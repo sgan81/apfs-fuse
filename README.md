@@ -1,6 +1,6 @@
-# APFS FUSE Driver
+# APFS FUSE Driver for Linux
 
-This project is a read-only FUSE driver for the new Apple File System.
+This project is a read-only FUSE driver for the new Apple File System. Since Apple didn't yet document the disk format of APFS, this driver should be considered experimental... It may not be able to read all files, it may return wrong data, or it may simply crash. Use at your own risk. But since it's read-only, at least the data on your apfs drive should be safe.
 
 ## Usage
 
@@ -40,6 +40,8 @@ The following features are implemented:
 
 * Can read macOS 10.13 case sensitive and insensitive volumes, as well as iOS 11 / macOS 10.12 volumes
 * Transparent decompression of ZLib and LZVN
+* Symlinks
+* Hardlinks (it seems ...)
 * Extended attributes
 
 ## Limitations
@@ -48,11 +50,3 @@ These things are not supported (yet):
 * Encryption
 * Transparent decompression of LZFSE
 * Writing
-
-## Final Words
-
-**This driver is experimental**
-
-Please be aware that this code is based on reverse engineering (looking at disk images in a hex-editor), since
-Apple didn't document the disk format yet. The driver is read-only, so your data should be safe. However, there
-may still be quite a few bugs left, including potential crashes. So use it at your own risk.

@@ -32,6 +32,7 @@
 #include <ApfsLib/ApfsVolume.h>
 #include <ApfsLib/ApfsDir.h>
 #include <ApfsLib/Decmpfs.h>
+#include <ApfsLib/DeviceLinux.h>
 
 #include <cassert>
 #include <cstring>
@@ -43,7 +44,7 @@
 
 static struct fuse_lowlevel_ops ops;
 
-static Disk g_disk;
+static DeviceLinux g_disk;
 static ApfsContainer *g_container = nullptr;
 static ApfsVolume *g_volume = nullptr;
 

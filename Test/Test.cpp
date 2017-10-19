@@ -20,15 +20,35 @@
 #include <iostream>
 #include <fstream>
 
-#include <ApfsLib/Disk.h>
+#include <ApfsLib/Device.h>
 #include <ApfsLib/ApfsContainer.h>
 #include <ApfsLib/ApfsVolume.h>
 #include <ApfsLib/BlockDumper.h>
 #include <ApfsLib/ApfsDir.h>
 
+#ifdef _WIN32
+#include <ApfsLib/DeviceWinFile.h>
+#include <ApfsLib/DeviceWinPhys.h>
+#else
+#include <ApfsLib/DeviceLinux.h>
+#endif
+
+#ifdef _WIN32
+#define WIN_PHYS_DEV_TEST
+#endif
+
 int main(int argc, char *argv[])
 {
-	Disk disk;
+	bool rc;
+#ifdef _WIN32
+#ifdef WIN_PHYS_DEV_TEST
+	DeviceWinPhys disk;
+#else
+	DeviceWinFile disk;
+#endif
+#else
+	DeviceLinux disk;
+#endif
 	int volumes_cnt;
 	int volume_id;
 
@@ -38,7 +58,13 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	if (!disk.Open(argv[1]))
+#ifdef WIN_PHYS_DEV_TEST
+	rc = disk.Open(3);
+#else
+	rc = disk.Open(argv[1]);
+#endif
+
+	if (!rc)
 	{
 		std::cerr << "Unable to open file " << argv[1] << std::endl;
 		return -1;
@@ -53,8 +79,19 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+#ifdef WIN_PHYS_DEV_TEST
+	ApfsContainer *container = new ApfsContainer(disk, 0xC805000, 0xE8D45AC000);
+#else
 	ApfsContainer *container = new ApfsContainer(disk, 0, disk.GetSize());
-	container->Init();
+#endif
+	rc = container->Init();
+
+	if (!rc)
+	{
+		std::cerr << "Unable to init container." << std::endl;
+		delete container;
+		return -1;
+	}
 
 #if 1
 	BlockDumper bd(st, container->GetBlocksize());

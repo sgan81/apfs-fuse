@@ -28,7 +28,7 @@
 
 int g_debug = 0;
 
-ApfsContainer::ApfsContainer(Disk &disk, uint64_t start, uint64_t len) :
+ApfsContainer::ApfsContainer(Device &disk, uint64_t start, uint64_t len) :
 	m_disk(disk),
 	m_part_start(start),
 	m_part_len(len),
@@ -121,7 +121,7 @@ bool ApfsContainer::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt) c
 	if ((blkid + blkcnt) > m_sb.block_count)
 		return false;
 
-	offs = m_sb.block_size * blkid;
+	offs = m_sb.block_size * blkid + m_part_start;
 	size = m_sb.block_size * blkcnt;
 
 	return m_disk.Read(data, offs, size);

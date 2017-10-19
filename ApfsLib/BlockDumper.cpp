@@ -66,6 +66,11 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 		return;
 	}
 
+#if 0
+	if (node->type != 0x0000000D)
+		return;
+#endif
+
 	DumpNodeHeader(node, blk_nr);
 
 	switch (node->type)
@@ -107,8 +112,8 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 		break;
 
 	default:
-		assert(false);
-		m_os << "!!! UNKNOWN NODE TYPE " << setw(8) << node->type << " !!!" << endl;
+		// assert(false);
+		std::cerr << "!!! UNKNOWN NODE TYPE " << setw(8) << node->type << " in block " << setw(16) << blk_nr << " !!!" << endl;
 		DumpBlockHex();
 		break;
 	}
@@ -830,7 +835,7 @@ void BlockDumper::DumpBlk_0_D()
 	m_os << "Unknown 0xD8     : " << setw(16) << sb->unk_D8 << endl;
 	m_os << "Unknown 0xE0     : " << setw(16) << sb->unk_E0 << endl;
 	m_os << "Unknown 0xE8     : " << setw(16) << sb->unk_E8 << endl;
-	m_os << "GUID             : " << setw(16) << sb->guid_1 << setw(16) << sb->guid_2 << endl;
+	m_os << "GUID             : " << guid(sb->guid) << endl;
 	m_os << "Timestamp 0x100  : " << tstamp(sb->timestamp_100) << endl;
 	m_os << "Version   0x108  : " << setw(16) << sb->version_108 << endl;
 	for (k = 0; k < 9; k++)
@@ -922,7 +927,7 @@ void BlockDumper::DumpBlk_8_1()
 	m_os << "Unknown 0x30     : " << setw(16) << sb->unk_30 << endl;
 	m_os << "Unknown 0x38     : " << setw(16) << sb->unk_38 << endl;
 	m_os << "Unknown 0x40     : " << setw(16) << sb->unk_40 << endl;
-	m_os << "GUID             : " << setw(16) << sb->container_guid_1 << setw(16) << sb->container_guid_2 << endl;
+	m_os << "GUID             : " << setw(16) << guid(sb->container_guid) << endl;
 	m_os << "Next Node ID     : " << setw(16) << sb->next_nodeid << endl;
 	m_os << "Next Version     : " << setw(16) << sb->next_version << endl;
 	m_os << "No of NXSB & 4_C : " << setw(8) << sb->sb_area_cnt << endl;
@@ -1186,6 +1191,22 @@ const std::string BlockDumper::tstamp(uint64_t apfs_time)
 	st << setw(2) << gmt.tm_min << ":";
 	st << setw(2) << gmt.tm_sec << ".";
 	st << setw(9) << nanos;
+
+	return st.str();
+}
+
+const std::string BlockDumper::guid(const APFS_GUID & guid)
+{
+	stringstream st;
+
+	st << hex << uppercase << setfill('0');
+	st << '{' << setw(8) << guid.data_1 << '-';
+	st << setw(4) << guid.data_2 << '-';
+	st << setw(4) << guid.data_3 << '-';
+	st << setw(2) << (int)guid.data_4[0] << setw(2) << (int)guid.data_4[1] << '-';
+	for (int k = 2; k < 8; k++)
+		st << setw(2) << (int)guid.data_4[k];
+	st << '}';
 
 	return st.str();
 }

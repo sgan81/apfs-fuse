@@ -72,6 +72,7 @@ public:
 
 private:
 	static const std::string tstamp(uint64_t apfs_time);
+	static const std::string guid(const APFS_GUID &guid);
 
 	uint32_t m_text_flags; // 00 - Alt, 01 - insensitive, 08 - sensitive
 

@@ -22,7 +22,7 @@
 #include "Global.h"
 #include "BTree.h"
 #include "DiskStruct.h"
-#include "Disk.h"
+#include "Device.h"
 #include "ApfsNodeMapperBTree.h"
 
 #include <cstdint>
@@ -33,7 +33,7 @@ class BlockDumper;
 class ApfsContainer
 {
 public:
-	ApfsContainer(Disk &disk, uint64_t start, uint64_t len);
+	ApfsContainer(Device &disk, uint64_t start, uint64_t len);
 	~ApfsContainer();
 
 	bool Init();
@@ -49,7 +49,7 @@ public:
 	void dump(BlockDumper& bd);
 
 private:
-	Disk &m_disk;
+	Device &m_disk;
 	const uint64_t m_part_start;
 	const uint64_t m_part_len;
 

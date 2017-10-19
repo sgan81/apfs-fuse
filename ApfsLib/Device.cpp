@@ -17,50 +17,12 @@
 	along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#pragma once
+#include "Device.h"
 
-#include <cstdint>
-
-#ifdef __unix
-
-class Disk
+Device::Device()
 {
-public:
-	Disk();
-	~Disk();
+}
 
-	bool Open(const char *name);
-	void Close();
-
-	bool Read(void *data, uint64_t offs, uint64_t len);
-
-	uint64_t GetSize() const { return m_size; }
-
-private:
-	int m_device;
-	size_t m_size;
-};
-
-#else
-
-#include <fstream>
-
-class Disk
+Device::~Device()
 {
-public:
-	Disk();
-	~Disk();
-
-	bool Open(const char *name);
-	void Close();
-
-	bool Read(void *data, uint64_t offs, uint64_t len);
-
-	uint64_t GetSize() const { return m_size; }
-
-private:
-	std::ifstream m_vol;
-	size_t m_size;
-};
-
-#endif
+}

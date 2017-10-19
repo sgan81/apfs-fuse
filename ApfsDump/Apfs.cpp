@@ -25,9 +25,15 @@
 #include <ApfsLib/DiskStruct.h>
 #include <ApfsLib/BlockDumper.h>
 
+#ifdef __linux__
+#include <signal.h>
+#endif
+
 #undef RAW_VERBOSE
 
 constexpr size_t BLOCKSIZE = 0x1000;
+
+volatile bool g_abort = 0;
 
 void DumpBlockTrunc(std::ostream &os, const byte_t *data)
 {
@@ -63,7 +69,7 @@ void MapBlocks(std::ostream &os, std::istream &dev)
 
 	size /= BLOCKSIZE;
 
-	for (blk_nr = 0; blk_nr < size; blk_nr++)
+	for (blk_nr = 0; blk_nr < size && !g_abort; blk_nr++)
 	{
 		dev.read(reinterpret_cast<char *>(block), BLOCKSIZE);
 
@@ -115,7 +121,9 @@ void ScanBlocks(std::ostream &os, std::istream &dev)
 
 	size /= BLOCKSIZE;
 
-	for (blk_nr = 0; blk_nr < size; blk_nr++)
+	bd.SetTextFlags(0x08);
+
+	for (blk_nr = 0; blk_nr < size && !g_abort; blk_nr++)
 	{
 		dev.read(reinterpret_cast<char *>(block), BLOCKSIZE);
 
@@ -137,6 +145,11 @@ void ScanBlocks(std::ostream &os, std::istream &dev)
 	}
 }
 
+static void ctrl_c_handler(int sig)
+{
+	g_abort = true;
+}
+
 int main(int argc, const char *argv[])
 {
 	if (argc < 3)
@@ -148,6 +161,10 @@ int main(int argc, const char *argv[])
 	std::ifstream dev;
 	std::ofstream os;
 
+#ifdef __linux__
+	signal(SIGINT, ctrl_c_handler);
+#endif
+
 	dev.open(argv[1], std::ios::binary);
 
 	if (!dev.is_open())
@@ -156,7 +173,7 @@ int main(int argc, const char *argv[])
 		return 2;
 	}
 
-	if (argc >= 3)
+	if (argc > 3)
 	{
 		os.open(argv[3]);
 		if (!os.is_open())

@@ -37,6 +37,14 @@ constexpr uint64_t KeyType_Hardlink_C = 0xC000000000000000ULL;
 #pragma pack(push)
 #pragma pack(1)
 
+struct APFS_GUID
+{
+	uint32_t data_1;
+	uint16_t data_2;
+	uint16_t data_3;
+	uint8_t  data_4[8];
+};
+
 struct APFS_BlockHeader
 {
 	uint64_t checksum;
@@ -279,8 +287,7 @@ struct APFS_Superblock_NXSB // Ab 0x20
 	uint64_t unk_30;
 	uint64_t unk_38;
 	uint64_t unk_40;
-	uint64_t container_guid_1;
-	uint64_t container_guid_2;
+	APFS_GUID container_guid;
 	uint64_t next_nodeid; // Next node id (?)
 	uint64_t next_version; // Next version number (?)
 	uint32_t sb_area_cnt; // Anzahl Bloecke fuer NXSB + 4_C ?
@@ -344,8 +351,7 @@ struct APFS_Superblock_APSB
 	uint64_t unk_D8;
 	uint64_t unk_E0;
 	uint64_t unk_E8;
-	uint64_t guid_1;
-	uint64_t guid_2;
+	APFS_GUID guid;
 	uint64_t timestamp_100;
 	uint64_t version_108;
 	APFS_Superblock_APSB_AccessInfo access_info[9];

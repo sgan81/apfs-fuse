@@ -17,8 +17,12 @@
 	along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef __linux__
 #include <unicode/utypes.h>
 #include <unicode/normalizer2.h>
+#else
+#include "Unicode.h"
+#endif
 
 #include <iostream>
 #include <iomanip>
@@ -224,6 +228,8 @@ void DumpHex(std::ostream &os, const byte_t *data, size_t size, size_t lineSize)
 
 #undef DEBUG_OUT
 
+#ifdef __linux__
+
 uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensitive)
 {
 	icu::StringPiece utf8(utf8str);
@@ -308,3 +314,26 @@ uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensit
 
 	return hash;
 }
+
+#else
+
+uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensitive)
+{
+	std::vector<char32_t> u32_name;
+	std::vector<char32_t> u32_normalized;
+	uint32_t hash;
+
+	Utf8toU32(u32_name, reinterpret_cast<const uint8_t *>(utf8str));
+	NormalizeFilename(u32_normalized, u32_name, case_insensitive);
+
+	g_crc.SetCRC(0xFFFFFFFF);
+	g_crc.Calc(reinterpret_cast<const byte_t *>(u32_normalized.data()), u32_normalized.size() * sizeof(char32_t));
+
+	hash = g_crc.GetCRC();
+
+	hash = ((hash & 0x3FFFFF) << 10) | (name_len & 0x3FF);
+
+	return hash;
+}
+
+#endif
