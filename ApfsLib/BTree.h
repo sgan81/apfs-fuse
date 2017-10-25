@@ -34,6 +34,7 @@ class BTreeIterator;
 class BlockDumper;
 
 class ApfsContainer;
+class ApfsVolume;
 
 #define BTREE_USE_MAP
 
@@ -134,10 +135,10 @@ class BTree
 
 	friend class BTreeIterator;
 public:
-	BTree(ApfsContainer &container);
+	BTree(ApfsContainer &container, ApfsVolume *vol = nullptr);
 	~BTree();
 
-	void Init(uint64_t root_node_id, uint64_t version, ApfsNodeMapper *node_map = nullptr);
+	bool Init(uint64_t root_node_id, uint64_t version, ApfsNodeMapper *node_map = nullptr);
 
 	bool Lookup(BTreeEntry &result, const void *key, size_t key_size, BTCompareFunc func, void *context, bool exact);
 	bool GetIterator(BTreeIterator &it, const void *key, size_t key_size, BTCompareFunc func, void *context);
@@ -157,6 +158,7 @@ private:
 	std::shared_ptr<BTreeNode> GetNode(uint64_t nodeid, uint64_t parentid);
 
 	ApfsContainer &m_container;
+	ApfsVolume *m_volume;
 
 	std::shared_ptr<BTreeNode> m_root_node;
 	ApfsNodeMapper *m_nodeid_map;

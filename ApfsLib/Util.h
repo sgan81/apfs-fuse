@@ -31,3 +31,4 @@ bool IsEmptyBlock(const void *data, size_t blksize);
 void DumpHex(std::ostream &os, const byte_t *data, size_t size, size_t line_size = 16);
 
 uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensitive);
+bool GetPassword(std::string &pw);

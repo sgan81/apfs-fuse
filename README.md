@@ -1,6 +1,12 @@
 # APFS FUSE Driver for Linux
 
-This project is a read-only FUSE driver for the new Apple File System. Since Apple didn't yet document the disk format of APFS, this driver should be considered experimental... It may not be able to read all files, it may return wrong data, or it may simply crash. Use at your own risk. But since it's read-only, at least the data on your apfs drive should be safe.
+This project is a read-only FUSE driver for the new Apple File System. Since Apple didn't yet document
+the disk format of APFS, this driver should be considered experimental... It may not be able to read all
+files, it may return wrong data, or it may simply crash. Use at your own risk. But since it's read-only,
+at least the data on your apfs drive should be safe.
+
+Be aware that not all copression methods are supported yet (only the ones I have encountered so far).
+Thus, the driver may return compressed files instead of uncompressed ones ...
 
 ## Usage
 
@@ -30,6 +36,8 @@ Supported options:
 The device has to be the one containing the APFS container. If a container contains more than one volume,
 the volume can be specified by the `-v` option.
 
+If a volume is encrypted, the apfs-fuse command will prompt for a password.
+
 ### Unmount a drive
 ```
 fusermount -u <mount-directory>
@@ -43,10 +51,10 @@ The following features are implemented:
 * Symlinks
 * Hardlinks (it seems ...)
 * Extended attributes
+* Encryption (at least full-disk encryption)
 
 ## Limitations
 These things are not supported (yet):
 
-* Encryption
 * Transparent decompression of LZFSE
 * Writing

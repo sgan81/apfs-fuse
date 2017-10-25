@@ -266,7 +266,6 @@ bool ApfsDir::LookupName(ApfsDir::Name& res, uint64_t parent_id, const char* nam
 
 bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 {
-	const ApfsContainer &cont = m_vol.getContainer();
 	BTreeEntry e;
 	APFS_Key_Extent key;
 	const APFS_Key_Extent *ext_key = nullptr;
@@ -304,7 +303,7 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		if (cur_size == 0)
 			break; // Die Freuden von Fuse ...
 		if (ext_val->block != 0)
-			cont.ReadBlocks(bdata, ext_val->block + idx, cur_size >> 12);
+			m_vol.ReadBlocks(bdata, ext_val->block + idx, cur_size >> 12, true);
 		else
 			memset(bdata, 0, cur_size);
 		bdata += cur_size;

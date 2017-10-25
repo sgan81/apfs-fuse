@@ -73,7 +73,7 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 
 	DumpNodeHeader(node, blk_nr);
 
-	switch (node->type)
+	switch (node->type & 0xCFFFFFFF)
 	{
 	case 0x00000002: // Directory Root
 	case 0x00000003: // Directory
@@ -807,9 +807,9 @@ void BlockDumper::DumpBlk_0_D()
 	m_os << hex;
 	m_os << "Signature        : " << setw(8) << sb->signature << endl;
 	m_os << "Unknown 0x24     : " << setw(8) << sb->unk_24 << endl;
-	m_os << "Unknown 0x28     : " << setw(16) << sb->unk_28 << endl;
-	m_os << "Unknown 0x30     : " << setw(16) << sb->unk_30 << endl;
-	m_os << "Unknown 0x38     : " << setw(16) << sb->unk_38 << endl;
+	m_os << "Features 0x28    : " << setw(16) << sb->features_28 << endl;
+	m_os << "Features 0x30    : " << setw(16) << sb->features_30 << endl;
+	m_os << "Features 0x38    : " << setw(16) << sb->features_38 << endl;
 	m_os << "Unknown 0x40     : " << setw(16) << sb->unk_40 << endl;
 	m_os << "Blocks Reserved  : " << setw(16) << sb->blocks_reserved << endl;
 	m_os << "Blocks Maximum   : " << setw(16) << sb->blocks_quota << endl;
@@ -835,9 +835,9 @@ void BlockDumper::DumpBlk_0_D()
 	m_os << "Unknown 0xD8     : " << setw(16) << sb->unk_D8 << endl;
 	m_os << "Unknown 0xE0     : " << setw(16) << sb->unk_E0 << endl;
 	m_os << "Unknown 0xE8     : " << setw(16) << sb->unk_E8 << endl;
-	m_os << "GUID             : " << guid(sb->guid) << endl;
+	m_os << "GUID             : " << uuid(sb->guid) << endl;
 	m_os << "Timestamp 0x100  : " << tstamp(sb->timestamp_100) << endl;
-	m_os << "Version   0x108  : " << setw(16) << sb->version_108 << endl;
+	m_os << "Version   0x108  : " << setw(16) << sb->flags_108 << endl;
 	for (k = 0; k < 9; k++)
 	{
 		m_os << "Accessor Info    : " << sb->access_info[k].accessor << endl;
@@ -927,7 +927,7 @@ void BlockDumper::DumpBlk_8_1()
 	m_os << "Unknown 0x30     : " << setw(16) << sb->unk_30 << endl;
 	m_os << "Unknown 0x38     : " << setw(16) << sb->unk_38 << endl;
 	m_os << "Unknown 0x40     : " << setw(16) << sb->unk_40 << endl;
-	m_os << "GUID             : " << setw(16) << guid(sb->container_guid) << endl;
+	m_os << "GUID             : " << setw(16) << uuid(sb->container_guid) << endl;
 	m_os << "Next Node ID     : " << setw(16) << sb->next_nodeid << endl;
 	m_os << "Next Version     : " << setw(16) << sb->next_version << endl;
 	m_os << "No of NXSB & 4_C : " << setw(8) << sb->sb_area_cnt << endl;
@@ -948,6 +948,11 @@ void BlockDumper::DumpBlk_8_1()
 
 	for (size_t k = 0; (k < 100) && (sb->nodeid_apsb[k] != 0); k++)
 		m_os << "Node-ID APSB " << setw(2) << k << "  : " << setw(16) << sb->nodeid_apsb[k] << endl;
+
+	m_os << endl;
+
+	m_os << "Block-ID Keybag  : " << setw(16) << sb->keybag_blk_start << endl;
+	m_os << "Block-Cnt Keybag : " << setw(16) << sb->keybag_blk_count << endl;
 
 	m_os << endl;
 
@@ -1195,18 +1200,26 @@ const std::string BlockDumper::tstamp(uint64_t apfs_time)
 	return st.str();
 }
 
-const std::string BlockDumper::guid(const APFS_GUID & guid)
+const std::string BlockDumper::uuid(const apfs_uuid_t &uuid)
 {
 	stringstream st;
+	int k;
 
 	st << hex << uppercase << setfill('0');
-	st << '{' << setw(8) << guid.data_1 << '-';
-	st << setw(4) << guid.data_2 << '-';
-	st << setw(4) << guid.data_3 << '-';
-	st << setw(2) << (int)guid.data_4[0] << setw(2) << (int)guid.data_4[1] << '-';
-	for (int k = 2; k < 8; k++)
-		st << setw(2) << (int)guid.data_4[k];
-	st << '}';
+	for (k = 0; k < 4; k++)
+		st << setw(2) << static_cast<unsigned>(uuid[k]);
+	st << '-';
+	for (k = 4; k < 6; k++)
+		st << setw(2) << static_cast<unsigned>(uuid[k]);
+	st << '-';
+	for (k = 6; k < 8; k++)
+		st << setw(2) << static_cast<unsigned>(uuid[k]);
+	st << '-';
+	for (k = 8; k < 10; k++)
+		st << setw(2) << static_cast<unsigned>(uuid[k]);
+	st << '-';
+	for (k = 10; k < 16; k++)
+		st << setw(2) << static_cast<unsigned>(uuid[k]);
 
 	return st.str();
 }

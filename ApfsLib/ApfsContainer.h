@@ -24,6 +24,7 @@
 #include "DiskStruct.h"
 #include "Device.h"
 #include "ApfsNodeMapperBTree.h"
+#include "KeyMgmt.h"
 
 #include <cstdint>
 
@@ -46,6 +47,9 @@ public:
 
 	uint32_t GetBlocksize() const { return m_sb.block_size; }
 
+	bool GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password);
+	bool GetPasswordHint(std::string &hint, const apfs_uuid_t &vol_uuid);
+
 	void dump(BlockDumper& bd);
 
 private:
@@ -63,4 +67,6 @@ private:
 	BTree m_nidmap_bt; // 4_2/B
 	BTree m_oldmgr_bt; // 8_2/9
 	BTree m_oldvol_bt; // 8_2/9
+
+	KeyManager m_keymgr;
 };

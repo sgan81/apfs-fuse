@@ -58,11 +58,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-#ifdef WIN_PHYS_DEV_TEST
-	rc = disk.Open(3);
-#else
 	rc = disk.Open(argv[1]);
-#endif
 
 	if (!rc)
 	{
@@ -96,7 +92,7 @@ int main(int argc, char *argv[])
 #if 1
 	BlockDumper bd(st, container->GetBlocksize());
 
-	// container->dump(bd);
+	container->dump(bd);
 
 	volumes_cnt = container->GetVolumeCnt();
 

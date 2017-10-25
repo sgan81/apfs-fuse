@@ -20,6 +20,7 @@
 #pragma once
 
 typedef unsigned char byte_t;
+typedef unsigned char apfs_uuid_t[16];
 
 // Debug level - defined in ApfsContainer.cpp
 extern int g_debug;

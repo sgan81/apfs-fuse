@@ -69,12 +69,10 @@ bool ApfsNodeMapperBTree::Init(uint64_t hdr_block_id, uint64_t version)
 	if (m_root_ptr.hdr.type != 0x4000000B)
 		return false;
 
-	m_tree.Init(m_root_ptr.entry[0].blk, version);
-
-	return true;
+	return m_tree.Init(m_root_ptr.entry[0].blk, version);
 }
 
-uint64_t ApfsNodeMapperBTree::GetBlockID(uint64_t nodeid, uint64_t version)
+bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nodeid, uint64_t version)
 {
 	APFS_Key_B_NodeID_Map key;
 
@@ -92,7 +90,7 @@ uint64_t ApfsNodeMapperBTree::GetBlockID(uint64_t nodeid, uint64_t version)
 	{
 		// std::cout << "NOT FOUND" << std::endl;
 		std::cerr << std::hex << "nodeid " << nodeid << " version " << version << " NOT FOUND!!!" << std::endl;
-		return 0;
+		return false;
 	}
 
 	assert(res.val_len == sizeof(APFS_Value_B_NodeID_Map));
@@ -104,10 +102,14 @@ uint64_t ApfsNodeMapperBTree::GetBlockID(uint64_t nodeid, uint64_t version)
 	{
 		// std::cout << "NOT FOUND" << std::endl;
 		std::cerr << std::hex << "nodeid " << nodeid << " version " << version << " NOT FOUND!!!" << std::endl;
-		return 0;
+		return false;
 	}
 
 	// std::cout << val->blockid << std::endl;
 
-	return val->blockid;
+	info.flags = val->flags;
+	info.size = val->size;
+	info.block_no = val->blockid;
+
+	return true;
 }

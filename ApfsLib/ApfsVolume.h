@@ -24,6 +24,7 @@
 #include "DiskStruct.h"
 #include "ApfsNodeMapperBTree.h"
 #include "BTree.h"
+#include "AesXts.h"
 
 class ApfsContainer;
 class BlockDumper;
@@ -41,9 +42,11 @@ public:
 	void dump(BlockDumper &bd);
 
 	BTree &getDirectory() { return m_bt_directory; }
-	uint32_t getTextFormat() const { return m_sb.unk_38 & 0x9; }
+	uint32_t getTextFormat() const { return m_sb.features_38 & 0x9; }
 
 	ApfsContainer &getContainer() const { return m_container; }
+
+	bool ReadBlocks(byte_t *data, uint64_t blkid, uint64_t blkcnt, bool decrypt);
 
 private:
 	ApfsContainer &m_container;
@@ -56,4 +59,7 @@ private:
 	BTree m_bt_snapshots;
 
 	uint64_t m_blockid_sb;
+
+	bool m_is_encrypted;
+	AesXts m_aes;
 };

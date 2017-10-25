@@ -24,6 +24,7 @@
 #include <iomanip>
 
 #include "ApfsContainer.h"
+#include "ApfsVolume.h"
 #include "BTree.h"
 #include "Util.h"
 #include "BlockDumper.h"
@@ -158,9 +159,11 @@ bool BTreeNodeVar::GetEntry(BTreeEntry & result, uint32_t index) const
 	return true;
 }
 
-BTree::BTree(ApfsContainer &container) :
+BTree::BTree(ApfsContainer &container, ApfsVolume *volume) :
 	m_container(container)
 {
+	m_volume = volume;
+
 	m_root_node = nullptr;
 	m_nodeid_map = nullptr;
 	m_version = 0;
@@ -174,14 +177,20 @@ BTree::~BTree()
 #endif
 }
 
-void BTree::Init(uint64_t root_node_id, uint64_t version, ApfsNodeMapper *node_map)
+bool BTree::Init(uint64_t root_node_id, uint64_t version, ApfsNodeMapper *node_map)
 {
 	m_nodeid_map = node_map;
 	m_version = version;
 
 	m_root_node = GetNode(root_node_id, 0);
 
-	memcpy(&m_treeinfo, m_root_node->block().data() + m_root_node->block().size() - sizeof(APFS_BTFooter), sizeof(APFS_BTFooter));
+	if (m_root_node)
+	{
+		memcpy(&m_treeinfo, m_root_node->block().data() + m_root_node->block().size() - sizeof(APFS_BTFooter), sizeof(APFS_BTFooter));
+		return true;
+	}
+	else
+		return false;
 }
 
 bool BTree::Lookup(BTreeEntry &result, const void *key, size_t key_size, BTCompareFunc func, void *context, bool exact)
@@ -291,7 +300,8 @@ bool BTree::GetIterator(BTreeIterator& it, const void* key, size_t key_size, BTC
 
 void BTree::dump(BlockDumper& out)
 {
-	DumpTreeInternal(out, m_root_node);
+	if (m_root_node)
+		DumpTreeInternal(out, m_root_node);
 }
 
 void BTree::DumpTreeInternal(BlockDumper& out, const std::shared_ptr<BTreeNode> &node)
@@ -341,22 +351,40 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 	else
 #endif
 	{
-		uint64_t blkid = nodeid;
+		node_info_t ni;
+
+		ni.flags = 0;
+		ni.size = 0x1000;
+		ni.block_no = nodeid;
 
 		std::vector<byte_t> blk;
 
 		if (m_nodeid_map)
-			blkid = m_nodeid_map->GetBlockID(nodeid, m_version);
+		{
+			if (!m_nodeid_map->GetBlockID(ni, nodeid, m_version))
+				return node;
+		}
 
 		blk.resize(m_container.GetBlocksize());
 
-		if (m_container.ReadAndVerifyHeaderBlock(blk.data(), blkid))
+		if (m_volume)
 		{
-			node = BTreeNode::CreateNode(*this, blk.data(), blk.size(), parentid, blkid);
-#ifdef BTREE_USE_MAP
-			m_nodes[nodeid] = node;
-#endif
+			if (!m_volume->ReadBlocks(blk.data(), ni.block_no, 1, (ni.flags & 4) != 0))
+				return node;
+
+			if (!VerifyBlock(blk.data(), blk.size()))
+				return node;
 		}
+		else
+		{
+			if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), ni.block_no))
+				return node;
+		}
+
+		node = BTreeNode::CreateNode(*this, blk.data(), blk.size(), parentid, ni.block_no);
+#ifdef BTREE_USE_MAP
+		m_nodes[nodeid] = node;
+#endif
 	}
 
 	return node;

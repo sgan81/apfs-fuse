@@ -121,7 +121,7 @@ void ScanBlocks(std::ostream &os, std::istream &dev)
 
 	size /= BLOCKSIZE;
 
-	bd.SetTextFlags(0x08);
+	bd.SetTextFlags(0x01);
 
 	for (blk_nr = 0; blk_nr < size && !g_abort; blk_nr++)
 	{
@@ -134,7 +134,7 @@ void ScanBlocks(std::ostream &os, std::istream &dev)
 			bd.DumpNode(block, blk_nr);
 		else
 		{
-#if 0
+#if 1
 			os << std::hex << std::setw(16) << blk_nr << std::endl;
 			DumpBlockTrunc(os, block);
 			os << std::endl;

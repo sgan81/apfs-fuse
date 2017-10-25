@@ -21,6 +21,8 @@
 
 #include <cstdint>
 
+#include "Global.h"
+
 constexpr uint64_t KeyType_Snapshot_1 = 0x1000000000000000ULL;
 constexpr uint64_t KeyType_BlockMap = 0x2000000000000000ULL;
 constexpr uint64_t KeyType_Object = 0x3000000000000000ULL;
@@ -36,14 +38,6 @@ constexpr uint64_t KeyType_Hardlink_C = 0xC000000000000000ULL;
 
 #pragma pack(push)
 #pragma pack(1)
-
-struct APFS_GUID
-{
-	uint32_t data_1;
-	uint16_t data_2;
-	uint16_t data_3;
-	uint8_t  data_4[8];
-};
 
 struct APFS_BlockHeader
 {
@@ -287,7 +281,7 @@ struct APFS_Superblock_NXSB // Ab 0x20
 	uint64_t unk_30;
 	uint64_t unk_38;
 	uint64_t unk_40;
-	APFS_GUID container_guid;
+	apfs_uuid_t container_guid;
 	uint64_t next_nodeid; // Next node id (?)
 	uint64_t next_version; // Next version number (?)
 	uint32_t sb_area_cnt; // Anzahl Bloecke fuer NXSB + 4_C ?
@@ -306,10 +300,15 @@ struct APFS_Superblock_NXSB // Ab 0x20
 	uint32_t unk_B0;
 	uint32_t unk_B4;
 	uint64_t nodeid_apsb[100]; // Liste der Node-ID's der Volume Superblocks (Anzahl geraten, koennte aber hinkommen ...)
+	uint64_t unk_3D8[0x23];
+	uint64_t unk_4F0[4];
+	uint64_t keybag_blk_start;
+	uint64_t keybag_blk_count;
+	uint64_t unk_520;
 	// Hier kaeme noch ein wenig mehr ... aber keine Ahnung was es bedeutet ...
 };
 
-static_assert(sizeof(APFS_Superblock_NXSB) == 0x3D8, "NXSB Superblock size wrong");
+static_assert(sizeof(APFS_Superblock_NXSB) == 0x528, "NXSB Superblock size wrong");
 
 struct APFS_Superblock_APSB_AccessInfo
 {
@@ -323,9 +322,9 @@ struct APFS_Superblock_APSB
 	APFS_BlockHeader hdr;
 	uint32_t signature; // APSB, 0x42535041
 	uint32_t unk_24;
-	uint64_t unk_28;
-	uint64_t unk_30;
-	uint64_t unk_38;
+	uint64_t features_28; // Features 3
+	uint64_t features_30; // Features 2
+    uint64_t features_38; // Features: & 0x09: 0x00 = Altes Format (iOS), 0x01 = Case-Insensitive, 0x08 = Case-Sensitive
 	uint64_t unk_40;
 	uint64_t blocks_reserved;
 	uint64_t blocks_quota;
@@ -351,9 +350,9 @@ struct APFS_Superblock_APSB
 	uint64_t unk_D8;
 	uint64_t unk_E0;
 	uint64_t unk_E8;
-	APFS_GUID guid;
+	apfs_uuid_t guid;
 	uint64_t timestamp_100;
-	uint64_t version_108;
+    uint64_t flags_108; // TODO: Keine Version, sondern Flags: Bit 0x1: 0 = Encrypted, 1 = Unencrypted. Bit 0x2: Effaceable
 	APFS_Superblock_APSB_AccessInfo access_info[9];
 	char vol_name[0x100];
 	uint64_t unk_3C0;

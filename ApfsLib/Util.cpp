@@ -27,6 +27,8 @@
 #include <iostream>
 #include <iomanip>
 #include <vector>
+#include <termios.h>
+#include <stdio.h>
 
 #include "Util.h"
 #include "Crc32.h"
@@ -237,7 +239,6 @@ uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensit
 	icu::UnicodeString normalized;
 	UErrorCode err = U_ZERO_ERROR;
 	std::vector<UChar32> hashdata;
-	int n;
 	uint32_t hash;
 
 	const icu::Normalizer2 *norm = icu::Normalizer2::getNFDInstance(err);
@@ -269,7 +270,7 @@ uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensit
 #endif
 
 	hashdata.resize(normalized.countChar32() + 1);
-	n = normalized.toUTF32(hashdata.data(), hashdata.size(), err);
+	normalized.toUTF32(hashdata.data(), hashdata.size(), err);
 
 #ifdef DEBUG_OUT
 	if (U_FAILURE(err))
@@ -337,3 +338,27 @@ uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensit
 }
 
 #endif
+
+bool GetPassword(std::string &pw)
+{
+	struct termios told, tnew;
+	FILE *stream = stdin;
+
+	/* Turn echoing off and fail if we can’t. */
+	if (tcgetattr (fileno (stream), &told) != 0)
+		return false;
+	tnew = told;
+	tnew.c_lflag &= ~ECHO;
+	if (tcsetattr (fileno (stream), TCSAFLUSH, &tnew) != 0)
+		return false;
+
+	/* Read the password. */
+	std::cin >> pw;
+
+	/* Restore terminal. */
+	(void) tcsetattr (fileno (stream), TCSAFLUSH, &told);
+
+	std::cout << std::endl;
+
+	return true;
+}

@@ -19,21 +19,24 @@
 
 #include <cstring>
 #include <vector>
+#include <iostream>
 
 #include "Global.h"
 
 #include "ApfsContainer.h"
 #include "ApfsVolume.h"
 #include "BlockDumper.h"
+#include "Util.h"
 
 ApfsVolume::ApfsVolume(ApfsContainer &container) :
 	m_container(container),
 	m_nodemap_dir(container),
-	m_bt_directory(container),
-	m_bt_blockmap(container),
-	m_bt_snapshots(container)
+	m_bt_directory(container, this),
+	m_bt_blockmap(container, this),
+	m_bt_snapshots(container, this)
 {
 	m_blockid_sb = 0;
+	m_is_encrypted = false;
 }
 
 ApfsVolume::~ApfsVolume()
@@ -48,7 +51,10 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 
 	blk.resize(m_container.GetBlocksize());
 
-	if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), blkid_volhdr))
+	if (!ReadBlocks(blk.data(), blkid_volhdr, 1, false))
+		return false;
+
+	if (!VerifyBlock(blk.data(), blk.size()))
 		return false;
 
 	memcpy(&m_sb, blk.data(), sizeof(m_sb));
@@ -57,6 +63,30 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 		return false;
 
 	m_nodemap_dir.Init(m_sb.blockid_nodemap, m_sb.hdr.version);
+
+	if ((m_sb.flags_108 & 3) != 1)
+	{
+		uint8_t vek[0x20];
+		std::string str;
+
+		std::cout << "Volume " << m_sb.vol_name << " is encrypted." << std::endl;
+
+		if (m_container.GetPasswordHint(str, m_sb.guid))
+			std::cout << "Hint: " << str << std::endl;
+
+		std::cout << "Enter Password: ";
+		GetPassword(str);
+
+		if (!m_container.GetVolumeKey(vek, m_sb.guid, str.c_str()))
+		{
+			std::cout << "Wrong password!" << std::endl;
+			return false;
+		}
+
+		m_aes.SetKey(vek, vek + 0x10);
+		m_is_encrypted = true;
+	}
+
 	m_bt_directory.Init(m_sb.nodeid_rootdir, m_sb.hdr.version, &m_nodemap_dir);
 	m_bt_blockmap.Init(m_sb.blockid_blockmap, m_sb.hdr.version);
 	m_bt_snapshots.Init(m_sb.blockid_4xBx10_map, m_sb.hdr.version);
@@ -70,15 +100,40 @@ void ApfsVolume::dump(BlockDumper& bd)
 
 	blk.resize(m_container.GetBlocksize());
 
-	if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), m_blockid_sb))
+	if (!ReadBlocks(blk.data(), m_blockid_sb, 1, false))
 		return;
 
-	bd.SetTextFlags(m_sb.unk_38 & 0xFF);
+	if (!VerifyBlock(blk.data(), blk.size()))
+		return;
+
+	bd.SetTextFlags(m_sb.features_38 & 0xFF);
 
 	bd.DumpNode(blk.data(), m_blockid_sb);
 
-	// m_nodemap_dir.dump(bd);
+	m_nodemap_dir.dump(bd);
 	m_bt_directory.dump(bd);
-	// m_bt_blockmap.dump(bd);
-	// m_bt_snapshots.dump(bd);
+	m_bt_blockmap.dump(bd);
+	m_bt_snapshots.dump(bd);
+}
+
+bool ApfsVolume::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt, bool decrypt)
+{
+	if (!m_container.ReadBlocks(data, blkid, blkcnt))
+		return false;
+
+	if (!decrypt || !m_is_encrypted)
+		return true;
+
+	uint64_t cs_factor = m_container.GetBlocksize() / 0x200;
+	uint64_t uno = blkid * cs_factor;
+	size_t size = blkcnt * m_container.GetBlocksize();
+	size_t k;
+
+	for (k = 0; k < size; k += 0x200)
+	{
+		m_aes.Decrypt(data + k, data + k, 0x200, uno);
+		uno++;
+	}
+
+	return true;
 }

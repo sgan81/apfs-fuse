@@ -19,6 +19,7 @@
 
 #include <cstring>
 #include <iostream>
+#include <fstream>
 
 #include "ApfsContainer.h"
 #include "ApfsVolume.h"
@@ -28,6 +29,8 @@
 
 int g_debug = 0;
 
+#undef KEYBAG_DEBUG
+
 ApfsContainer::ApfsContainer(Device &disk, uint64_t start, uint64_t len) :
 	m_disk(disk),
 	m_part_start(start),
@@ -35,7 +38,8 @@ ApfsContainer::ApfsContainer(Device &disk, uint64_t start, uint64_t len) :
 	m_nodemap_vol(*this),
 	m_nidmap_bt(*this),
 	m_oldmgr_bt(*this),
-	m_oldvol_bt(*this)
+	m_oldvol_bt(*this),
+	m_keymgr(*this)
 {
 }
 
@@ -70,6 +74,9 @@ bool ApfsContainer::Init()
 
 	m_nodemap_vol.Init(m_sb.blockid_volhdr, m_sb.hdr.version);
 
+	if ((m_sb.keybag_blk_start != 0) && (m_sb.keybag_blk_count != 0))
+		m_keymgr.Init(m_sb.keybag_blk_start, m_sb.keybag_blk_count, m_sb.container_guid);
+
 	return true;
 }
 
@@ -77,7 +84,8 @@ ApfsVolume * ApfsContainer::GetVolume(int index)
 {
 	ApfsVolume *vol = nullptr;
 	uint64_t nodeid;
-	uint64_t blkid;
+	node_info_t ni;
+	bool rc;
 
 	if (index >= 100)
 		return nullptr;
@@ -87,15 +95,22 @@ ApfsVolume * ApfsContainer::GetVolume(int index)
 	if (nodeid == 0)
 		return nullptr;
 
-	blkid = m_nodemap_vol.GetBlockID(nodeid, m_sb.hdr.version);
+	if (!m_nodemap_vol.GetBlockID(ni, nodeid, m_sb.hdr.version))
+		return nullptr;
 
 	// std::cout << std::hex << "Loading Volume " << index << ", nodeid = " << nodeid << ", version = " << m_sb.hdr.version << ", blkid = " << blkid << std::endl;
 
-	if (blkid == 0)
+	if (ni.block_no == 0)
 		return nullptr;
 
 	vol = new ApfsVolume(*this);
-	vol->Init(blkid);
+	rc = vol->Init(ni.block_no);
+
+	if (rc == false)
+	{
+		delete vol;
+		vol = nullptr;
+	}
 
 	return vol;
 }
@@ -138,6 +153,19 @@ bool ApfsContainer::ReadAndVerifyHeaderBlock(byte_t * data, uint64_t blkid) cons
 	return true;
 }
 
+bool ApfsContainer::GetVolumeKey(uint8_t * key, const apfs_uuid_t & vol_uuid, const char *password)
+{
+	if (!m_keymgr.IsValid())
+		return false;
+
+	return m_keymgr.GetVolumeKey(key, vol_uuid, password);
+}
+
+bool ApfsContainer::GetPasswordHint(std::string & hint, const apfs_uuid_t & vol_uuid)
+{
+	return m_keymgr.GetPasswordHint(hint, vol_uuid);
+}
+
 void ApfsContainer::dump(BlockDumper& bd)
 {
 	std::vector<byte_t> blk;
@@ -148,21 +176,26 @@ void ApfsContainer::dump(BlockDumper& bd)
 
 	bd.DumpNode(blk.data(), 0);
 
+	/*
+	if (m_keybag.size())
+		bd.DumpNode(m_keybag.data(), m_sb.keybag_blk_start);
+		*/
+
 	for (blkid = m_sb.blockid_sb_area_start; blkid < (m_sb.blockid_sb_area_start + m_sb.sb_area_cnt); blkid++)
 	{
 		ReadAndVerifyHeaderBlock(blk.data(), blkid);
 		bd.DumpNode(blk.data(), blkid);
 	}
 
-#if 0
+#if 1
 	for (blkid = m_sb.blockid_spaceman_area_start; blkid < (m_sb.blockid_spaceman_area_start + m_sb.spaceman_area_cnt); blkid++)
 	{
 		ReadAndVerifyHeaderBlock(blk.data(), blkid);
 		bd.DumpNode(blk.data(), blkid);
 	}
 #endif
-	m_nodemap_vol.dump(bd);
 
+	m_nodemap_vol.dump(bd);
 	// m_nidmap_bt.dump(bd);
 	// m_oldmgr_bt.dump(bd);
 	// m_oldvol_bt.dump(bd);

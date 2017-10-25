@@ -31,7 +31,7 @@ public:
 	DeviceWinPhys();
 	~DeviceWinPhys();
 
-	bool Open(int disk);
+	bool Open(const char *name);
 	void Close();
 
 	bool Read(void *data, uint64_t offs, uint64_t len) override;
