@@ -601,6 +601,7 @@ int main(int argc, char *argv[])
 	}
 
 	add_option(mount_options, "fsname", dev_path);
+	add_option(mount_options, "allow_other", nullptr);
 
 	fuse_opt_add_arg(&args, "apfs-fuse");
 	fuse_opt_add_arg(&args, "-o");
