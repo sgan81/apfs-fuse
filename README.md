@@ -5,7 +5,7 @@ the disk format of APFS, this driver should be considered experimental... It may
 files, it may return wrong data, or it may simply crash. Use at your own risk. But since it's read-only,
 at least the data on your apfs drive should be safe.
 
-Be aware that not all copression methods are supported yet (only the ones I have encountered so far).
+Be aware that not all compression methods are supported yet (only the ones I have encountered so far).
 Thus, the driver may return compressed files instead of uncompressed ones ...
 
 ## Usage
