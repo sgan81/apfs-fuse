@@ -196,6 +196,7 @@ bool BTree::Init(uint64_t root_node_id, uint64_t version, ApfsNodeMapper *node_m
 bool BTree::Lookup(BTreeEntry &result, const void *key, size_t key_size, BTCompareFunc func, void *context, bool exact)
 {
 	uint64_t nodeid;
+	uint64_t parentid;
 	int index;
 
 	std::shared_ptr<BTreeNode> node(m_root_node);
@@ -221,7 +222,14 @@ bool BTree::Lookup(BTreeEntry &result, const void *key, size_t key_size, BTCompa
 
 		nodeid = *reinterpret_cast<const uint64_t *>(e.val);
 
-		node = GetNode(nodeid, node->nodeid());
+		parentid = node->nodeid();
+		node = GetNode(nodeid, parentid);
+
+		if (!node)
+		{
+			std::cerr << "BTree::Lookup: Node " << nodeid << " with parent " << parentid << " not found.";
+			return false;
+		}
 	}
 
 	index = FindBin(node, key, key_size, func, context, exact ? FindMode::EQ : FindMode::LE);
@@ -311,6 +319,7 @@ void BTree::DumpTreeInternal(BlockDumper& out, const std::shared_ptr<BTreeNode> 
 	BTreeEntry e;
 	std::shared_ptr<BTreeNode> child;
 	uint64_t nodeid_child;
+	uint64_t nodeid_parent;
 
 	if (!node)
 		return;
@@ -330,9 +339,17 @@ void BTree::DumpTreeInternal(BlockDumper& out, const std::shared_ptr<BTreeNode> 
 
 			nodeid_child = *reinterpret_cast<const uint64_t *>(e.val);
 
-			child = GetNode(nodeid_child, node->nodeid());
+			nodeid_parent = node->nodeid();
+			child = GetNode(nodeid_child, nodeid_parent);
 
-			DumpTreeInternal(out, child);
+			if (child)
+			{
+				DumpTreeInternal(out, child);
+			}
+			else
+			{
+				out.st() << "Child node " << nodeid_child << " of parent " << nodeid_parent << " not found!" << std::endl;
+			}
 		}
 	}
 }

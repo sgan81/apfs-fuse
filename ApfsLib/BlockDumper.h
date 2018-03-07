@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 #include <ostream>
 
@@ -33,6 +34,8 @@ public:
 
 	void SetTextFlags(uint32_t flags) { m_text_flags = flags; }
 	void DumpNode(const byte_t *block, uint64_t blk_nr);
+
+	std::ostream &st() { return m_os; }
 
 private:
 	typedef void(BlockDumper::*DumpFunc)(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
