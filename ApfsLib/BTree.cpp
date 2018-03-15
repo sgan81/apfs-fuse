@@ -189,8 +189,10 @@ bool BTree::Init(uint64_t root_node_id, uint64_t version, ApfsNodeMapper *node_m
 		memcpy(&m_treeinfo, m_root_node->block().data() + m_root_node->block().size() - sizeof(APFS_BTFooter), sizeof(APFS_BTFooter));
 		return true;
 	}
-	else
+	else {
+		std::cerr << "ERROR: could not find root_node_id " << root_node_id << "\n";
 		return false;
+	}
 }
 
 bool BTree::Lookup(BTreeEntry &result, const void *key, size_t key_size, BTCompareFunc func, void *context, bool exact)
@@ -378,8 +380,10 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 
 		if (m_nodeid_map)
 		{
-			if (!m_nodeid_map->GetBlockID(ni, nodeid, m_version))
+			if (!m_nodeid_map->GetBlockID(ni, nodeid, m_version)) {
+				std::cerr << "ERROR: m_nodeid_map available, but no such nodeid\n";
 				return node;
+			}
 		}
 
 		blk.resize(m_container.GetBlocksize());
@@ -393,13 +397,18 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 				return node;
 			}
 
-			if (!VerifyBlock(blk.data(), blk.size()))
+
+			if (!VerifyBlock(blk.data(), blk.size())) {
+				std::cerr << "ERROR: (volume) VerifyBlock failed\n";
 				return node;
+			}
 		}
 		else
 		{
-			if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), ni.block_no))
+			if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), ni.block_no)) {
+				std::cerr << "ERROR: ReadAndVerifyHeaderBlock failed\n";
 				return node;
+			}
 		}
 
 		node = BTreeNode::CreateNode(*this, blk.data(), blk.size(), parentid, ni.block_no);
