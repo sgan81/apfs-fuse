@@ -415,14 +415,37 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 	attr = reinterpret_cast<const APFS_Attribute *>(res.val);
 	adata = reinterpret_cast<const uint8_t *>(res.val) + sizeof(APFS_Attribute);
 
-	if (attr->type == 1)
+	if (g_debug > 8) {
+		std::cout << "GetAttribute: type=" << attr->type << "\n";
+	}
+
+	// Original has attr->type == 1, but apparently this could work for
+	// type 0x11 as well. Is it a flag?
+	if (attr->type & 0x1)
 	{
 		assert(attr->size == 0x30);
 		alnk = reinterpret_cast<const APFS_AttributeLink *>(adata);
+		if (g_debug > 8) {
+			std::cout << "parsing as a link\n"
+				<< " size=" << alnk->size
+				<< " size_on_disk=" << alnk->size_on_disk
+				<< "\n";
+			Inode inode_info;
+			GetInode(inode_info, alnk->object_id);
+			std::cout << " inode says size=" << inode_info.sizes.size
+				<< " size_on_disk=" << inode_info.sizes.size_on_disk
+				<< "\n";
+		}
+
+		if (g_debug > 8)
+			DumpBuffer(adata, sizeof(*alnk), "attribute link data");
 
 		data.resize(alnk->size_on_disk);
 		ReadFile(data.data(), alnk->object_id, 0, data.size()); // Read must be multiple of 4K ...
 		data.resize(alnk->size);
+		if (g_debug > 8 && data.size() >= 0x10) {
+			DumpBuffer(data.data(), 0x10, "start of attribute content");
+		}
 	}
 	else // if (attr->type == 2)
 	{
@@ -540,4 +563,3 @@ int ApfsDir::CompareStdDirKey(const void *skey, size_t skey_len, const void *eke
 
 	return 0;
 }
-
