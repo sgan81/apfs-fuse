@@ -32,6 +32,9 @@ Supported options:
 * `-d n`: If n > 0, enable debug output.
 * `-o opts`: Comma-separated list of mount options.
 * `-v n`: Instead of mounting the first volume in a container, mount volume n (starting at 0).
+* `-r recovery_key`: Mount an encrypted volume by supplying a Personal Recovery Key.
+* `-s n`: Find the container at offset n inside the device. This is useful when using an image file
+  instead of a disk device, and therefore partitions are not exposed.
 
 The device has to be the one containing the APFS container. If a container contains more than one volume,
 the volume can be specified by the `-v` option.
