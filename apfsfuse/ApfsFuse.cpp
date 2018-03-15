@@ -516,7 +516,7 @@ struct apfs {
 
 void usage(const char *name)
 {
-	std::cout << name << " [-d level] [-o options] [-v volume-id] <device> <dir>" << std::endl;
+	std::cout << name << " [-d level] [-o options] [-v volume-id] [-r passphrase] [-s offset] <device> <dir>" << std::endl;
 }
 
 bool add_option(std::string &optstr, const char *name, const char *value)
@@ -543,6 +543,7 @@ int main(int argc, char *argv[])
 	int opt;
 	std::string mount_options, passphrase;
 	unsigned int volume_id = 0;
+	size_t container_offset = 0;
 
 	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/ios_11_0_1.img";
 	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/apfs_2vol_test_rw.dmg";
@@ -566,7 +567,7 @@ int main(int argc, char *argv[])
 	ops.releasedir = apfs_releasedir;
 	// ops.statfs = apfs_statfs;
 
-	while ((opt = getopt(argc, argv, "d:o:v:r:")) != -1)
+	while ((opt = getopt(argc, argv, "d:o:v:r:s:")) != -1)
 	{
 		switch (opt)
 		{
@@ -581,6 +582,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'r':
 			  passphrase = std::string(optarg);
+				break;
+			case 's':
+			  container_offset = strtoul(optarg, nullptr, 10);
 				break;
 			default:
 				usage(argv[0]);
@@ -605,7 +609,13 @@ int main(int argc, char *argv[])
 		std::cerr << "Error opening device!" << std::endl;
 		return 1;
 	}
-	g_container = new ApfsContainer(g_disk, 0, g_disk.GetSize());
+	if (container_offset >= g_disk.GetSize()) {
+		std::cerr << "Invalid container offset specified" << std::endl;
+		return 1;
+	}
+	g_container = new ApfsContainer(g_disk,
+                                  container_offset,
+																	g_disk.GetSize() - container_offset);
 	g_container->Init();
 	g_volume = g_container->GetVolume(volume_id, passphrase);
 	if (!g_volume)
