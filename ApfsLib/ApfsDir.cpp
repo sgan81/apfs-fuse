@@ -185,7 +185,14 @@ bool ApfsDir::ListDirectory(std::vector<Name> &dir, uint64_t inode)
 		if (!rc)
 			break;
 
+
 		kdata = reinterpret_cast<const uint8_t *>(res.key);
+
+		if (g_debug > 8) {
+			DumpBuffer(kdata, res.key_len, "entry key");
+			DumpBuffer(reinterpret_cast<const uint8_t*>(res.val), res.val_len,
+			           "entry val");
+		}
 
 		e.parent_id = *reinterpret_cast<const uint64_t *>(kdata);
 
@@ -285,6 +292,12 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		key.inode = inode | KeyType_Extent;
 		key.offset = offs;
 
+		if (g_debug > 8) {
+			std::cout << "ReadFile for inode " << inode
+				<< ", offset=" << offs
+				<< "\n";
+		}
+
 		rc = m_bt.Lookup(e, &key, sizeof(key), CompareStdDirKey, this, false);
 
 		if (!rc)
@@ -293,13 +306,33 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		ext_key = reinterpret_cast<const APFS_Key_Extent *>(e.key);
 		ext_val = reinterpret_cast<const APFS_Extent *>(e.val);
 
+		if (g_debug > 8) {
+			std::cout << " key->inode=" << ext_key->inode
+				<< "; key->offset=" << ext_key->offset
+				<< "\n"
+				<< " val->size=" << ext_val->size
+				<< "; val->block=" << ext_val->block
+				<< "; val->crypto_id=" << ext_val->crypto_id
+				<< "\n";
+		}
+
 		if (ext_key->inode != key.inode)
 			return false;
 
 		idx = (offs - ext_key->offset) >> 12;
+		// ext_val->size has a mysterious upper byte set. At least sometimes.
+		// Let us clear it.
+		uint64_t extent_size = ext_val->size & 0x00FFFFFFFFFFFFFFULL;
+
+		if (g_debug > 8) {
+			std::cout << " key has offset " << ext_key->offset << "\n"
+				<< " val has block=" << ext_val->block
+				<< ", size=" << extent_size << "\n";
+		}
+
 		cur_size = size;
-		if (((idx << 12) + cur_size) > ext_val->size)
-			cur_size = ext_val->size - (idx << 12);
+		if (((idx << 12) + cur_size) > extent_size)
+			cur_size = extent_size - (idx << 12);
 		if (cur_size == 0)
 			break; // Die Freuden von Fuse ...
 		if (ext_val->block != 0) {
