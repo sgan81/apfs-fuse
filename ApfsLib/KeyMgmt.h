@@ -59,7 +59,7 @@ public:
 
 	size_t GetKeyCnt();
 	bool GetKey(size_t nr, key_data_t &keydata);
-	bool FindKey(const apfs_uuid_t &uuid, uint16_t type, key_data_t &keydata);
+	bool FindKey(const apfs_uuid_t &uuid, uint16_t type, key_data_t &keydata, int force_index = -1);
 
 private:
 	std::vector<uint8_t> m_data;
@@ -74,7 +74,7 @@ public:
 	bool Init(uint64_t block, uint64_t blockcnt, const apfs_uuid_t &container_uuid);
 
 	bool GetPasswordHint(std::string &hint, const apfs_uuid_t &volume_uuid);
-	bool GetVolumeKey(uint8_t *vek, const apfs_uuid_t &volume_uuid, const char *password);
+	bool GetVolumeKey(uint8_t *vek, const apfs_uuid_t &volume_uuid, const char *password = NULL, bool password_is_prk = false);
 
 	bool IsValid() const { return m_is_valid; }
 

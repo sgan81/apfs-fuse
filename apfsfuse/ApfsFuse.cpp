@@ -337,6 +337,11 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 				return;
 			}
 
+						if (g_debug > 0) {
+							std::cout << "Reporting size as [no stat]"
+								<< "\nHowever inode says: size=" << f->ino.sizes.size << ", size_on_disk="
+								<< f->ino.sizes.size_on_disk << "\n";
+						}
 			DecompressFile(dir, ino, f->decomp_data, attr);
 		}
 
@@ -536,7 +541,7 @@ int main(int argc, char *argv[])
 	const char *dev_path = nullptr;
 	int err = -1;
 	int opt;
-	std::string mount_options;
+	std::string mount_options, passphrase;
 	unsigned int volume_id = 0;
 
 	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/ios_11_0_1.img";
@@ -561,7 +566,7 @@ int main(int argc, char *argv[])
 	ops.releasedir = apfs_releasedir;
 	// ops.statfs = apfs_statfs;
 
-	while ((opt = getopt(argc, argv, "d:o:v:")) != -1)
+	while ((opt = getopt(argc, argv, "d:o:v:r:")) != -1)
 	{
 		switch (opt)
 		{
@@ -573,6 +578,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'v':
 				volume_id = strtoul(optarg, nullptr, 10);
+				break;
+			case 'r':
+			  passphrase = std::string(optarg);
 				break;
 			default:
 				usage(argv[0]);
@@ -599,7 +607,7 @@ int main(int argc, char *argv[])
 	}
 	g_container = new ApfsContainer(g_disk, 0, g_disk.GetSize());
 	g_container->Init();
-	g_volume = g_container->GetVolume(volume_id);
+	g_volume = g_container->GetVolume(volume_id, passphrase);
 	if (!g_volume)
 	{
 		std::cerr << "Unable to get volume!" << std::endl;

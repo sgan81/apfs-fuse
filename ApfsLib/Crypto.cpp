@@ -59,7 +59,7 @@ void Rfc3394_KeyWrap(uint8_t *crypto, const uint8_t *plain, size_t size, const u
 		c[i + 1] = r[i];
 }
 
-void Rfc3394_KeyUnwrap(uint8_t *plain, const uint8_t *crypto, size_t size, const uint8_t *key, AES::Mode aes_mode, uint64_t *iv)
+bool Rfc3394_KeyUnwrap(uint8_t *plain, const uint8_t *crypto, size_t size, const uint8_t *key, AES::Mode aes_mode, uint64_t *iv)
 {
 	Rfc3394_Unit u;
 	uint64_t a;
@@ -96,6 +96,10 @@ void Rfc3394_KeyUnwrap(uint8_t *plain, const uint8_t *crypto, size_t size, const
 		p[i] = r[i];
 	if (iv)
 		*iv = a;
+	if (a == rfc_3394_default_iv)
+		return true;
+	else
+		return false;
 }
 
 void HMAC_SHA256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len, uint8_t *mac)

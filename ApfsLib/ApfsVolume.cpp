@@ -19,6 +19,7 @@
 
 #include <cstring>
 #include <vector>
+#include <iomanip>
 #include <iostream>
 
 #include "Global.h"
@@ -62,7 +63,9 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 	if (m_sb.signature != 0x42535041)
 		return false;
 
-	m_nodemap_dir.Init(m_sb.blockid_nodemap, m_sb.hdr.version);
+  if (!m_nodemap_dir.Init(m_sb.blockid_nodemap, m_sb.hdr.version)) {
+		std::cerr << "WARNING: m_nodemap_dir init failed\n";
+	}
 
 	if ((m_sb.flags_108 & 3) != 1)
 	{
@@ -71,25 +74,36 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 
 		std::cout << "Volume " << m_sb.vol_name << " is encrypted." << std::endl;
 
-		if (m_container.GetPasswordHint(str, m_sb.guid))
-			std::cout << "Hint: " << str << std::endl;
+		// Try self-service first
+		if (!m_container.GetVolumeKey(vek, m_sb.guid)) {
+			if (m_container.GetPasswordHint(str, m_sb.guid))
+				std::cout << "Hint: " << str << std::endl;
 
-		std::cout << "Enter Password: ";
-		GetPassword(str);
+			std::cout << "Enter Password: ";
+			GetPassword(str);
 
-		if (!m_container.GetVolumeKey(vek, m_sb.guid, str.c_str()))
-		{
-			std::cout << "Wrong password!" << std::endl;
-			return false;
+			if (!m_container.GetVolumeKey(vek, m_sb.guid, str.c_str()))
+			{
+				std::cout << "Wrong password!" << std::endl;
+				return false;
+			}
 		}
-
+		if (g_debug > 0) {
+    	std::cerr << "Setting the VEK and m_is_encrypted\n";
+		}
 		m_aes.SetKey(vek, vek + 0x10);
 		m_is_encrypted = true;
 	}
 
-	m_bt_directory.Init(m_sb.nodeid_rootdir, m_sb.hdr.version, &m_nodemap_dir);
-	m_bt_blockmap.Init(m_sb.blockid_blockmap, m_sb.hdr.version);
-	m_bt_snapshots.Init(m_sb.blockid_4xBx10_map, m_sb.hdr.version);
+  if(!m_bt_directory.Init(m_sb.nodeid_rootdir, m_sb.hdr.version, &m_nodemap_dir)) {
+		std::cerr << "WARNING: m_bt_directory init failed\n";
+	}
+	if (!m_bt_blockmap.Init(m_sb.blockid_blockmap, m_sb.hdr.version)) {
+		std::cerr << "WARNING: m_bt_blockmap init failed\n";
+	}
+	if (!m_bt_snapshots.Init(m_sb.blockid_4xBx10_map, m_sb.hdr.version)) {
+		std::cerr << "WARNING: m_bt_snapshots init failed\n";
+	}
 
 	return true;
 }

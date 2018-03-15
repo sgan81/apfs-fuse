@@ -39,7 +39,8 @@ public:
 
 	bool Init();
 
-	ApfsVolume *GetVolume(int index);
+	ApfsVolume *GetVolume(int index, const std::string &passphrase);
+  ApfsVolume *GetVolume(int index);
 	int GetVolumeCnt() const;
 
 	bool ReadBlocks(byte_t *data, uint64_t blkid, uint64_t blkcnt = 1) const;
@@ -47,6 +48,7 @@ public:
 
 	uint32_t GetBlocksize() const { return m_sb.block_size; }
 
+	bool GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid);
 	bool GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password);
 	bool GetPasswordHint(std::string &hint, const apfs_uuid_t &vol_uuid);
 
@@ -56,6 +58,9 @@ private:
 	Device &m_disk;
 	const uint64_t m_part_start;
 	const uint64_t m_part_len;
+	std::string m_passphrase;
+	std::string m_passphrase_kek_struct;
+	std::string m_volume_kek_struct;
 
 	APFS_Superblock_NXSB m_sb;
 
