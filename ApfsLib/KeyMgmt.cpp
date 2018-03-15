@@ -500,10 +500,10 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		return false;
 	}
 
-  if (g_debug > 0)
-	  std::cout << " KEK IV valid\n";
-
-	DumpBuffer(vek_blob.wrapped_vek, 0x20, "wrapped VEK");
+  	if (g_debug > 0) {
+		std::cout << " KEK IV valid\n";
+    		DumpBuffer(vek_blob.wrapped_vek, 0x20, "wrapped VEK");
+	}
 
 	{
 		// Try AES-256 first. This method is used for wrapping the whole XTS-AES key,
@@ -541,7 +541,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	memcpy(&vek[0x10], sha_result, 0x10);
 
 	if (g_debug > 0)
-  	DumpBuffer(vek, 0x20, "final VEK");
+	  	DumpBuffer(vek, 0x20, "final AES-XTS key");
 
 	return true;
 }
@@ -669,7 +669,8 @@ bool KeyManager::DecodeKEKBlob(kek_blob_t & kek_blob, const bagdata_t & data)
 
 	parser.SetData(key_hdr);
 
-	DumpBuffer(data.data, data.size, "KEK blob data");
+	if (g_debug > 0)
+  		DumpBuffer(data.data, data.size, "KEK blob data");
 
 	if (!parser.GetUInt64(0x80, kek_blob.unk_80))
 		return false;
@@ -677,7 +678,8 @@ bool KeyManager::DecodeKEKBlob(kek_blob_t & kek_blob, const bagdata_t & data)
 	if (!parser.GetBytes(0x81, kek_blob.uuid, 0x10))
 		return false;
 
-	DumpBuffer(kek_blob.uuid, 0x10, "KEK blob UUID");
+	if (g_debug > 0)
+  		DumpBuffer(kek_blob.uuid, 0x10, "KEK blob UUID");
 
 	if (!parser.GetBytes(0x82, kek_blob.unk_82, 8))
 		return false;
@@ -701,7 +703,8 @@ bool KeyManager::DecodeVEKBlob(vek_blob_t & vek_blob, const bagdata_t & data)
 
 	parser.SetData(data);
 
-	DumpBuffer(data.data, data.size, "VEK blob data");
+	if (g_debug > 0)
+		DumpBuffer(data.data, data.size, "VEK blob data");
 
 	if (!parser.GetAny(0xA3, key_hdr))
 		return false;
