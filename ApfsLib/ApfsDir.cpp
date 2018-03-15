@@ -302,10 +302,21 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 			cur_size = ext_val->size - (idx << 12);
 		if (cur_size == 0)
 			break; // Die Freuden von Fuse ...
-		if (ext_val->block != 0)
-			m_vol.ReadBlocks(bdata, ext_val->block + idx, cur_size >> 12, true);
-		else
+		if (ext_val->block != 0) {
+			uint64_t block_id = ext_val->block;
+			m_vol.ReadBlocks(bdata, block_id + idx, cur_size >> 12, true,
+										   ext_val->crypto_id + idx);
+			if (g_debug > 8) {
+				std::cout << "reading at offset " << offs
+				  << " length " << cur_size
+					<< " starting from block " << block_id + idx
+					<< " (extent starts at block " << block_id
+					<< ")\n";
+			}
+		}
+		else {
 			memset(bdata, 0, cur_size);
+		}
 		bdata += cur_size;
 		offs += cur_size;
 		size -= cur_size;

@@ -51,7 +51,7 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 
 	blk.resize(m_container.GetBlocksize());
 
-	if (!ReadBlocks(blk.data(), blkid_volhdr, 1, false))
+	if (!ReadBlocks(blk.data(), blkid_volhdr, 1, false, 0)) // crypto_id is unused
 		return false;
 
 	if (!VerifyBlock(blk.data(), blk.size()))
@@ -100,7 +100,7 @@ void ApfsVolume::dump(BlockDumper& bd)
 
 	blk.resize(m_container.GetBlocksize());
 
-	if (!ReadBlocks(blk.data(), m_blockid_sb, 1, false))
+	if (!ReadBlocks(blk.data(), m_blockid_sb, 1, false, 0))
 		return;
 
 	if (!VerifyBlock(blk.data(), blk.size()))
@@ -116,7 +116,7 @@ void ApfsVolume::dump(BlockDumper& bd)
 	m_bt_snapshots.dump(bd);
 }
 
-bool ApfsVolume::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt, bool decrypt)
+bool ApfsVolume::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt, bool decrypt, uint64_t crypto_id)
 {
 	if (!m_container.ReadBlocks(data, blkid, blkcnt))
 		return false;
@@ -125,7 +125,7 @@ bool ApfsVolume::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt, bool
 		return true;
 
 	uint64_t cs_factor = m_container.GetBlocksize() / 0x200;
-	uint64_t uno = blkid * cs_factor;
+	uint64_t uno = crypto_id * cs_factor;
 	size_t size = blkcnt * m_container.GetBlocksize();
 	size_t k;
 

@@ -193,7 +193,7 @@ struct APFS_Extent
 {
 	uint64_t size;
 	uint64_t block;
-	uint64_t unk;
+	uint64_t crypto_id;
 };
 
 struct APFS_Key_Attribute

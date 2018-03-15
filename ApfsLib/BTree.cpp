@@ -386,8 +386,12 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 
 		if (m_volume)
 		{
-			if (!m_volume->ReadBlocks(blk.data(), ni.block_no, 1, (ni.flags & 4) != 0))
+			// TODO: is the crypto_id always equal to the block ID here?
+			if (!m_volume->ReadBlocks(blk.data(), ni.block_no, 1, (ni.flags & 4) != 0,
+			                          ni.block_no)) {
+				std::cerr << "ERROR: volume ReadBlocks failed\n";
 				return node;
+			}
 
 			if (!VerifyBlock(blk.data(), blk.size()))
 				return node;

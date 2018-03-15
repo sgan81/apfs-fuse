@@ -549,7 +549,7 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 	case 0x8:
 		assert(key_length == 16);
 		m_os << "Data " << key << " " << *reinterpret_cast<const uint64_t *>(key_data + 8) << " => ";
-		// key | offset : len | block | unk
+		// key | offset : len | block | crypto_id
 
 		m_os << hex;
 
@@ -565,7 +565,7 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 			if (value_length == 0x18)
 			{
 				const APFS_Extent *ext = reinterpret_cast<const APFS_Extent *>(value_data);
-				m_os << ext->size << " " << ext->block << " " << ext->unk << endl;
+				m_os << ext->size << " " << ext->block << " " << ext->crypto_id << endl;
 			}
 			else
 			{
