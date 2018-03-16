@@ -254,7 +254,8 @@ static void apfs_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 	{
 		for (size_t k = 0; k < names.size(); k++)
 		{
-			std::cout << names[k] << std::endl;
+			if (g_debug > 0)
+				std::cout << names[k] << std::endl;
 			reply.append(names[k]);
 			reply.push_back(0);
 		}
