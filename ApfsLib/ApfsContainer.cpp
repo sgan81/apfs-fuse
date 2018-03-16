@@ -28,6 +28,7 @@
 #include "Global.h"
 
 int g_debug = 0;
+bool g_lax = false;
 
 #undef KEYBAG_DEBUG
 

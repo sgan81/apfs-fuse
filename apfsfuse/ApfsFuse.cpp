@@ -133,11 +133,15 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 					{
 						st.st_size = data.size();
 						std::cerr << "Unknown compression algorithm " << decmpfs->algo << std::endl;
+						if (!g_lax)
+							return false;
 					}
 				}
 				else
 				{
 					std::cerr << "Flag 0x20 set but no com.apple.decmpfs attribute!!!" << std::endl;
+					if (!g_lax)
+						return false;
 				}
 			}
 			else
@@ -341,7 +345,13 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 				std::cout << "Inode info: size=" << f->ino.sizes.size
 				          << ", size_on_disk=" << f->ino.sizes.size_on_disk << "\n";
 			}
-			DecompressFile(dir, ino, f->decomp_data, attr);
+			rc = DecompressFile(dir, ino, f->decomp_data, attr);
+			// In strict mode, do not return uncompressed data.
+			if (!rc && !g_lax) {
+				fuse_reply_err(req, EIO);
+				delete f;
+				return;
+			}
 		}
 
 		fi->fh = reinterpret_cast<uint64_t>(f);
@@ -566,7 +576,7 @@ int main(int argc, char *argv[])
 	ops.releasedir = apfs_releasedir;
 	// ops.statfs = apfs_statfs;
 
-	while ((opt = getopt(argc, argv, "d:o:v:r:s:")) != -1)
+	while ((opt = getopt(argc, argv, "d:o:v:r:s:l")) != -1)
 	{
 		switch (opt)
 		{
@@ -580,10 +590,13 @@ int main(int argc, char *argv[])
 				volume_id = strtoul(optarg, nullptr, 10);
 				break;
 			case 'r':
-			  passphrase = std::string(optarg);
+				passphrase = std::string(optarg);
 				break;
 			case 's':
-			  container_offset = strtoul(optarg, nullptr, 10);
+				container_offset = strtoul(optarg, nullptr, 10);
+				break;
+			case 'l':
+				g_lax = true;
 				break;
 			default:
 				usage(argv[0]);

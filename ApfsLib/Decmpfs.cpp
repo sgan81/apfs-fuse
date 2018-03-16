@@ -136,7 +136,8 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 				if (g_debug > 0)
 					std::cout << "Expected " << hdr->size << " bytes in compressed stream, "
 						  << "got " << decoded_bytes << std::endl;
-				return false;
+				if (!g_lax)
+					return false;
 			}
 		}
 		else if (compressed[0x10] == 0xFF)
@@ -229,7 +230,8 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 						std::cout << "Invalid content in block " << k << ": expected "
 						          << expected << " bytes, but uncompressed block has size "
 							  << src_len << std::endl;
-					return false;
+					if (!g_lax)
+						return false;
 				}
 				memcpy(blk, src, src_len);
 			} else if (src_len > 0x10000) {
@@ -249,13 +251,15 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 					if (g_debug > 0)
 						std::cout << "Wrong uncompressed size for block " << k << ": expected "
 							  << expected << " bytes, found " << off << std::endl;
-					return false;
+					if (!g_lax)
+						return false;
 				}
 
 				if ((0x10000 * (k + 1) - 1) > decompressed.size()) {
-						if (g_debug > 0) {
-							std::cout << "More decompressed data than expected!\n";
-						}
+					if (g_debug > 0) {
+						std::cout << "More decompressed data than expected!\n";
+					}
+					if (!g_lax)
 						return false;
 				}
 			}
@@ -336,14 +340,16 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 						std::cout << "Invalid content in block " << k << ": expected "
 						          << expected << " bytes, but uncompressed block has size "
 							  << src_len << std::endl;
-					return false;
+					if (!g_lax)
+						return false;
 				}
 				memcpy(dst, src, src_len);
 			} else if (src_len > 0x10000) {
 				if (g_debug > 0) {
 					std::cout << "Invalid compressed block size";
 				}
-				return false;
+				if (!g_lax)
+					return false;
 			}	else {
 				size_t decoded_size = lzvn_decode(dst, dst_len, src, src_len);
 				if (g_debug > 8) {
@@ -353,7 +359,8 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 					if (g_debug > 0)
 						std::cout << "Wrong uncompressed size for block " << k << ": expected "
 							  << expected << " bytes, found " << decoded_size << std::endl;
-					return false;
+					if (!g_lax)
+						return false;
 				}
 			}
 		}
@@ -368,11 +375,14 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		if (g_debug > 0)
 			std::cout << "DecompressFile: Unknown Algorithm " << hdr->algo << std::endl;
 
-	  std::cerr << "Unknown algo " << hdr->algo << "\n";
+	  	std::cerr << "Unknown algo " << hdr->algo << "\n";
 		std::cerr << "stream size: " << compressed.size() << "\n";
 		DumpBuffer(compressed.data(), compressed.size(), "compressed stream content");
 
-		decompressed = compressed;
+		if (g_lax)
+			decompressed = compressed;
+		else
+			return false;
 	}
 #else
 	decompressed = compressed;
