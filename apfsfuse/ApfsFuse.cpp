@@ -337,11 +337,10 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 				return;
 			}
 
-						if (g_debug > 0) {
-							std::cout << "Reporting size as [no stat]"
-								<< "\nHowever inode says: size=" << f->ino.sizes.size << ", size_on_disk="
-								<< f->ino.sizes.size_on_disk << "\n";
-						}
+			if (g_debug > 0) {
+				std::cout << "Inode info: size=" << f->ino.sizes.size
+				          << ", size_on_disk=" << f->ino.sizes.size_on_disk << "\n";
+			}
 			DecompressFile(dir, ino, f->decomp_data, attr);
 		}
 
