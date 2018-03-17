@@ -586,7 +586,7 @@ int main(int argc, char *argv[])
 
 	if (!g_disk.Open(dev_path))
 	{
-		std::cerr << "Device not found!" << std::endl;
+		std::cerr << "Error opening device!" << std::endl;
 		return 1;
 	}
 	g_container = new ApfsContainer(g_disk, 0, g_disk.GetSize());

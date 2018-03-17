@@ -22,7 +22,9 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/stat.h>
 #include <sys/fcntl.h>
 #include <linux/fs.h>
+#include <errno.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "DeviceLinux.h"
 #include "Global.h"
@@ -43,7 +45,10 @@ bool DeviceLinux::Open(const char* name)
 	m_device = open(name, O_RDONLY | O_LARGEFILE);
 
 	if (m_device == -1)
+	{
+		printf("Opening device %s failed. %s\n", name, strerror(errno));
 		return false;
+	}
 
 	struct stat64 st;
 
