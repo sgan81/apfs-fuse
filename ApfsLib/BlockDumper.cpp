@@ -332,7 +332,7 @@ void BlockDumper::DumpTableHeader(const APFS_TableHeader &tbl)
 void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index)
 {
 	uint64_t key;
-	uint16_t nlen;
+	// uint16_t nlen;
 	uint8_t type;
 
 	// assert(key_length >= 8);
@@ -451,7 +451,7 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 	case 0x4:
 		assert(key_length >= 10);
 		m_os << "Attr " << key << " ";
-		nlen = *reinterpret_cast<const uint16_t *>(key_data + 8);
+		// nlen = *reinterpret_cast<const uint16_t *>(key_data + 8);
 		m_os << '\'' << (key_data + 10) << '\'';
 
 		if (index)
@@ -653,6 +653,9 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 
 void BlockDumper::DumpBTEntry_4_B(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
+	(void)key_length;
+	(void)value_length;
+
 	const APFS_Key_B_NodeID_Map *ekey = reinterpret_cast<const APFS_Key_B_NodeID_Map *>(key_ptr);
 
 	m_os << setw(16) << ekey->nodeid << " | ";
@@ -681,6 +684,9 @@ void BlockDumper::DumpBTEntry_4_B(const byte_t * key_ptr, size_t key_length, con
 
 void BlockDumper::DumpBTEntry_4_F(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
+	(void)key_length;
+	(void)value_length;
+
 	assert(key_length == 8);
 	uint64_t key = *reinterpret_cast<const uint64_t *>(key_ptr);
 
@@ -711,6 +717,9 @@ void BlockDumper::DumpBTEntry_4_F(const byte_t * key_ptr, size_t key_length, con
 
 void BlockDumper::DumpBTEntry_4_10(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
+	(void)key_length;
+	(void)value_length;
+
 	uint64_t key = *reinterpret_cast<const uint64_t *>(key_ptr);
 
 	switch (key >> 60)
@@ -769,6 +778,10 @@ void BlockDumper::DumpBTEntry_4_10(const byte_t * key_ptr, size_t key_length, co
 
 void BlockDumper::DumpBTEntry_4_13(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
+	(void)key_length;
+	(void)value_length;
+	(void)index;
+
 	DumpHex(key_ptr, 0x08);
 	DumpHex(val_ptr, 0x10);
 	m_os << endl;
@@ -776,6 +789,10 @@ void BlockDumper::DumpBTEntry_4_13(const byte_t * key_ptr, size_t key_length, co
 
 void BlockDumper::DumpBTEntry_8_9(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
+	(void)key_length;
+	(void)value_length;
+	(void)index;
+
 	const APFS_Key_8_9 *key = reinterpret_cast<const APFS_Key_8_9 *>(key_ptr);
 
 	assert(key_length == 0x10);
@@ -792,6 +809,8 @@ void BlockDumper::DumpBTEntry_8_9(const byte_t * key_ptr, size_t key_length, con
 
 void BlockDumper::DumpBTEntry_Unk(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
+	(void)index;
+
 	m_os << "Key: " << std::endl;
 	DumpHex(key_ptr, key_length);
 	m_os << "Value: " << std::endl;

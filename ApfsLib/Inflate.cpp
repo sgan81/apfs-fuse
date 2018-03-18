@@ -279,7 +279,7 @@ size_t Inflate::Decompress(uint8_t *dst, size_t dst_size, const uint8_t *src, si
 	int bfinal;
 	int btype;
 	int len;
-	int nlen;
+	// int nlen;
 
 	buffer = src;
 	buffer_size = src_size;
@@ -298,7 +298,7 @@ size_t Inflate::Decompress(uint8_t *dst, size_t dst_size, const uint8_t *src, si
 		{
 		case 0:
 			len = buffer[buffer_ptr] | (buffer[buffer_ptr + 1] << 8);
-			nlen = buffer[buffer_ptr + 2] | (buffer[buffer_ptr + 3] << 8);
+			// nlen = buffer[buffer_ptr + 2] | (buffer[buffer_ptr + 3] << 8);
 			buffer_ptr += 4;
 			bit_pos = 8;
 			memcpy(dbuffer + dbuffer_ptr, buffer + buffer_ptr, len);

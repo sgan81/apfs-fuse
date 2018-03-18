@@ -134,7 +134,7 @@ bool KeyParser::GetBytes(uint8_t expected_tag, uint8_t * data, size_t len)
 
 	GetTagAndLen(tag, len);
 
-	if ((m_end - m_ptr) < len)
+	if ((m_end - m_ptr) < static_cast<ptrdiff_t>(len))
 		return false;
 
 	memcpy(data, m_ptr, len);
@@ -155,7 +155,7 @@ bool KeyParser::GetAny(uint8_t expected_tag, bagdata_t& data)
 
 	GetTagAndLen(tag, len);
 
-	if ((m_end - m_ptr) < len)
+	if ((m_end - m_ptr) < static_cast<ptrdiff_t>(len))
 		return false;
 
 	data.data = m_ptr;
@@ -204,6 +204,8 @@ Keybag::~Keybag()
 bool Keybag::Init(const uint8_t * data, size_t size)
 {
 	const keybag_hdr_t &hdr = *reinterpret_cast<const keybag_hdr_t *>(data);
+
+	(void)size;
 
 	if (hdr.version != 2)
 		return false;

@@ -167,18 +167,29 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 	}
 }
 
+/*
 static void apfs_bmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize, uint64_t idx)
 {
+	(void)req;
+	(void)ino;
+	(void)blocksize;
+	(void)idx;
+
 	// fuse_reply_bmap(req, idx);
 }
+*/
 
+/*
 static void apfs_destroy(void *userdata)
 {
-
+	(void)userdata;
 }
+*/
 
 static void apfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
+	(void)fi;
+
 	ApfsDir dir(*g_volume);
 	ApfsDir::Inode rec;
 	bool rc = false;
@@ -357,10 +368,11 @@ static void apfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, st
 
 	if (!file->IsCompressed())
 	{
-		bool rc;
+		// bool rc;
 		std::vector<char> buf(size, 0);
 
-		rc = dir.ReadFile(buf.data(), file->ino.ino.object_id, off, size);
+		// rc =
+		dir.ReadFile(buf.data(), file->ino.ino.object_id, off, size);
 
 		// std::cerr << "apfs_read: fuse_reply_buf(req, " << reinterpret_cast<uint64_t>(buf.data()) << ", " << size << ")" << std::endl;
 
@@ -368,7 +380,7 @@ static void apfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, st
 	}
 	else
 	{
-		if (off >= file->decomp_data.size())
+		if (static_cast<size_t>(off) >= file->decomp_data.size())
 			size = 0;
 		else if (off + size > file->decomp_data.size())
 			size = file->decomp_data.size() - off;
@@ -395,7 +407,7 @@ static void dirbuf_add(fuse_req_t req, std::vector<char> &dirbuf, const char *na
 
 static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize, off_t off, size_t maxsize)
 {
-	if (off < bufsize)
+	if (static_cast<size_t>(off) < bufsize)
 		return fuse_reply_buf(req, buf + off, min(bufsize - off, maxsize));
 	else
 		return fuse_reply_buf(req, NULL, 0);
@@ -483,22 +495,18 @@ static void apfs_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
 	fuse_reply_err(req, 0);
 }
 
+/*
 static void apfs_statfs(fuse_req_t req, fuse_ino_t ino)
 {
-
+	(void)req;
+	(void)ino;
 }
+*/
 
 struct apfs {
 	char *disk;
 	char *logfile;
 	int vol_id;
-};
-
-static fuse_opt apfs_opfs[] =
-{
-	// { "logfile=%s", offsetof(apfs, logfile), 0 },
-	{ "volume=%d", offsetof(apfs, vol_id), 0 },
-	FUSE_OPT_END
 };
 
 void usage(const char *name)

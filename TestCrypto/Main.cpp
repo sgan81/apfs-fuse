@@ -198,6 +198,9 @@ void TestWrapUnwrap()
 
 int main(int argc, char *argv[])
 {
+	(void)argc;
+	(void)argv;
+
 	// return TestDiskDecrypt(argc, argv);
 	TestBlobVerify();
 	TestKeyDerivation();

@@ -400,6 +400,9 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 
 		node = BTreeNode::CreateNode(*this, blk.data(), blk.size(), parentid, ni.block_no);
 #ifdef BTREE_USE_MAP
+		if (m_nodes.size() > BTREE_MAP_MAX_NODES)
+			m_nodes.clear(); // TODO: Make this somewhat more intelligent ...
+
 		m_nodes[nodeid] = node;
 #endif
 	}
@@ -442,14 +445,14 @@ int BTree::FindBin(const std::shared_ptr<BTreeNode>& node, const void* key, size
 
 	int beg;
 	int end;
-	int mid;
+	int mid = -1;
 	int cnt = node->entries_cnt();
 	int res;
 
 	BTreeEntry e;
 	int rc;
 
-	if (cnt == 0)
+	if (cnt <= 0)
 		return -1;
 
 	beg = 0;
@@ -506,6 +509,10 @@ int BTree::FindBin(const std::shared_ptr<BTreeNode>& node, const void* key, size
 		break;
 	case FindMode::GT:
 		res = (rc > 0) ? mid : (mid + 1);
+		break;
+	default:
+		assert(false);
+		res = -1;
 		break;
 	}
 

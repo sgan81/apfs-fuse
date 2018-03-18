@@ -27,6 +27,8 @@
 static int CompareNodeMapKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context)
 {
 	(void)context;
+	(void)skey_len;
+	(void)ekey_len;
 
 	assert(skey_len == sizeof(APFS_Key_B_NodeID_Map));
 	assert(ekey_len == sizeof(APFS_Key_B_NodeID_Map));

@@ -147,6 +147,7 @@ void ScanBlocks(std::ostream &os, std::istream &dev)
 
 static void ctrl_c_handler(int sig)
 {
+	(void)sig;
 	g_abort = true;
 }
 

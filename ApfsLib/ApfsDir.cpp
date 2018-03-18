@@ -393,6 +393,8 @@ int ApfsDir::CompareStdDirKey(const void *skey, size_t skey_len, const void *eke
 	// assert(skey_len == 8);
 	// assert(ekey_len == 8);
 
+	(void)ekey_len;
+
 	ApfsDir *dir = reinterpret_cast<ApfsDir *>(context);
 
 	uint64_t ks = *reinterpret_cast<const uint64_t *>(skey);
