@@ -353,7 +353,7 @@ bool GetPassword(std::string &pw)
 		return false;
 
 	/* Read the password. */
-	std::cin >> pw;
+	std::getline(std::cin, pw);
 
 	/* Restore terminal. */
 	(void) tcsetattr (fileno (stream), TCSAFLUSH, &told);
