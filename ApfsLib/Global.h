@@ -24,3 +24,5 @@ typedef unsigned char apfs_uuid_t[16];
 
 // Debug level - defined in ApfsContainer.cpp
 extern int g_debug;
+// Lax mode - defined in ApfsContainer.cpp
+extern bool g_lax;

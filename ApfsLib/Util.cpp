@@ -353,7 +353,7 @@ bool GetPassword(std::string &pw)
 		return false;
 
 	/* Read the password. */
-	std::cin >> pw;
+	std::getline(std::cin, pw);
 
 	/* Restore terminal. */
 	(void) tcsetattr (fileno (stream), TCSAFLUSH, &told);
@@ -361,4 +361,11 @@ bool GetPassword(std::string &pw)
 	std::cout << std::endl;
 
 	return true;
+}
+
+// Like DumpHex, but prints a label.
+void DumpBuffer(const uint8_t *data, size_t len, const char *label)
+{
+	std::cout << "dumping " << label << std::endl;
+	DumpHex(std::cout, data, len);
 }

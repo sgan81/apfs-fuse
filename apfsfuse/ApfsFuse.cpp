@@ -133,11 +133,15 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 					{
 						st.st_size = data.size();
 						std::cerr << "Unknown compression algorithm " << decmpfs->algo << std::endl;
+						if (!g_lax)
+							return false;
 					}
 				}
 				else
 				{
 					std::cerr << "Flag 0x20 set but no com.apple.decmpfs attribute!!!" << std::endl;
+					if (!g_lax)
+						return false;
 				}
 			}
 			else
@@ -250,7 +254,8 @@ static void apfs_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 	{
 		for (size_t k = 0; k < names.size(); k++)
 		{
-			std::cout << names[k] << std::endl;
+			if (g_debug > 0)
+				std::cout << names[k] << std::endl;
 			reply.append(names[k]);
 			reply.push_back(0);
 		}
@@ -337,7 +342,19 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 				return;
 			}
 
-			DecompressFile(dir, ino, f->decomp_data, attr);
+			if (g_debug > 0)
+			{
+				std::cout << "Inode info: size=" << f->ino.sizes.size
+				          << ", size_on_disk=" << f->ino.sizes.size_on_disk << std::endl;
+			}
+			rc = DecompressFile(dir, ino, f->decomp_data, attr);
+			// In strict mode, do not return uncompressed data.
+			if (!rc && !g_lax)
+			{
+				fuse_reply_err(req, EIO);
+				delete f;
+				return;
+			}
 		}
 
 		fi->fh = reinterpret_cast<uint64_t>(f);
@@ -511,7 +528,7 @@ struct apfs {
 
 void usage(const char *name)
 {
-	std::cout << name << " [-d level] [-o options] [-v volume-id] <device> <dir>" << std::endl;
+	std::cout << name << " [-d level] [-o options] [-v volume-id] [-r passphrase] [-s offset] <device> <dir>" << std::endl;
 }
 
 bool add_option(std::string &optstr, const char *name, const char *value)
@@ -536,8 +553,9 @@ int main(int argc, char *argv[])
 	const char *dev_path = nullptr;
 	int err = -1;
 	int opt;
-	std::string mount_options;
+	std::string mount_options, passphrase;
 	unsigned int volume_id = 0;
+	size_t container_offset = 0;
 
 	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/ios_11_0_1.img";
 	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/apfs_2vol_test_rw.dmg";
@@ -561,7 +579,7 @@ int main(int argc, char *argv[])
 	ops.releasedir = apfs_releasedir;
 	// ops.statfs = apfs_statfs;
 
-	while ((opt = getopt(argc, argv, "d:o:v:")) != -1)
+	while ((opt = getopt(argc, argv, "d:o:v:r:s:l")) != -1)
 	{
 		switch (opt)
 		{
@@ -573,6 +591,15 @@ int main(int argc, char *argv[])
 				break;
 			case 'v':
 				volume_id = strtoul(optarg, nullptr, 10);
+				break;
+			case 'r':
+				passphrase = std::string(optarg);
+				break;
+			case 's':
+				container_offset = strtoul(optarg, nullptr, 10);
+				break;
+			case 'l':
+				g_lax = true;
 				break;
 			default:
 				usage(argv[0]);
@@ -597,9 +624,15 @@ int main(int argc, char *argv[])
 		std::cerr << "Error opening device!" << std::endl;
 		return 1;
 	}
-	g_container = new ApfsContainer(g_disk, 0, g_disk.GetSize());
+	if (container_offset >= g_disk.GetSize()) {
+		std::cerr << "Invalid container offset specified" << std::endl;
+		return 1;
+	}
+	g_container = new ApfsContainer(g_disk,
+                                  container_offset,
+																	g_disk.GetSize() - container_offset);
 	g_container->Init();
-	g_volume = g_container->GetVolume(volume_id);
+	g_volume = g_container->GetVolume(volume_id, passphrase);
 	if (!g_volume)
 	{
 		std::cerr << "Unable to get volume!" << std::endl;

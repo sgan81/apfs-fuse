@@ -28,6 +28,7 @@
 #include "Global.h"
 
 int g_debug = 0;
+bool g_lax = false;
 
 #undef KEYBAG_DEBUG
 
@@ -80,7 +81,12 @@ bool ApfsContainer::Init()
 	return true;
 }
 
-ApfsVolume * ApfsContainer::GetVolume(int index)
+ApfsVolume *ApfsContainer::GetVolume(int index)
+{
+	return GetVolume(index, std::string());
+}
+
+ApfsVolume *ApfsContainer::GetVolume(int index, const std::string &passphrase)
 {
 	ApfsVolume *vol = nullptr;
 	uint64_t nodeid;
@@ -89,6 +95,8 @@ ApfsVolume * ApfsContainer::GetVolume(int index)
 
 	if (index >= 100)
 		return nullptr;
+
+	m_passphrase = passphrase;
 
 	nodeid = m_sb.nodeid_apsb[index];
 
@@ -158,7 +166,19 @@ bool ApfsContainer::GetVolumeKey(uint8_t * key, const apfs_uuid_t & vol_uuid, co
 	if (!m_keymgr.IsValid())
 		return false;
 
-	return m_keymgr.GetVolumeKey(key, vol_uuid, password);
+	return m_keymgr.GetVolumeKey(key, vol_uuid, password, false);
+}
+
+bool ApfsContainer::GetVolumeKey(uint8_t *key, const apfs_uuid_t & vol_uuid)
+{
+	if (!m_keymgr.IsValid())
+		return false;
+
+	if (m_passphrase.empty()) {
+		return false;
+	}
+
+	return m_keymgr.GetVolumeKey(key, vol_uuid, m_passphrase.c_str(), true);
 }
 
 bool ApfsContainer::GetPasswordHint(std::string & hint, const apfs_uuid_t & vol_uuid)

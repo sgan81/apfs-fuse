@@ -187,6 +187,12 @@ bool ApfsDir::ListDirectory(std::vector<Name> &dir, uint64_t inode)
 
 		kdata = reinterpret_cast<const uint8_t *>(res.key);
 
+		if (g_debug > 8)
+		{
+			DumpBuffer(kdata, res.key_len, "entry key");
+			DumpBuffer(reinterpret_cast<const uint8_t*>(res.val), res.val_len, "entry val");
+		}
+
 		e.parent_id = *reinterpret_cast<const uint64_t *>(kdata);
 
 		if (e.parent_id != skey)
@@ -285,6 +291,13 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		key.inode = inode | KeyType_Extent;
 		key.offset = offs;
 
+		if (g_debug > 8)
+		{
+			std::cout << "ReadFile for inode " << inode
+				<< ", offset=" << offs
+				<< std::endl;
+		}
+
 		rc = m_bt.Lookup(e, &key, sizeof(key), CompareStdDirKey, this, false);
 
 		if (!rc)
@@ -293,19 +306,50 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		ext_key = reinterpret_cast<const APFS_Key_Extent *>(e.key);
 		ext_val = reinterpret_cast<const APFS_Extent *>(e.val);
 
+		if (g_debug > 8) {
+			std::cout << " key->inode=" << ext_key->inode
+				<< "; key->offset=" << ext_key->offset
+				<< std::endl
+				<< " val->size=" << ext_val->size
+				<< "; val->block=" << ext_val->block
+				<< "; val->crypto_id=" << ext_val->crypto_id
+				<< std::endl;
+		}
+
 		if (ext_key->inode != key.inode)
 			return false;
 
 		idx = (offs - ext_key->offset) >> 12;
+		// ext_val->size has a mysterious upper byte set. At least sometimes.
+		// Let us clear it.
+		uint64_t extent_size = ext_val->size & 0x00FFFFFFFFFFFFFFULL;
+
+		if (g_debug > 8) {
+			std::cout << " key has offset " << ext_key->offset << std::endl
+				<< " val has block=" << ext_val->block
+				<< ", size=" << extent_size << std::endl;
+		}
+
 		cur_size = size;
-		if (((idx << 12) + cur_size) > ext_val->size)
-			cur_size = ext_val->size - (idx << 12);
+		if (((idx << 12) + cur_size) > extent_size)
+			cur_size = extent_size - (idx << 12);
 		if (cur_size == 0)
 			break; // Die Freuden von Fuse ...
-		if (ext_val->block != 0)
-			m_vol.ReadBlocks(bdata, ext_val->block + idx, cur_size >> 12, true);
-		else
+		if (ext_val->block != 0) {
+			uint64_t block_id = ext_val->block;
+			m_vol.ReadBlocks(bdata, block_id + idx, cur_size >> 12, true,
+										   ext_val->crypto_id + idx);
+			if (g_debug > 8) {
+				std::cout << "reading at offset " << offs
+					<< " length " << cur_size
+					<< " starting from block " << block_id + idx
+					<< " (extent starts at block " << block_id
+					<< ")" << std::endl;
+			}
+		}
+		else {
 			memset(bdata, 0, cur_size);
+		}
 		bdata += cur_size;
 		offs += cur_size;
 		size -= cur_size;
@@ -371,14 +415,37 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 	attr = reinterpret_cast<const APFS_Attribute *>(res.val);
 	adata = reinterpret_cast<const uint8_t *>(res.val) + sizeof(APFS_Attribute);
 
-	if (attr->type == 1)
+	if (g_debug > 8) {
+		std::cout << "GetAttribute: type=" << attr->type << std::endl;
+	}
+
+	// Original has attr->type == 1, but apparently this could work for
+	// type 0x11 as well. Is it a flag?
+	if (attr->type & 0x1)
 	{
 		assert(attr->size == 0x30);
 		alnk = reinterpret_cast<const APFS_AttributeLink *>(adata);
+		if (g_debug > 8) {
+			std::cout << "parsing as a link" << std::endl
+				<< " size=" << alnk->size
+				<< " size_on_disk=" << alnk->size_on_disk
+				<< std::endl;
+			Inode inode_info;
+			GetInode(inode_info, alnk->object_id);
+			std::cout << " inode says size=" << inode_info.sizes.size
+				<< " size_on_disk=" << inode_info.sizes.size_on_disk
+				<< std::endl;
+		}
+
+		if (g_debug > 8)
+			DumpBuffer(adata, sizeof(*alnk), "attribute link data");
 
 		data.resize(alnk->size_on_disk);
 		ReadFile(data.data(), alnk->object_id, 0, data.size()); // Read must be multiple of 4K ...
 		data.resize(alnk->size);
+		if (g_debug > 8 && data.size() >= 0x10) {
+			DumpBuffer(data.data(), 0x10, "start of attribute content");
+		}
 	}
 	else // if (attr->type == 2)
 	{
@@ -496,4 +563,3 @@ int ApfsDir::CompareStdDirKey(const void *skey, size_t skey_len, const void *eke
 
 	return 0;
 }
-
