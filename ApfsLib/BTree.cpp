@@ -189,8 +189,9 @@ bool BTree::Init(uint64_t root_node_id, uint64_t version, ApfsNodeMapper *node_m
 		memcpy(&m_treeinfo, m_root_node->block().data() + m_root_node->block().size() - sizeof(APFS_BTFooter), sizeof(APFS_BTFooter));
 		return true;
 	}
-	else {
-		std::cerr << "ERROR: could not find root_node_id " << root_node_id << "\n";
+	else
+	{
+		std::cerr << "ERROR: could not find root_node_id " << root_node_id << std::endl;
 		return false;
 	}
 }
@@ -229,7 +230,7 @@ bool BTree::Lookup(BTreeEntry &result, const void *key, size_t key_size, BTCompa
 
 		if (!node)
 		{
-			std::cerr << "BTree::Lookup: Node " << nodeid << " with parent " << parentid << " not found.";
+			std::cerr << "BTree::Lookup: Node " << nodeid << " with parent " << parentid << " not found." << std::endl;
 			return false;
 		}
 	}
@@ -380,8 +381,9 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 
 		if (m_nodeid_map)
 		{
-			if (!m_nodeid_map->GetBlockID(ni, nodeid, m_version)) {
-				std::cerr << "ERROR: m_nodeid_map available, but no such nodeid\n";
+			if (!m_nodeid_map->GetBlockID(ni, nodeid, m_version))
+			{
+				std::cerr << "ERROR: m_nodeid_map available, but no nodeid " << std::hex << nodeid << " with version " << m_version << std::endl;
 				return node;
 			}
 		}
@@ -391,22 +393,22 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 		if (m_volume)
 		{
 			// TODO: is the crypto_id always equal to the block ID here?
-			if (!m_volume->ReadBlocks(blk.data(), ni.block_no, 1, (ni.flags & 4) != 0,
-			                          ni.block_no)) {
-				std::cerr << "ERROR: volume ReadBlocks failed\n";
+			if (!m_volume->ReadBlocks(blk.data(), ni.block_no, 1, (ni.flags & 4) != 0, ni.block_no))
+			{
+				std::cerr << "ERROR: volume ReadBlocks failed!" << std::endl;
 				return node;
 			}
 
-
-			if (!VerifyBlock(blk.data(), blk.size())) {
-				std::cerr << "ERROR: (volume) VerifyBlock failed\n";
+			if (!VerifyBlock(blk.data(), blk.size()))
+			{
+				std::cerr << "ERROR: (volume) VerifyBlock failed!" << std::endl;
 				return node;
 			}
 		}
 		else
 		{
 			if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), ni.block_no)) {
-				std::cerr << "ERROR: ReadAndVerifyHeaderBlock failed\n";
+				std::cerr << "ERROR: ReadAndVerifyHeaderBlock failed!" << std::endl;
 				return node;
 			}
 		}

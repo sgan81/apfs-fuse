@@ -364,7 +364,8 @@ bool GetPassword(std::string &pw)
 }
 
 // Like DumpHex, but prints a label.
-void DumpBuffer(const uint8_t *data, size_t len, const char *label) {
-	std::cout << "dumping " << label << "\n";
+void DumpBuffer(const uint8_t *data, size_t len, const char *label)
+{
+	std::cout << "dumping " << label << std::endl;
 	DumpHex(std::cout, data, len);
 }

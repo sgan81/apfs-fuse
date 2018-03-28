@@ -64,7 +64,7 @@ bool ApfsNodeMapperBTree::Init(uint64_t hdr_block_id, uint64_t version)
 	blk.resize(m_container.GetBlocksize());
 
 	if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), hdr_block_id)) {
-		std::cerr << "ERROR: header block NOT verified\n";
+		std::cerr << "ERROR: header block NOT verified" << std::endl;
 		return false;
 	}
 
@@ -72,7 +72,7 @@ bool ApfsNodeMapperBTree::Init(uint64_t hdr_block_id, uint64_t version)
 
 	if (m_root_ptr.hdr.type != 0x4000000B) {
 		std::cerr << "ERROR: wrong header type 0x" << std::hex
-		    << m_root_ptr.hdr.type << "\n";
+		    << m_root_ptr.hdr.type << std::endl;
 		return false;
 	}
 

@@ -83,7 +83,7 @@ bool ApfsContainer::Init()
 
 ApfsVolume *ApfsContainer::GetVolume(int index)
 {
-  return GetVolume(index, std::string());
+	return GetVolume(index, std::string());
 }
 
 ApfsVolume *ApfsContainer::GetVolume(int index, const std::string &passphrase)

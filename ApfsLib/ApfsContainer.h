@@ -40,7 +40,7 @@ public:
 	bool Init();
 
 	ApfsVolume *GetVolume(int index, const std::string &passphrase);
-  ApfsVolume *GetVolume(int index);
+	ApfsVolume *GetVolume(int index);
 	int GetVolumeCnt() const;
 
 	bool ReadBlocks(byte_t *data, uint64_t blkid, uint64_t blkcnt = 1) const;

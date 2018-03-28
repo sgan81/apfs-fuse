@@ -342,13 +342,15 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 				return;
 			}
 
-			if (g_debug > 0) {
+			if (g_debug > 0)
+			{
 				std::cout << "Inode info: size=" << f->ino.sizes.size
-				          << ", size_on_disk=" << f->ino.sizes.size_on_disk << "\n";
+				          << ", size_on_disk=" << f->ino.sizes.size_on_disk << std::endl;
 			}
 			rc = DecompressFile(dir, ino, f->decomp_data, attr);
 			// In strict mode, do not return uncompressed data.
-			if (!rc && !g_lax) {
+			if (!rc && !g_lax)
+			{
 				fuse_reply_err(req, EIO);
 				delete f;
 				return;

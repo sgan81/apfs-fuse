@@ -185,13 +185,12 @@ bool ApfsDir::ListDirectory(std::vector<Name> &dir, uint64_t inode)
 		if (!rc)
 			break;
 
-
 		kdata = reinterpret_cast<const uint8_t *>(res.key);
 
-		if (g_debug > 8) {
+		if (g_debug > 8)
+		{
 			DumpBuffer(kdata, res.key_len, "entry key");
-			DumpBuffer(reinterpret_cast<const uint8_t*>(res.val), res.val_len,
-			           "entry val");
+			DumpBuffer(reinterpret_cast<const uint8_t*>(res.val), res.val_len, "entry val");
 		}
 
 		e.parent_id = *reinterpret_cast<const uint64_t *>(kdata);
@@ -292,10 +291,11 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		key.inode = inode | KeyType_Extent;
 		key.offset = offs;
 
-		if (g_debug > 8) {
+		if (g_debug > 8)
+		{
 			std::cout << "ReadFile for inode " << inode
 				<< ", offset=" << offs
-				<< "\n";
+				<< std::endl;
 		}
 
 		rc = m_bt.Lookup(e, &key, sizeof(key), CompareStdDirKey, this, false);
@@ -309,11 +309,11 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		if (g_debug > 8) {
 			std::cout << " key->inode=" << ext_key->inode
 				<< "; key->offset=" << ext_key->offset
-				<< "\n"
+				<< std::endl
 				<< " val->size=" << ext_val->size
 				<< "; val->block=" << ext_val->block
 				<< "; val->crypto_id=" << ext_val->crypto_id
-				<< "\n";
+				<< std::endl;
 		}
 
 		if (ext_key->inode != key.inode)
@@ -325,9 +325,9 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		uint64_t extent_size = ext_val->size & 0x00FFFFFFFFFFFFFFULL;
 
 		if (g_debug > 8) {
-			std::cout << " key has offset " << ext_key->offset << "\n"
+			std::cout << " key has offset " << ext_key->offset << std::endl
 				<< " val has block=" << ext_val->block
-				<< ", size=" << extent_size << "\n";
+				<< ", size=" << extent_size << std::endl;
 		}
 
 		cur_size = size;
@@ -341,10 +341,10 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 										   ext_val->crypto_id + idx);
 			if (g_debug > 8) {
 				std::cout << "reading at offset " << offs
-				  << " length " << cur_size
+					<< " length " << cur_size
 					<< " starting from block " << block_id + idx
 					<< " (extent starts at block " << block_id
-					<< ")\n";
+					<< ")" << std::endl;
 			}
 		}
 		else {
@@ -416,7 +416,7 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 	adata = reinterpret_cast<const uint8_t *>(res.val) + sizeof(APFS_Attribute);
 
 	if (g_debug > 8) {
-		std::cout << "GetAttribute: type=" << attr->type << "\n";
+		std::cout << "GetAttribute: type=" << attr->type << std::endl;
 	}
 
 	// Original has attr->type == 1, but apparently this could work for
@@ -426,15 +426,15 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 		assert(attr->size == 0x30);
 		alnk = reinterpret_cast<const APFS_AttributeLink *>(adata);
 		if (g_debug > 8) {
-			std::cout << "parsing as a link\n"
+			std::cout << "parsing as a link" << std::endl
 				<< " size=" << alnk->size
 				<< " size_on_disk=" << alnk->size_on_disk
-				<< "\n";
+				<< std::endl;
 			Inode inode_info;
 			GetInode(inode_info, alnk->object_id);
 			std::cout << " inode says size=" << inode_info.sizes.size
 				<< " size_on_disk=" << inode_info.sizes.size_on_disk
-				<< "\n";
+				<< std::endl;
 		}
 
 		if (g_debug > 8)
