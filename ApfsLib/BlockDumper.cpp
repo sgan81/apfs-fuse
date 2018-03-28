@@ -113,7 +113,7 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 
 	default:
 		// assert(false);
-		std::cerr << "!!! UNKNOWN NODE TYPE " << setw(8) << node->type << " in block " << setw(16) << blk_nr << " !!!" << endl;
+		std::cerr << "!!! UNKNOWN NODE TYPE " << hex << setw(8) << node->type << " in block " << setw(16) << blk_nr << " !!!" << endl;
 		DumpBlockHex();
 		break;
 	}
