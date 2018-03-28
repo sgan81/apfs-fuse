@@ -303,7 +303,7 @@ bool Keybag::FindKey(const apfs_uuid_t & uuid, uint16_t type, key_data_t & keyda
 		khdr = reinterpret_cast<const key_hdr_t *>(ptr);
 
 		if (
-			(force_index == k) ||
+			(force_index == static_cast<int>(k)) ||
 			(force_index == -1
 					&& memcmp(uuid, khdr->uuid, sizeof(apfs_uuid_t)) == 0
 					&& khdr->type == type))

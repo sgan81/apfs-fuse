@@ -184,7 +184,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			std::cout << " mgmt size=" << rsrc_hdr.mgmt_size_be << std::endl;
 		}
 
-		uint32_t rsrc_size = bswap_32(*reinterpret_cast<uint32_t *>(rsrc.data() + rsrc_hdr.data_off_be));
+		// uint32_t rsrc_size = bswap_32(*reinterpret_cast<uint32_t *>(rsrc.data() + rsrc_hdr.data_off_be));
 		if (rsrc_hdr.data_off_be > rsrc.size())
 		{
 			if (g_debug > 0)
