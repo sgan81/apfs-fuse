@@ -27,6 +27,8 @@
 #include <cassert>
 #include <cstring>
 
+#undef DUMP_COMPRESSED
+
 using namespace std;
 
 BlockDumper::BlockDumper(std::ostream &os, size_t blocksize) :
@@ -489,14 +491,18 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 					std::string str(reinterpret_cast<const char *>(value_data + 4), value_length - 4);
 					m_os << " : '" << str << '\'' << endl;
 				}
+#ifndef DUMP_COMPRESSED
+				else if (!strcmp(attr_name, "com.apple.decmpfs"))
+				{
+					// Don't dump compressed data ...
+				}
+#endif
 				else
 				{
 					m_os << endl;
 					DumpHex(value_data + 4, value_length - 4);
 				}
 			}
-
-			// if (strcmp(reinterpret_cast<const char *>(key_data + 10), "com.apple.decmpfs"))
 		}
 
 		break;

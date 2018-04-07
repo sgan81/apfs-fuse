@@ -16,6 +16,6 @@ include_directories(.)
 
 add_subdirectory(ApfsLib)
 add_subdirectory(ApfsDump)
-add_subdirectory(Test)
+add_subdirectory(ApfsDumpQuick)
 add_subdirectory(apfsfuse)
 add_subdirectory(TestCrypto)
