@@ -553,7 +553,8 @@ int main(int argc, char *argv[])
 	const char *dev_path = nullptr;
 	int err = -1;
 	int opt;
-	std::string mount_options, passphrase;
+	std::string mount_options;
+	std::string passphrase;
 	unsigned int volume_id = 0;
 	size_t container_offset = 0;
 
@@ -593,7 +594,7 @@ int main(int argc, char *argv[])
 				volume_id = strtoul(optarg, nullptr, 10);
 				break;
 			case 'r':
-				passphrase = std::string(optarg);
+				passphrase = optarg;
 				break;
 			case 's':
 				container_offset = strtoul(optarg, nullptr, 10);
@@ -628,9 +629,7 @@ int main(int argc, char *argv[])
 		std::cerr << "Invalid container offset specified" << std::endl;
 		return 1;
 	}
-	g_container = new ApfsContainer(g_disk,
-                                  container_offset,
-																	g_disk.GetSize() - container_offset);
+	g_container = new ApfsContainer(g_disk, container_offset, g_disk.GetSize() - container_offset);
 	g_container->Init();
 	g_volume = g_container->GetVolume(volume_id, passphrase);
 	if (!g_volume)

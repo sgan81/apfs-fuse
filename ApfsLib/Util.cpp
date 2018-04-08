@@ -27,7 +27,9 @@
 #include <iostream>
 #include <iomanip>
 #include <vector>
+#ifdef __linux__
 #include <termios.h>
+#endif
 #include <stdio.h>
 
 #include "Util.h"
@@ -341,6 +343,7 @@ uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensit
 
 bool GetPassword(std::string &pw)
 {
+#ifdef __linux__
 	struct termios told, tnew;
 	FILE *stream = stdin;
 
@@ -361,6 +364,10 @@ bool GetPassword(std::string &pw)
 	std::cout << std::endl;
 
 	return true;
+#else
+	std::getline(std::cin, pw);
+	std::cout << std::endl;
+#endif
 }
 
 // Like DumpHex, but prints a label.

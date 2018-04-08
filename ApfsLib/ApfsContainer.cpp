@@ -174,9 +174,8 @@ bool ApfsContainer::GetVolumeKey(uint8_t *key, const apfs_uuid_t & vol_uuid)
 	if (!m_keymgr.IsValid())
 		return false;
 
-	if (m_passphrase.empty()) {
+	if (m_passphrase.empty())
 		return false;
-	}
 
 	return m_keymgr.GetVolumeKey(key, vol_uuid, m_passphrase.c_str(), true);
 }
@@ -196,18 +195,21 @@ void ApfsContainer::dump(BlockDumper& bd)
 
 	bd.DumpNode(blk.data(), 0);
 
+	if (m_keymgr.IsValid())
+		m_keymgr.dump(bd);
+
 	/*
 	if (m_keybag.size())
 		bd.DumpNode(m_keybag.data(), m_sb.keybag_blk_start);
 		*/
 
+#if 1
 	for (blkid = m_sb.blockid_sb_area_start; blkid < (m_sb.blockid_sb_area_start + m_sb.sb_area_cnt); blkid++)
 	{
 		ReadAndVerifyHeaderBlock(blk.data(), blkid);
 		bd.DumpNode(blk.data(), blkid);
 	}
 
-#if 1
 	for (blkid = m_sb.blockid_spaceman_area_start; blkid < (m_sb.blockid_spaceman_area_start + m_sb.spaceman_area_cnt); blkid++)
 	{
 		ReadAndVerifyHeaderBlock(blk.data(), blkid);

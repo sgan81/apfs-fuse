@@ -1,6 +1,7 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 
 #include "ApfsContainer.h"
 #include "AesXts.h"
@@ -341,6 +342,222 @@ bool Keybag::FindKey(const apfs_uuid_t & uuid, uint16_t type, key_data_t & keyda
 	return false;
 }
 
+std::string hexstr(const uint8_t *data, size_t size)
+{
+	using namespace std;
+
+	std::ostringstream st;
+
+	size_t k;
+
+	st << hex << uppercase << setfill('0');
+
+	for (k = 0; k < size; k++)
+		st << setw(2) << static_cast<unsigned int>(data[k]);
+
+	return st.str();
+}
+
+void Keybag::dump(BlockDumper& bd, Keybag *cbag, const apfs_uuid_t &vuuid)
+{
+	using namespace std;
+
+	ostream &st = bd.st();
+
+	size_t s;
+	size_t k;
+	key_data_t kd;
+	blob_header_t bhdr;
+	const char *typestr;
+
+	st << "Dumping Keybag (" << (cbag ? "recs" : "keys") << ")" << endl;
+	st << endl;
+
+	if (m_data.empty())
+	{
+		st << "Keybag is empty." << endl;
+		return;
+	}
+
+	DumpHex(st, m_data.data(), m_data.size());
+	st << endl;
+
+	const keybag_hdr_t &hdr = *reinterpret_cast<const keybag_hdr_t *>(m_data.data());
+
+	st << "Version : " << setw(4) << hdr.version << endl;
+	st << "Keys    : " << setw(4) << hdr.no_of_keys << endl;
+	st << "Bytes   : " << setw(8) << hdr.no_of_bytes << endl;
+	st << endl;
+
+	s = GetKeyCnt();
+
+	for (k = 0; k < s; k++)
+	{
+		GetKey(k, kd);
+
+		typestr = "!!! Unknown !!!";
+
+		if (!cbag)
+		{
+			switch (kd.header->type)
+			{
+				case 2: typestr = "VEK"; break;
+				case 3: typestr = "Keybag Ref"; break;
+				default: break;
+			}
+		}
+		else
+		{
+			switch (kd.header->type)
+			{
+				case 3: typestr = "KEK"; break;
+				case 4: typestr = "Password Hint"; break;
+				default: break;
+			}
+		}
+
+		st << "Key " << k << ":" << endl;
+		st << "UUID    : " << BlockDumper::uuid(kd.header->uuid) << endl;
+		st << "Type    : " << setw(4) << kd.header->type << " [" << typestr << "]" << endl;
+		st << "Length  : " << setw(4) << kd.header->length << endl;
+		st << "Unknown : " << setw(8) << kd.header->unknown << endl;
+		// DumpHex(st, kd.data.data, kd.data.size);
+		st << endl;
+
+		if (!cbag)
+		{
+			switch (kd.header->type)
+			{
+			case 2:
+				if (KeyManager::DecodeBlobHeader(bhdr, kd.data))
+				{
+					st << "[Blob Header]" << endl;
+					st << "Unk 80  : " << bhdr.unk_80 << endl;
+					st << "HMAC    : " << hexstr(bhdr.hmac, sizeof(bhdr.hmac)) << endl;
+					st << "Salt    : " << hexstr(bhdr.salt, sizeof(bhdr.salt)) << endl;
+					st << endl;
+
+					vek_blob_t vek;
+
+					if (KeyManager::DecodeVEKBlob(vek, bhdr.blob))
+					{
+						st << "[VEK]" << endl;
+						st << "Unk 80  : " << vek.unk_80 << endl;
+						st << "UUID    : " << BlockDumper::uuid(vek.uuid) << endl;
+						st << "Unk 82  : " << hexstr(vek.unk_82, sizeof(vek.unk_82)) << endl;
+						st << "VEK Wrpd: " << hexstr(vek.wrapped_vek, sizeof(vek.wrapped_vek)) << endl;
+						st << endl;
+					}
+					else
+					{
+						st << "Invalid VEK Blob!!!" << endl;
+					}
+				}
+				else
+				{
+					st << "Invalid BLOB Header!!!" << endl;
+				}
+				break;
+			case 3:
+				{
+					const key_extent_t *ext = reinterpret_cast<const key_extent_t *>(kd.data.data);
+					st << "Block   : " << setw(16) << ext->blk << endl;
+					st << "Count   : " << setw(16) << ext->bcnt << endl;
+				}
+				break;
+			default:
+				st << "Unknown Type !!!" << endl;
+				break;
+			}
+		}
+		else
+		{
+			switch (kd.header->type)
+			{
+			case 3:
+				if (KeyManager::DecodeBlobHeader(bhdr, kd.data))
+				{
+					st << "[Blob Header]" << endl;
+					st << "Unk 80  : " << bhdr.unk_80 << endl;
+					st << "HMAC    : " << hexstr(bhdr.hmac, sizeof(bhdr.hmac)) << endl;
+					st << "Salt    : " << hexstr(bhdr.salt, sizeof(bhdr.salt)) << endl;
+					st << endl;
+
+					kek_blob_t kek;
+
+					if (KeyManager::DecodeKEKBlob(kek, bhdr.blob))
+					{
+						st << "[KEK]" << endl;
+						st << "Unk 80  : " << kek.unk_80 << endl;
+						st << "UUID    : " << BlockDumper::uuid(kek.uuid) << endl;
+						st << "Unk 82  : " << hexstr(kek.unk_82, sizeof(kek.unk_82)) << endl;
+						st << "KEK Wrpd: " << hexstr(kek.wrapped_kek, sizeof(kek.wrapped_kek)) << endl;
+						st << "Iterat's: " << dec << kek.iterations << hex << endl;
+						st << "Salt    : " << hexstr(kek.salt, sizeof(kek.salt)) << endl;
+						st << endl;
+
+#if 1
+						string pw;
+						uint8_t dk[0x20];
+						uint8_t kekk[0x20];
+						uint64_t iv;
+
+						cout << "Enter Password for KEK " << BlockDumper::uuid(kek.uuid) << endl;
+						GetPassword(pw);
+
+						st << "[Decryption Check]" << endl;
+						PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(pw.c_str()), pw.size(), kek.salt, sizeof(kek.salt), kek.iterations, dk, sizeof(dk));
+						st << "PW DKey : " << hexstr(dk, sizeof(dk)) << endl;
+						Rfc3394_KeyUnwrap(kekk, kek.wrapped_kek, sizeof(kekk), dk, AES::AES_256, &iv);
+						st << "KEK Dec : " << hexstr(kekk, sizeof(kekk)) << endl;
+						st << "IV KEK  : " << setw(16) << iv << " [" << (iv == 0xA6A6A6A6A6A6A6A6 ? "Correct" : "!!!INCORRECT!!!") << "]" << endl;
+
+						if (iv != 0xA6A6A6A6A6A6A6A6)
+							cerr << "Warning: Wrong password." << endl;
+						else
+						{
+							vek_blob_t vek;
+							uint8_t vekk[0x20];
+
+							if (cbag->FindKey(vuuid, 2, kd))
+							{
+								if (KeyManager::DecodeBlobHeader(bhdr, kd.data))
+								{
+									if (KeyManager::DecodeVEKBlob(vek, bhdr.blob))
+									{
+										Rfc3394_KeyUnwrap(vekk, vek.wrapped_vek, sizeof(vekk), kekk, AES::AES_256, &iv);
+										st << "VEK Dec : " << hexstr(vekk, sizeof(vekk)) << endl;
+										st << "IV VEK  : " << setw(16) << iv << " [" << (iv == 0xA6A6A6A6A6A6A6A6 ? "Correct" : "!!!INCORRECT!!!") << "]" << endl;
+										if (iv != 0xA6A6A6A6A6A6A6A6)
+											cerr << "Error: Password correct, but KEK can't decrypt VEK ..." << endl;
+									}
+								}
+							}
+						}
+#endif
+					}
+					else
+					{
+						st << "Invalid KEK Blob!!!" << endl;
+					}
+				}
+				else
+				{
+					st << "Invalid BLOB Header!!!" << endl;
+				}
+				break;
+			case 4:
+				st << "Hint    : " << string(reinterpret_cast<const char *>(kd.data.data), kd.data.size) << endl;
+				break;
+			}
+		}
+
+		st << endl;
+	}
+
+	st << endl;
+}
+
 KeyManager::KeyManager(ApfsContainer& container) : m_container(container)
 {
 	memset(m_container_uuid, 0, sizeof(m_container_uuid));
@@ -386,7 +603,7 @@ bool KeyManager::GetPasswordHint(std::string& hint, const apfs_uuid_t& volume_uu
 	Keybag recs_bag;
 
 	if (g_debug > 0)
-	  std::cout << "Trying to load key bag from recs_block" << std::endl;
+		std::cout << "Trying to load key bag from recs_block" << std::endl;
 
 	if (!LoadKeybag(recs_bag, 0x72656373, recs_ext.blk, recs_ext.bcnt, volume_uuid))
 		return false;
@@ -553,6 +770,41 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		DumpBuffer(vek, 0x20, "final AES-XTS key");
 
 	return true;
+}
+
+void KeyManager::dump(BlockDumper& bd)
+{
+	size_t k;
+	size_t s;
+	key_data_t d;
+	apfs_uuid_t dummy_uuid;
+
+	memset(dummy_uuid, 0, sizeof(dummy_uuid));
+
+	m_container_bag.dump(bd, nullptr, dummy_uuid);
+
+	s = m_container_bag.GetKeyCnt();
+
+	for (k = 0; k < s; k++)
+	{
+		if (!m_container_bag.GetKey(k, d))
+			continue;
+
+		if ((d.header->type == 3) && (d.header->length == sizeof(key_extent_t)))
+		{
+			const key_extent_t &ext = *reinterpret_cast<const key_extent_t *>(d.data.data);
+			Keybag recs_bag;
+
+			if (LoadKeybag(recs_bag, 0x72656373, ext.blk, ext.bcnt, d.header->uuid))
+				recs_bag.dump(bd, &m_container_bag, d.header->uuid);
+		}
+	}
+
+	std::ostream &st = bd.st();
+
+	st << std::endl;
+	st << "========================================================================================================================" << std::endl;
+	st << std::endl;
 }
 
 bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t blockcnt, const apfs_uuid_t& uuid)

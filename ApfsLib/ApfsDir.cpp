@@ -306,7 +306,8 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		ext_key = reinterpret_cast<const APFS_Key_Extent *>(e.key);
 		ext_val = reinterpret_cast<const APFS_Extent *>(e.val);
 
-		if (g_debug > 8) {
+		if (g_debug > 8)
+		{
 			std::cout << " key->inode=" << ext_key->inode
 				<< "; key->offset=" << ext_key->offset
 				<< std::endl
@@ -324,7 +325,8 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		// Let us clear it.
 		uint64_t extent_size = ext_val->size & 0x00FFFFFFFFFFFFFFULL;
 
-		if (g_debug > 8) {
+		if (g_debug > 8)
+		{
 			std::cout << " key has offset " << ext_key->offset << std::endl
 				<< " val has block=" << ext_val->block
 				<< ", size=" << extent_size << std::endl;
@@ -334,8 +336,9 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		if (((idx << 12) + cur_size) > extent_size)
 			cur_size = extent_size - (idx << 12);
 		if (cur_size == 0)
-			break; // Die Freuden von Fuse ...
-		if (ext_val->block != 0) {
+			break;
+		if (ext_val->block != 0)
+		{
 			uint64_t block_id = ext_val->block;
 			m_vol.ReadBlocks(bdata, block_id + idx, cur_size >> 12, true,
 										   ext_val->crypto_id + idx);
@@ -347,7 +350,8 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 					<< ")" << std::endl;
 			}
 		}
-		else {
+		else
+		{
 			memset(bdata, 0, cur_size);
 		}
 		bdata += cur_size;
@@ -415,9 +419,8 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 	attr = reinterpret_cast<const APFS_Attribute *>(res.val);
 	adata = reinterpret_cast<const uint8_t *>(res.val) + sizeof(APFS_Attribute);
 
-	if (g_debug > 8) {
+	if (g_debug > 8)
 		std::cout << "GetAttribute: type=" << attr->type << std::endl;
-	}
 
 	// Original has attr->type == 1, but apparently this could work for
 	// type 0x11 as well. Is it a flag?
@@ -425,7 +428,8 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 	{
 		assert(attr->size == 0x30);
 		alnk = reinterpret_cast<const APFS_AttributeLink *>(adata);
-		if (g_debug > 8) {
+		if (g_debug > 8)
+		{
 			std::cout << "parsing as a link" << std::endl
 				<< " size=" << alnk->size
 				<< " size_on_disk=" << alnk->size_on_disk
@@ -443,9 +447,8 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 		data.resize(alnk->size_on_disk);
 		ReadFile(data.data(), alnk->object_id, 0, data.size()); // Read must be multiple of 4K ...
 		data.resize(alnk->size);
-		if (g_debug > 8 && data.size() >= 0x10) {
+		if (g_debug > 8 && data.size() >= 0x10)
 			DumpBuffer(data.data(), 0x10, "start of attribute content");
-		}
 	}
 	else // if (attr->type == 2)
 	{

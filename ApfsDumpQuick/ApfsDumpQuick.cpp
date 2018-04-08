@@ -96,6 +96,7 @@ int main(int argc, char *argv[])
 
 	volumes_cnt = container->GetVolumeCnt();
 
+#if 1
 	for (volume_id = 0; volume_id < volumes_cnt; volume_id++)
 	{
 		ApfsVolume *vol;
@@ -111,6 +112,7 @@ int main(int argc, char *argv[])
 
 		delete vol;
 	}
+#endif
 #endif
 
 #if 0

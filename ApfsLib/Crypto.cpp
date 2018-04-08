@@ -96,10 +96,8 @@ bool Rfc3394_KeyUnwrap(uint8_t *plain, const uint8_t *crypto, size_t size, const
 		p[i] = r[i];
 	if (iv)
 		*iv = a;
-	if (a == rfc_3394_default_iv)
-		return true;
-	else
-		return false;
+
+	return a == rfc_3394_default_iv;
 }
 
 void HMAC_SHA256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len, uint8_t *mac)

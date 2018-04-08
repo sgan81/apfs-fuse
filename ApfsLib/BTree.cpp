@@ -346,13 +346,9 @@ void BTree::DumpTreeInternal(BlockDumper& out, const std::shared_ptr<BTreeNode> 
 			child = GetNode(nodeid_child, nodeid_parent);
 
 			if (child)
-			{
 				DumpTreeInternal(out, child);
-			}
 			else
-			{
 				out.st() << "Child node " << nodeid_child << " of parent " << nodeid_parent << " not found!" << std::endl;
-			}
 		}
 	}
 }
@@ -407,7 +403,8 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 		}
 		else
 		{
-			if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), ni.block_no)) {
+			if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), ni.block_no))
+			{
 				std::cerr << "ERROR: ReadAndVerifyHeaderBlock failed!" << std::endl;
 				return node;
 			}

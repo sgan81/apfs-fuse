@@ -61,12 +61,15 @@ public:
 	bool GetKey(size_t nr, key_data_t &keydata);
 	bool FindKey(const apfs_uuid_t &uuid, uint16_t type, key_data_t &keydata, int force_index = -1);
 
+	void dump(BlockDumper &bd, Keybag *cbag, const apfs_uuid_t &vuuid);
+
 private:
 	std::vector<uint8_t> m_data;
 };
 
 class KeyManager
 {
+	friend class Keybag;
 public:
 	KeyManager(ApfsContainer &container);
 	~KeyManager();
@@ -78,15 +81,17 @@ public:
 
 	bool IsValid() const { return m_is_valid; }
 
+	void dump(BlockDumper &bd);
+
 private:
 	bool LoadKeybag(Keybag &bag, uint32_t type, uint64_t block, uint64_t blockcnt, const apfs_uuid_t &uuid);
 	void DecryptBlocks(uint8_t *data, uint64_t block, uint64_t cnt, const uint8_t *key);
 
 	bool VerifyBlob(const bagdata_t &keydata, bagdata_t &contents);
 
-	bool DecodeBlobHeader(blob_header_t &hdr, const bagdata_t &data);
-	bool DecodeKEKBlob(kek_blob_t &kek_blob, const bagdata_t &data);
-	bool DecodeVEKBlob(vek_blob_t &vek_blob, const bagdata_t &data);
+	static bool DecodeBlobHeader(blob_header_t &hdr, const bagdata_t &data);
+	static bool DecodeKEKBlob(kek_blob_t &kek_blob, const bagdata_t &data);
+	static bool DecodeVEKBlob(vek_blob_t &vek_blob, const bagdata_t &data);
 
 	ApfsContainer &m_container;
 	Keybag m_container_bag;

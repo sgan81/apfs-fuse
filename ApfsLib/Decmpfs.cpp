@@ -97,7 +97,8 @@ bool IsDecompAlgoInRsrc(uint16_t algo)
 	}
 }
 
-static size_t expected_block_len(int block_number, size_t uncompressed_file_size) {
+static size_t expected_block_len(int block_number, size_t uncompressed_file_size)
+{
 	const size_t uncompressed_block_standard_size = 0x10000;
 
 	int whole_blocks = uncompressed_file_size >> 16;
@@ -130,7 +131,8 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		if (compressed[0x10] == 0x78)
 		{
 			size_t decoded_bytes = DecompressZLib(decompressed.data(), decompressed.size(), cdata, csize);
-			if (decoded_bytes != hdr->size) {
+			if (decoded_bytes != hdr->size)
+			{
 				if (g_debug > 0)
 					std::cout << "Expected " << hdr->size << " bytes in compressed stream, "
 						  << "got " << decoded_bytes << std::endl;
@@ -139,7 +141,9 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			}
 		}
 		else if (compressed[0x10] == 0xFF)
+		{
 			decompressed.assign(cdata + 1, cdata + csize);
+		}
 	}
 	else if (hdr->algo == 4)
 	{
