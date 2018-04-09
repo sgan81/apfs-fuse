@@ -34,7 +34,7 @@
 #endif
 
 #ifdef _WIN32
-#define WIN_PHYS_DEV_TEST
+#undef WIN_PHYS_DEV_TEST
 #endif
 
 int main(int argc, char *argv[])
@@ -57,6 +57,8 @@ int main(int argc, char *argv[])
 		std::cerr << "Syntax: Test <filename.dmg> <Logfile.txt>" << std::endl;
 		return -1;
 	}
+
+	g_debug = 16;
 
 	rc = disk.Open(argv[1]);
 

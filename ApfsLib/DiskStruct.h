@@ -92,7 +92,7 @@ static_assert(sizeof(APFS_BTFooter) == 0x28, "BTFooter size wrong");
 
 struct APFS_BTEntry
 {
-	uint16_t key_offs; // offs = Base + key_offs
+	uint16_t key_offs; // offs = base + key_offs
 	uint16_t key_len;
 	uint16_t value_offs; // offs = 0x1000 - value_offs
 	uint16_t value_len;
@@ -125,7 +125,7 @@ struct APFS_Inode
 	uint64_t mtime;
 	uint64_t ctime;
 	uint64_t atime;
-	uint64_t unk_30; // ? meistens 0x8000
+	uint64_t unk_30; // ? usually 0x8000
 	uint64_t refcnt;
 	uint32_t unk_40;
 	uint32_t flags;  // 0x20: compressed
@@ -139,11 +139,11 @@ struct APFS_Inode
 
 struct APFS_InodeEntry
 {
-	uint16_t type; // Keine Ahnung ...
-	uint16_t len; // Padden auf vielfaches von 8 ...
+	uint16_t type; // No idea ...
+	uint16_t len; // Pad to multiple of 8
 };
 
-struct APFS_Inode_Sizes // Object, after Filename
+struct APFS_Inode_Sizes // Object, after filename
 {
 	uint64_t size;
 	uint64_t size_on_disk;
@@ -162,7 +162,7 @@ struct APFS_Key_Name_Old
 struct APFS_Key_Name
 {
 	uint64_t parent_id;
-	uint32_t hash;
+	uint32_t hash; // Lowest byte is the name len
 	char name[0x400];
 };
 
@@ -268,8 +268,8 @@ struct APFS_Key_8_9
 {
 	uint64_t version;
 	uint64_t blk_id; // Block-ID
-	// => Anzahl Bloecke
-	// Wenn kein Value, dann Anzahl = 1
+	// Value = Number of blocks
+	// If no value, the number of blocks is 1
 };
 
 struct APFS_Superblock_NXSB // Ab 0x20
@@ -284,28 +284,28 @@ struct APFS_Superblock_NXSB // Ab 0x20
 	apfs_uuid_t container_guid;
 	uint64_t next_nodeid; // Next node id (?)
 	uint64_t next_version; // Next version number (?)
-	uint32_t sb_area_cnt; // Anzahl Bloecke fuer NXSB + 4_C ?
-	uint32_t spaceman_area_cnt; // Anzahl Bloecke fuer Rest
-	uint64_t blockid_sb_area_start; // Block-ID (0x4000000C) - Nein
+	uint32_t sb_area_cnt; // Number of blocks for NXSB + 4_C ?
+	uint32_t spaceman_area_cnt; // Number of blocks for the rest
+	uint64_t blockid_sb_area_start; // Block-ID (0x4000000C) - No
 	uint64_t blockid_spaceman_area_start; // Block-ID (0x80000005) => Node-ID 0x400
-	uint32_t next_sb; // Naechster 4_C + NXSB? (+sb_area_start)
-	uint32_t next_spaceman; // Naechster 8_5/2/11? (+blockid_spaceman_area_start)
-	uint32_t current_sb_start; // Start 4_C+NXSB Block (+sb_area_start)
-	uint32_t current_sb_len; // Laenge 4_C+NXSB Block
-	uint32_t current_spaceman_start; // Start 8_5/2/11 Bloecke (+blockid_spaceman_area_start)
-	uint32_t current_spaceman_len; // Anzahl 8_5/2/11 Bloecke
+	uint32_t next_sb; // Next 4_C + NXSB? (+sb_area_start)
+	uint32_t next_spaceman; // Next 8_5/2/11? (+blockid_spaceman_area_start)
+	uint32_t current_sb_start; // Start 4_C+NXSB block (+sb_area_start)
+	uint32_t current_sb_len; // Length 4_C+NXSB block
+	uint32_t current_spaceman_start; // Start 8_5/2/11 blocks (+blockid_spaceman_area_start)
+	uint32_t current_spaceman_len; // No of 8_5/2/11 blocks
 	uint64_t nodeid_8x5;     // Node-ID (0x400) => (0x80000005)
-	uint64_t blockid_volhdr; // Block-ID => (0x4000000B) => B*-Tree fuer Mapping Node-ID -> Volume APSB Superblocks
+	uint64_t blockid_volhdr; // Block-ID => (0x4000000B) => B*-Tree for mapping node-id -> volume APSB superblocks
 	uint64_t nodeid_8x11;    // Node-ID (0x401) => (0x80000011)
 	uint32_t unk_B0;
 	uint32_t unk_B4;
-	uint64_t nodeid_apsb[100]; // Liste der Node-ID's der Volume Superblocks (Anzahl geraten, koennte aber hinkommen ...)
+	uint64_t nodeid_apsb[100]; // List of the node-id's of the volume superblocks (not sure about the length of this list though ...)
 	uint64_t unk_3D8[0x23];
 	uint64_t unk_4F0[4];
 	uint64_t keybag_blk_start;
 	uint64_t keybag_blk_count;
 	uint64_t unk_520;
-	// Hier kaeme noch ein wenig mehr ... aber keine Ahnung was es bedeutet ...
+	// There's some more stuff here, but I have no idea about it's meaning ...
 };
 
 static_assert(sizeof(APFS_Superblock_NXSB) == 0x528, "NXSB Superblock size wrong");
@@ -324,7 +324,7 @@ struct APFS_Superblock_APSB
 	uint32_t unk_24;
 	uint64_t features_28; // Features 3
 	uint64_t features_30; // Features 2
-    uint64_t features_38; // Features: & 0x09: 0x00 = Altes Format (iOS), 0x01 = Case-Insensitive, 0x08 = Case-Sensitive
+    uint64_t features_38; // Features: & 0x09: 0x00 = old format (iOS), 0x01 = case-insensitive, 0x08 = case-sensitive
 	uint64_t unk_40;
 	uint64_t blocks_reserved;
 	uint64_t blocks_quota;
@@ -336,7 +336,7 @@ struct APFS_Superblock_APSB
 	uint32_t unk_74;
 	uint32_t unk_78; // 40000002
 	uint32_t unk_7C; // 40000002
-	uint64_t blockid_nodemap; // Block ID -> 4000000B -> Node Map Tree Root (40000002/B) - Node Map nur fuer Directory!
+	uint64_t blockid_nodemap; // Block ID -> 4000000B -> Node Map Tree Root (40000002/B) - Node Map only for Directory!
 	uint64_t nodeid_rootdir; // Node ID -> Root Directory
 	uint64_t blockid_blockmap; // Block ID -> 40000002/F Block Map Tree Root
 	uint64_t blockid_4xBx10_map; // Block ID -> Root of 40000002/10 Tree
@@ -352,7 +352,7 @@ struct APFS_Superblock_APSB
 	uint64_t unk_E8;
 	apfs_uuid_t guid;
 	uint64_t timestamp_100;
-    uint64_t flags_108; // TODO: Keine Version, sondern Flags: Bit 0x1: 0 = Encrypted, 1 = Unencrypted. Bit 0x2: Effaceable
+    uint64_t flags_108; // TODO: No version, but flags: Bit 0x1: 0 = Encrypted, 1 = Unencrypted. Bit 0x2: Effaceable
 	APFS_Superblock_APSB_AccessInfo access_info[9];
 	char vol_name[0x100];
 	uint64_t unk_3C0;

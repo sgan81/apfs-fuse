@@ -27,6 +27,7 @@
 #include <iostream>
 #include <iomanip>
 #include <vector>
+#include <sstream>
 #ifdef __linux__
 #include <termios.h>
 #endif
@@ -230,6 +231,39 @@ void DumpHex(std::ostream &os, const byte_t *data, size_t size, size_t lineSize)
 	// os << dec;
 }
 
+// Like DumpHex, but prints a label.
+void DumpBuffer(const uint8_t *data, size_t len, const char *label)
+{
+	std::cout << "dumping " << label << std::endl;
+	DumpHex(std::cout, data, len);
+}
+
+std::string uuidstr(const apfs_uuid_t &uuid)
+{
+	using namespace std;
+
+	stringstream st;
+	int k;
+
+	st << hex << uppercase << setfill('0');
+	for (k = 0; k < 4; k++)
+		st << setw(2) << static_cast<unsigned>(uuid[k]);
+	st << '-';
+	for (k = 4; k < 6; k++)
+		st << setw(2) << static_cast<unsigned>(uuid[k]);
+	st << '-';
+	for (k = 6; k < 8; k++)
+		st << setw(2) << static_cast<unsigned>(uuid[k]);
+	st << '-';
+	for (k = 8; k < 10; k++)
+		st << setw(2) << static_cast<unsigned>(uuid[k]);
+	st << '-';
+	for (k = 10; k < 16; k++)
+		st << setw(2) << static_cast<unsigned>(uuid[k]);
+
+	return st.str();
+}
+
 #undef DEBUG_OUT
 
 #ifdef __linux__
@@ -367,12 +401,7 @@ bool GetPassword(std::string &pw)
 #else
 	std::getline(std::cin, pw);
 	std::cout << std::endl;
-#endif
-}
 
-// Like DumpHex, but prints a label.
-void DumpBuffer(const uint8_t *data, size_t len, const char *label)
-{
-	std::cout << "dumping " << label << std::endl;
-	DumpHex(std::cout, data, len);
+	return true;
+#endif
 }

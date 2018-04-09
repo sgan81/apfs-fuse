@@ -21,6 +21,8 @@ union Rfc3394_Unit {
 	uint8_t u8[16];
 };
 
+constexpr uint64_t rfc_3394_default_iv = 0xA6A6A6A6A6A6A6A6ULL;
+
 void Rfc3394_KeyWrap(uint8_t *crypto, const uint8_t *plain, size_t size, const uint8_t *key, AES::Mode aes_mode, uint64_t iv)
 {
 	Rfc3394_Unit u;

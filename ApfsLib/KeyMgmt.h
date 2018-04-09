@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include <iosfwd>
 
 #include "Global.h"
 
@@ -61,7 +62,7 @@ public:
 	bool GetKey(size_t nr, key_data_t &keydata);
 	bool FindKey(const apfs_uuid_t &uuid, uint16_t type, key_data_t &keydata, int force_index = -1);
 
-	void dump(BlockDumper &bd, Keybag *cbag, const apfs_uuid_t &vuuid);
+	void dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid);
 
 private:
 	std::vector<uint8_t> m_data;
@@ -81,7 +82,7 @@ public:
 
 	bool IsValid() const { return m_is_valid; }
 
-	void dump(BlockDumper &bd);
+	void dump(std::ostream &st);
 
 private:
 	bool LoadKeybag(Keybag &bag, uint32_t type, uint64_t block, uint64_t blockcnt, const apfs_uuid_t &uuid);

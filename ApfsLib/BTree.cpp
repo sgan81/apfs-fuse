@@ -198,6 +198,9 @@ bool BTree::Init(uint64_t root_node_id, uint64_t version, ApfsNodeMapper *node_m
 
 bool BTree::Lookup(BTreeEntry &result, const void *key, size_t key_size, BTCompareFunc func, void *context, bool exact)
 {
+	if (!m_root_node)
+		return false;
+
 	uint64_t nodeid;
 	uint64_t parentid;
 	int index;
@@ -413,7 +416,18 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 		node = BTreeNode::CreateNode(*this, blk.data(), blk.size(), parentid, ni.block_no);
 #ifdef BTREE_USE_MAP
 		if (m_nodes.size() > BTREE_MAP_MAX_NODES)
+		{
+#if 0
 			m_nodes.clear(); // TODO: Make this somewhat more intelligent ...
+#else
+			// This might be somewhat more intelligent ...
+			for (it = m_nodes.begin(); it != m_nodes.end(); it++)
+			{
+				if (it->second.use_count() == 1)
+					it = m_nodes.erase(it);
+			}
+#endif
+		}
 
 		m_nodes[nodeid] = node;
 #endif

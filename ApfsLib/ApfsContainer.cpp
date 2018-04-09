@@ -73,7 +73,43 @@ bool ApfsContainer::Init()
 
 	memcpy(&m_sb, blk.data(), sizeof(APFS_Superblock_NXSB));
 
-	m_nodemap_vol.Init(m_sb.blockid_volhdr, m_sb.hdr.version);
+#if 1 // Scan container for most recent superblock (might fix segfaults)
+	uint64_t max_version = 0;
+	uint64_t max_bid = 0;
+	uint64_t bid;
+	std::vector<byte_t> tmp;
+
+	tmp.resize(m_sb.block_size);
+
+	for (bid = m_sb.blockid_sb_area_start; bid < (m_sb.blockid_sb_area_start + m_sb.sb_area_cnt); bid++)
+	{
+		m_disk.Read(tmp.data(), bid * m_sb.block_size, m_sb.block_size);
+		if (!VerifyBlock(tmp.data(), tmp.size()))
+			continue;
+
+		const APFS_Superblock_NXSB *sb = reinterpret_cast<const APFS_Superblock_NXSB *>(tmp.data());
+		if (sb->hdr.type != 0x80000001)
+			continue;
+
+		if (sb->hdr.version > max_version)
+		{
+			max_version = sb->hdr.version;
+			max_bid = bid;
+		}
+	}
+
+	if (max_version > m_sb.hdr.version)
+	{
+		if (g_debug > 0)
+			std::cout << "Found more recent version " << max_version << " than superblock 0 contained (" << m_sb.hdr.version << ")." << std::endl;
+
+		m_disk.Read(tmp.data(), max_bid * m_sb.block_size, m_sb.block_size);
+		memcpy(&m_sb, tmp.data(), sizeof(APFS_Superblock_NXSB));
+	}
+#endif
+
+	if (!m_nodemap_vol.Init(m_sb.blockid_volhdr, m_sb.hdr.version))
+		return false;
 
 	if ((m_sb.keybag_blk_start != 0) && (m_sb.keybag_blk_count != 0))
 		m_keymgr.Init(m_sb.keybag_blk_start, m_sb.keybag_blk_count, m_sb.container_guid);
@@ -195,8 +231,10 @@ void ApfsContainer::dump(BlockDumper& bd)
 
 	bd.DumpNode(blk.data(), 0);
 
+#if 1
 	if (m_keymgr.IsValid())
-		m_keymgr.dump(bd);
+		m_keymgr.dump(bd.st());
+#endif
 
 	/*
 	if (m_keybag.size())

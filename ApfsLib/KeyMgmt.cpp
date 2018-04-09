@@ -53,11 +53,19 @@ struct blob_header_t
 	bagdata_t blob;
 };
 
+struct key_unk_82_t
+{
+	uint32_t unk_00;
+	uint16_t unk_04;
+	uint8_t unk_06;
+	uint8_t unk_07;
+};
+
 struct kek_blob_t
 {
 	uint64_t unk_80;
 	apfs_uuid_t uuid;
-	uint8_t unk_82[8];
+	key_unk_82_t unk_82;
 	uint8_t wrapped_kek[0x28];
 	uint64_t iterations;
 	uint8_t salt[0x10];
@@ -67,7 +75,7 @@ struct vek_blob_t
 {
 	uint64_t unk_80;
 	apfs_uuid_t uuid;
-	uint8_t unk_82[8];
+	key_unk_82_t unk_82;
 	uint8_t wrapped_vek[0x28];
 };
 
@@ -263,7 +271,7 @@ bool Keybag::GetKey(size_t nr, key_data_t & keydata)
 
 	keydata.header = khdr;
 	keydata.data.data = ptr + sizeof(key_hdr_t);
-	keydata.data.size = hdr.no_of_bytes;
+	keydata.data.size = khdr->length;
 
 	return true;
 }
@@ -288,7 +296,7 @@ bool Keybag::FindKey(const apfs_uuid_t & uuid, uint16_t type, key_data_t & keyda
 		for (k = 0; k < hdr.no_of_keys; k++)
 		{
 			khdr = reinterpret_cast<const key_hdr_t *>(ptr);
-			std::cout << "k=" << k << "; uuid=" << BlockDumper::uuid(khdr->uuid)
+			std::cout << "k=" << k << "; uuid=" << uuidstr(khdr->uuid)
 					<< "; type=" << khdr->type << std::endl;
 			len = (khdr->length + sizeof(key_hdr_t) + 0xF) & ~0xF;
 			ptr += len;
@@ -358,11 +366,11 @@ std::string hexstr(const uint8_t *data, size_t size)
 	return st.str();
 }
 
-void Keybag::dump(BlockDumper& bd, Keybag *cbag, const apfs_uuid_t &vuuid)
+void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 {
 	using namespace std;
 
-	ostream &st = bd.st();
+	(void)vuuid;
 
 	size_t s;
 	size_t k;
@@ -417,7 +425,7 @@ void Keybag::dump(BlockDumper& bd, Keybag *cbag, const apfs_uuid_t &vuuid)
 		}
 
 		st << "Key " << k << ":" << endl;
-		st << "UUID    : " << BlockDumper::uuid(kd.header->uuid) << endl;
+		st << "UUID    : " << uuidstr(kd.header->uuid) << endl;
 		st << "Type    : " << setw(4) << kd.header->type << " [" << typestr << "]" << endl;
 		st << "Length  : " << setw(4) << kd.header->length << endl;
 		st << "Unknown : " << setw(8) << kd.header->unknown << endl;
@@ -435,6 +443,8 @@ void Keybag::dump(BlockDumper& bd, Keybag *cbag, const apfs_uuid_t &vuuid)
 					st << "Unk 80  : " << bhdr.unk_80 << endl;
 					st << "HMAC    : " << hexstr(bhdr.hmac, sizeof(bhdr.hmac)) << endl;
 					st << "Salt    : " << hexstr(bhdr.salt, sizeof(bhdr.salt)) << endl;
+					st << "Data    :" << endl;
+					DumpHex(st, bhdr.blob.data, bhdr.blob.size);
 					st << endl;
 
 					vek_blob_t vek;
@@ -443,8 +453,9 @@ void Keybag::dump(BlockDumper& bd, Keybag *cbag, const apfs_uuid_t &vuuid)
 					{
 						st << "[VEK]" << endl;
 						st << "Unk 80  : " << vek.unk_80 << endl;
-						st << "UUID    : " << BlockDumper::uuid(vek.uuid) << endl;
-						st << "Unk 82  : " << hexstr(vek.unk_82, sizeof(vek.unk_82)) << endl;
+						st << "UUID    : " << uuidstr(vek.uuid) << endl;
+						st << "Unk 82  : " << setw(8) << vek.unk_82.unk_00 << ' ' << setw(4) << vek.unk_82.unk_04 << ' ';
+						st << setw(2) << static_cast<int>(vek.unk_82.unk_06) << ' ' << setw(2) << static_cast<int>(vek.unk_82.unk_07) << endl;
 						st << "VEK Wrpd: " << hexstr(vek.wrapped_vek, sizeof(vek.wrapped_vek)) << endl;
 						st << endl;
 					}
@@ -481,6 +492,8 @@ void Keybag::dump(BlockDumper& bd, Keybag *cbag, const apfs_uuid_t &vuuid)
 					st << "Unk 80  : " << bhdr.unk_80 << endl;
 					st << "HMAC    : " << hexstr(bhdr.hmac, sizeof(bhdr.hmac)) << endl;
 					st << "Salt    : " << hexstr(bhdr.salt, sizeof(bhdr.salt)) << endl;
+					st << "Data    :" << endl;
+					DumpHex(st, bhdr.blob.data, bhdr.blob.size);
 					st << endl;
 
 					kek_blob_t kek;
@@ -489,20 +502,21 @@ void Keybag::dump(BlockDumper& bd, Keybag *cbag, const apfs_uuid_t &vuuid)
 					{
 						st << "[KEK]" << endl;
 						st << "Unk 80  : " << kek.unk_80 << endl;
-						st << "UUID    : " << BlockDumper::uuid(kek.uuid) << endl;
-						st << "Unk 82  : " << hexstr(kek.unk_82, sizeof(kek.unk_82)) << endl;
+						st << "UUID    : " << uuidstr(kek.uuid) << endl;
+						st << "Unk 82  : " << setw(8) << kek.unk_82.unk_00 << ' ' << setw(4) << kek.unk_82.unk_04 << ' ';
+						st << setw(2) << static_cast<int>(kek.unk_82.unk_06) << ' ' << setw(2) << static_cast<int>(kek.unk_82.unk_07) << endl;
 						st << "KEK Wrpd: " << hexstr(kek.wrapped_kek, sizeof(kek.wrapped_kek)) << endl;
 						st << "Iterat's: " << dec << kek.iterations << hex << endl;
 						st << "Salt    : " << hexstr(kek.salt, sizeof(kek.salt)) << endl;
 						st << endl;
 
-#if 1
+#if 0 // Test decryption of keys
 						string pw;
 						uint8_t dk[0x20];
 						uint8_t kekk[0x20];
 						uint64_t iv;
 
-						cout << "Enter Password for KEK " << BlockDumper::uuid(kek.uuid) << endl;
+						cout << "Enter Password for KEK " << uuidstr(kek.uuid) << endl;
 						GetPassword(pw);
 
 						st << "[Decryption Check]" << endl;
@@ -589,7 +603,7 @@ bool KeyManager::GetPasswordHint(std::string& hint, const apfs_uuid_t& volume_uu
 	if (g_debug > 0)
 	{
 		std::cout << "Password hint: looking for key type 3 for volume "
-			<< BlockDumper::uuid(volume_uuid) << " in m_container_bag" << std::endl;
+			<< uuidstr(volume_uuid) << " in m_container_bag" << std::endl;
 	}
 
 	if (!m_container_bag.FindKey(volume_uuid, 3, recs_block))
@@ -610,7 +624,7 @@ bool KeyManager::GetPasswordHint(std::string& hint, const apfs_uuid_t& volume_uu
 
 	if (g_debug > 0)
 		std::cout << "Password hint: looking for key type 4 for volume "
-			<< BlockDumper::uuid(volume_uuid) << " in recs_bag" << std::endl;
+			<< uuidstr(volume_uuid) << " in recs_bag" << std::endl;
 
 	if (!recs_bag.FindKey(volume_uuid, 4, hint_data))
 		return false;
@@ -631,8 +645,14 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	vek_blob_t vek_blob;
 
 	if (g_debug > 0)
+	{
+		std::cout << "GetVolumeKey: Dumping container keybag." << std::endl;
+
+		m_container_bag.dump(std::cout, nullptr, volume_uuid);
+
 		std::cout << "GetVolumeKey: looking for key type 3 for volume "
-		          << BlockDumper::uuid(volume_uuid) << " in m_container_bag" << std::endl;
+			<< uuidstr(volume_uuid) << " in m_container_bag" << std::endl;
+	}
 
 	if (!m_container_bag.FindKey(volume_uuid, 3, recs_block))
 		return false;
@@ -657,7 +677,11 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		return false;
 
 	if (g_debug > 0)
-		std::cout << "key bag loaded" << std::endl;
+	{
+		std::cout << "Volume key bag loaded successfully. Dumping contents." << std::endl;
+
+		recs_bag.dump(std::cout, &m_container_bag, volume_uuid);
+	}
 
 	if (password_is_prk)
 	{
@@ -665,7 +689,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		// the special personal recovery key UUID to identify it.
 		if (g_debug > 0)
 			std::cout << "GetVolumeKey: looking for key index 1 for volume "
-				  << BlockDumper::uuid(volume_uuid) << " in recs_bag" << std::endl;
+				  << uuidstr(volume_uuid) << " in recs_bag" << std::endl;
 
 		if (!recs_bag.FindKey(volume_uuid, 3, kek_header, 1))
 			return false;
@@ -685,7 +709,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 
 	if (g_debug > 0)
 		std::cout << "GetVolumeKey: looking for key type 2 for volume "
-			<< BlockDumper::uuid(volume_uuid) << " in m_container_bag" << std::endl;
+			<< uuidstr(volume_uuid) << " in m_container_bag" << std::endl;
 
 	if (!m_container_bag.FindKey(volume_uuid, 2, vek_header))
 		return false;
@@ -714,7 +738,8 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 
 	PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(password), strlen(password), kek_blob.salt, sizeof(kek_blob.salt), kek_blob.iterations, dk, sizeof(dk));
 
-	if (!Rfc3394_KeyUnwrap(kek, kek_blob.wrapped_kek, 0x20, dk, AES::AES_256, &iv)) {
+	if (!Rfc3394_KeyUnwrap(kek, kek_blob.wrapped_kek, 0x20, dk, AES::AES_256, &iv))
+	{
 		if (g_debug > 0)
 		{
 			DumpBuffer(reinterpret_cast<const uint8_t *>(&iv), sizeof(uint64_t), "KEK IV");
@@ -772,7 +797,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	return true;
 }
 
-void KeyManager::dump(BlockDumper& bd)
+void KeyManager::dump(std::ostream &st)
 {
 	size_t k;
 	size_t s;
@@ -781,7 +806,7 @@ void KeyManager::dump(BlockDumper& bd)
 
 	memset(dummy_uuid, 0, sizeof(dummy_uuid));
 
-	m_container_bag.dump(bd, nullptr, dummy_uuid);
+	m_container_bag.dump(st, nullptr, dummy_uuid);
 
 	s = m_container_bag.GetKeyCnt();
 
@@ -796,11 +821,9 @@ void KeyManager::dump(BlockDumper& bd)
 			Keybag recs_bag;
 
 			if (LoadKeybag(recs_bag, 0x72656373, ext.blk, ext.bcnt, d.header->uuid))
-				recs_bag.dump(bd, &m_container_bag, d.header->uuid);
+				recs_bag.dump(st, &m_container_bag, d.header->uuid);
 		}
 	}
-
-	std::ostream &st = bd.st();
 
 	st << std::endl;
 	st << "========================================================================================================================" << std::endl;
@@ -942,7 +965,7 @@ bool KeyManager::DecodeKEKBlob(kek_blob_t & kek_blob, const bagdata_t & data)
 	if (g_debug > 0)
 		DumpBuffer(kek_blob.uuid, 0x10, "KEK blob UUID");
 
-	if (!parser.GetBytes(0x82, kek_blob.unk_82, 8))
+	if (!parser.GetBytes(0x82, reinterpret_cast<uint8_t *>(&kek_blob.unk_82), 8))
 		return false;
 
 	if (!parser.GetBytes(0x83, kek_blob.wrapped_kek, 0x28))
@@ -978,7 +1001,7 @@ bool KeyManager::DecodeVEKBlob(vek_blob_t & vek_blob, const bagdata_t & data)
 	if (!parser.GetBytes(0x81, vek_blob.uuid, 0x10))
 		return false;
 
-	if (!parser.GetBytes(0x82, vek_blob.unk_82, 8))
+	if (!parser.GetBytes(0x82, reinterpret_cast<uint8_t *>(&vek_blob.unk_82), 8))
 		return false;
 
 	if (!parser.GetBytes(0x83, vek_blob.wrapped_vek, 0x28))

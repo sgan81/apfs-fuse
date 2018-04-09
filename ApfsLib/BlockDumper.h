@@ -72,10 +72,9 @@ private:
 
 public:
 	static const char * GetNodeType(uint32_t type, uint32_t subtype);
-	static const std::string uuid(const apfs_uuid_t &uuid);
 
 private:
-	static const std::string tstamp(uint64_t apfs_time);
+	static std::string tstamp(uint64_t apfs_time);
 
 	uint32_t m_text_flags; // 00 - Alt, 01 - insensitive, 08 - sensitive
 
