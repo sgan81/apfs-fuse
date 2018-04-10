@@ -112,14 +112,15 @@ bool ApfsContainer::Init()
 		return false;
 
 	if ((m_sb.keybag_blk_start != 0) && (m_sb.keybag_blk_count != 0))
-		m_keymgr.Init(m_sb.keybag_blk_start, m_sb.keybag_blk_count, m_sb.container_guid);
+	{
+		if (!m_keymgr.Init(m_sb.keybag_blk_start, m_sb.keybag_blk_count, m_sb.container_guid))
+		{
+			std::cerr << "Initialization of KeyManager failed." << std::endl;
+			return false;
+		}
+	}
 
 	return true;
-}
-
-ApfsVolume *ApfsContainer::GetVolume(int index)
-{
-	return GetVolume(index, std::string());
 }
 
 ApfsVolume *ApfsContainer::GetVolume(int index, const std::string &passphrase)
@@ -197,23 +198,22 @@ bool ApfsContainer::ReadAndVerifyHeaderBlock(byte_t * data, uint64_t blkid) cons
 	return true;
 }
 
-bool ApfsContainer::GetVolumeKey(uint8_t * key, const apfs_uuid_t & vol_uuid, const char *password)
+bool ApfsContainer::GetVolumeKey(uint8_t *key, const apfs_uuid_t & vol_uuid, const char *password)
 {
 	if (!m_keymgr.IsValid())
 		return false;
 
-	return m_keymgr.GetVolumeKey(key, vol_uuid, password, false);
-}
+	if (password)
+	{
+		return m_keymgr.GetVolumeKey(key, vol_uuid, password);
+	}
+	else
+	{
+		if (m_passphrase.empty())
+			return false;
 
-bool ApfsContainer::GetVolumeKey(uint8_t *key, const apfs_uuid_t & vol_uuid)
-{
-	if (!m_keymgr.IsValid())
-		return false;
-
-	if (m_passphrase.empty())
-		return false;
-
-	return m_keymgr.GetVolumeKey(key, vol_uuid, m_passphrase.c_str(), true);
+		return m_keymgr.GetVolumeKey(key, vol_uuid, m_passphrase.c_str());
+	}
 }
 
 bool ApfsContainer::GetPasswordHint(std::string & hint, const apfs_uuid_t & vol_uuid)

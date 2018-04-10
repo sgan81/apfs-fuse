@@ -79,11 +79,6 @@ struct vek_blob_t
 	uint8_t wrapped_vek[0x28];
 };
 
-static void dumpBagData(const bagdata_t &data, const char *label)
-{
-	DumpBuffer(data.data, data.size, label);
-}
-
 KeyParser::KeyParser()
 {
 	m_start = nullptr;
@@ -276,7 +271,7 @@ bool Keybag::GetKey(size_t nr, key_data_t & keydata)
 	return true;
 }
 
-bool Keybag::FindKey(const apfs_uuid_t & uuid, uint16_t type, key_data_t & keydata, int force_index)
+bool Keybag::FindKey(const apfs_uuid_t & uuid, uint16_t type, key_data_t & keydata)
 {
 	if (m_data.empty())
 		return false;
@@ -289,46 +284,6 @@ bool Keybag::FindKey(const apfs_uuid_t & uuid, uint16_t type, key_data_t & keyda
 	size_t k;
 
 	ptr = m_data.data() + 0x10;
-
-	// Dump all keys
-	if (g_debug > 0)
-	{
-		for (k = 0; k < hdr.no_of_keys; k++)
-		{
-			khdr = reinterpret_cast<const key_hdr_t *>(ptr);
-			std::cout << "k=" << k << "; uuid=" << uuidstr(khdr->uuid)
-					<< "; type=" << khdr->type << std::endl;
-			len = (khdr->length + sizeof(key_hdr_t) + 0xF) & ~0xF;
-			ptr += len;
-		}
-		std::cout << std::endl;
-	}
-
-	// Actual work
-	ptr = m_data.data() + 0x10;
-
-	for (k = 0; k < hdr.no_of_keys; k++)
-	{
-		khdr = reinterpret_cast<const key_hdr_t *>(ptr);
-
-		if (
-			(force_index == static_cast<int>(k)) ||
-			(force_index == -1
-					&& memcmp(uuid, khdr->uuid, sizeof(apfs_uuid_t)) == 0
-					&& khdr->type == type))
-		{
-			if (g_debug > 0)
-				std::cout << " found key: k=" << k << std::endl;
-			keydata.header = khdr;
-			keydata.data.data = ptr + sizeof(key_hdr_t);
-			keydata.data.size = khdr->length;
-
-			return true;
-		}
-
-		len = (khdr->length + sizeof(key_hdr_t) + 0xF) & ~0xF;
-		ptr += len;
-	}
 
 	for (k = 0; k < hdr.no_of_keys; k++)
 	{
@@ -512,17 +467,26 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 
 #if 0 // Test decryption of keys
 						string pw;
-						uint8_t dk[0x20];
-						uint8_t kekk[0x20];
+						uint8_t dk[0x20] = { 0 };
+						uint8_t kekk[0x20] = { 0 };
 						uint64_t iv;
 
-						cout << "Enter Password for KEK " << uuidstr(kek.uuid) << endl;
+						cout << "Enter Password for KEK " << uuidstr(kd.header->uuid) << endl;
 						GetPassword(pw);
 
 						st << "[Decryption Check]" << endl;
 						PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(pw.c_str()), pw.size(), kek.salt, sizeof(kek.salt), kek.iterations, dk, sizeof(dk));
 						st << "PW DKey : " << hexstr(dk, sizeof(dk)) << endl;
-						Rfc3394_KeyUnwrap(kekk, kek.wrapped_kek, sizeof(kekk), dk, AES::AES_256, &iv);
+						if (kek.unk_82.unk_00 == 0 || kek_unk_82.unk_00 == 0x10)
+							Rfc3394_KeyUnwrap(kekk, kek.wrapped_kek, 0x20, dk, AES::AES_256, &iv);
+						else if (kek.unk_82.unk_00 == 2)
+							Rfc3394_KeyUnwrap(kekk, kek.wrapped_kek, 0x10, dk, AES::AES_128, &iv);
+						else
+						{
+							st << "kek/82/00 = " << kek.unk_82.unk_00 << " ???" << endl;
+							iv = 0;
+						}
+
 						st << "KEK Dec : " << hexstr(kekk, sizeof(kekk)) << endl;
 						st << "IV KEK  : " << setw(16) << iv << " [" << (iv == 0xA6A6A6A6A6A6A6A6 ? "Correct" : "!!!INCORRECT!!!") << "]" << endl;
 
@@ -531,7 +495,7 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 						else
 						{
 							vek_blob_t vek;
-							uint8_t vekk[0x20];
+							uint8_t vekk[0x20] = { 0 };
 
 							if (cbag->FindKey(vuuid, 2, kd))
 							{
@@ -539,7 +503,16 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 								{
 									if (KeyManager::DecodeVEKBlob(vek, bhdr.blob))
 									{
-										Rfc3394_KeyUnwrap(vekk, vek.wrapped_vek, sizeof(vekk), kekk, AES::AES_256, &iv);
+										if (vek.unk_82.unk_00 == 0)
+											Rfc3394_KeyUnwrap(vekk, vek.wrapped_vek, 0x20, kekk, AES::AES_256, &iv);
+										else if (vek.unk_82.unk_00 == 2)
+											Rfc3394_KeyUnwrap(vekk, vek.wrapped_vek, 0x10, kekk, AES::AES_128, &iv);
+										else
+										{
+											st << "vek/82/00 = " << vek.unk_82.unk_00 << " ???" << endl;
+											iv = 0;
+										}
+
 										st << "VEK Dec : " << hexstr(vekk, sizeof(vekk)) << endl;
 										st << "IV VEK  : " << setw(16) << iv << " [" << (iv == 0xA6A6A6A6A6A6A6A6 ? "Correct" : "!!!INCORRECT!!!") << "]" << endl;
 										if (iv != 0xA6A6A6A6A6A6A6A6)
@@ -634,7 +607,7 @@ bool KeyManager::GetPasswordHint(std::string& hint, const apfs_uuid_t& volume_uu
 	return true;
 }
 
-bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, const char* password, bool password_is_prk)
+bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, const char* password)
 {
 	key_data_t recs_block;
 	key_data_t kek_header;
@@ -683,29 +656,66 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		recs_bag.dump(std::cout, &m_container_bag, volume_uuid);
 	}
 
-	if (password_is_prk)
+	uint8_t dk[0x20];
+	uint8_t kek[0x20] = { 0 };
+	uint64_t iv;
+	bool rc = false;
+
+	int cnt = recs_bag.GetKeyCnt();
+	int k;
+
+	// Check all KEKs for any valid KEK.
+	for (k = 0; k < cnt; k++)
 	{
-		// TODO(epuccia): instead of looking for a specific key index, use
-		// the special personal recovery key UUID to identify it.
+		if (!recs_bag.GetKey(k, kek_header))
+			continue;
+
+		if (kek_header.header->type != 3)
+			continue;
+
+		if (!VerifyBlob(kek_header.data, kek_data))
+			continue;
+
+		if (!DecodeKEKBlob(kek_blob, kek_data))
+			continue;
+
+		PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(password), strlen(password), kek_blob.salt, sizeof(kek_blob.salt), kek_blob.iterations, dk, sizeof(dk));
+
+		switch (kek_blob.unk_82.unk_00)
+		{
+		case 0x00:
+		case 0x10:
+			rc = Rfc3394_KeyUnwrap(kek, kek_blob.wrapped_kek, 0x20, dk, AES::AES_256, &iv);
+			break;
+		case 0x02:
+			rc = Rfc3394_KeyUnwrap(kek, kek_blob.wrapped_kek, 0x10, dk, AES::AES_128, &iv);
+			break;
+		default:
+			std::cerr << "Unknown KEK key flags 82/00 = " << std::hex << kek_blob.unk_82.unk_00 << ". Please file a bug report." << std::endl;
+			rc = false;
+			break;
+		}
+
 		if (g_debug > 0)
-			std::cout << "GetVolumeKey: looking for key index 1 for volume "
-				  << uuidstr(volume_uuid) << " in recs_bag" << std::endl;
+		{
+			std::cout << std::hex << std::setfill('0') << std::uppercase;
+			std::cout << "PW Key  : " << hexstr(dk, sizeof(dk)) << std::endl;
+			std::cout << "KEK Wrpd: " << hexstr(kek_blob.wrapped_kek, sizeof(kek_blob.wrapped_kek)) << std::endl;
+			std::cout << "KEK     : " << hexstr(kek, 0x20) << std::endl;
+			std::cout << "KEK IV  : " << std::setw(16) << iv << std::endl;
+			std::cout << std::endl;
+		}
 
-		if (!recs_bag.FindKey(volume_uuid, 3, kek_header, 1))
-			return false;
+		if (rc)
+			break;
 	}
-	else
+
+	if (!rc)
 	{
-		// password is a regular user password
-		if (!recs_bag.FindKey(volume_uuid, 3, kek_header))
-			return false;
+		if (g_debug > 0)
+			std::cout << "Password doesn't work for any key." << std::endl;
+		return false;
 	}
-
-	if (!VerifyBlob(kek_header.data, kek_data))
-		return false;
-
-	if (!DecodeKEKBlob(kek_blob, kek_data))
-		return false;
 
 	if (g_debug > 0)
 		std::cout << "GetVolumeKey: looking for key type 2 for volume "
@@ -717,84 +727,57 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	if (!VerifyBlob(vek_header.data, vek_data))
 		return false;
 
+	/*
 	if (g_debug > 0)
 		dumpBagData(vek_data, "vek_data");
+	*/
 
 	if (!DecodeVEKBlob(vek_blob, vek_data))
 		return false;
 
-	// PW Check
-
-	uint8_t dk[0x20];
-	uint8_t kek[0x20];
-	uint64_t iv;
-	size_t vek_len;
 
 	memset(vek, 0, 0x20);
 
-	if (g_debug > 0)
-		std::cout << " password check: pw is '" << password << "'; iterations="
-			  << kek_blob.iterations << std::endl;
-
-	PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(password), strlen(password), kek_blob.salt, sizeof(kek_blob.salt), kek_blob.iterations, dk, sizeof(dk));
-
-	if (!Rfc3394_KeyUnwrap(kek, kek_blob.wrapped_kek, 0x20, dk, AES::AES_256, &iv))
+	if (vek_blob.unk_82.unk_00 == 0)
 	{
-		if (g_debug > 0)
+		// AES-256. This method is used for wrapping the whole XTS-AES key,
+		// and applies to non-FileVault encrypted APFS volumes.
+		rc = Rfc3394_KeyUnwrap(vek, vek_blob.wrapped_vek, 0x20, kek, AES::AES_256, &iv);
+	}
+	else if (vek_blob.unk_82.unk_00 == 2)
+	{
+		// AES-128. This method is used for FileVault and CoreStorage encrypted
+		// volumes that have been converted to APFS.
+		rc = Rfc3394_KeyUnwrap(vek, vek_blob.wrapped_vek, 0x10, kek, AES::AES_128, &iv);
+
+		if (rc)
 		{
-			DumpBuffer(reinterpret_cast<const uint8_t *>(&iv), sizeof(uint64_t), "KEK IV");
-			DumpBuffer(kek, 32, "KEK content");
+			SHA256 sha;
+			uint8_t sha_result[0x20];
+			sha.Init();
+
+			// Use (VEK || vek_blob.uuid), then SHA256, then take the first 16 bytes
+			sha.Update(vek, 0x10);
+			sha.Update(vek_blob.uuid, 0x10);
+			sha.Final(sha_result);
+			memcpy(vek + 0x10, sha_result, 0x10);
 		}
-		return false;
+	}
+	else
+	{
+		// Unknown method.
+		std::cerr << "Unknown VEK key flags 82/00 = " << std::hex << vek_blob.unk_82.unk_00 << ". Please file a bug report." << std::endl;
+		rc = false;
 	}
 
 	if (g_debug > 0)
 	{
-		std::cout << " KEK IV valid" << std::endl;
-		DumpBuffer(vek_blob.wrapped_vek, 0x20, "wrapped VEK");
+		std::cout << "VEK Wrpd: " << hexstr(vek_blob.wrapped_vek, 0x28) << std::endl;
+		std::cout << "VEK     : " << hexstr(vek, 0x20) << std::endl;
+		std::cout << "VEK IV  : " << std::setw(16) << iv << std::endl;
 	}
 
-	// Try AES-256 first. This method is used for wrapping the whole XTS-AES key,
-	// and applies to non-FileVault encrypted APFS volumes.
-	vek_len = 0x20;
-
-	if (Rfc3394_KeyUnwrap(vek, vek_blob.wrapped_vek, vek_len, kek, AES::AES_256, &iv))
-		return true;
-
-	// This didn't work; try the FileVault method.
-	if (g_debug > 0)
-	{
-		DumpBuffer(reinterpret_cast<const uint8_t *>(&iv), sizeof(uint64_t), "VEK IV (method 1)");
-		DumpBuffer(vek, vek_len, "VEK method 1");
-	}
-
-	vek_len = 0x10;
-
-	if (!Rfc3394_KeyUnwrap(vek, vek_blob.wrapped_vek, vek_len, kek, AES::AES_128, &iv))
-	{
-		if (g_debug > 0)
-		{
-			DumpBuffer(reinterpret_cast<const uint8_t *>(&iv), sizeof(uint64_t), "VEK IV (method 2)");
-			DumpBuffer(vek, vek_len, "VEK (method 2)");
-		}
-		return false;
-	}
-
-	// Tweak key calculation
-	SHA256 sha;
-	uint8_t sha_result[0x20];
-	sha.Init();
-
-	// Use (VEK || vek_blob.uuid), then SHA256, then take the first 16 bytes
-	sha.Update(vek, 0x10);
-	sha.Update(vek_blob.uuid, 0x10);
-	sha.Final(sha_result);
-	memcpy(&vek[0x10], sha_result, 0x10);
-
-	if (g_debug > 0)
-		DumpBuffer(vek, 0x20, "final AES-XTS key");
-
-	return true;
+	return rc;
 }
 
 void KeyManager::dump(std::ostream &st)
@@ -953,17 +936,11 @@ bool KeyManager::DecodeKEKBlob(kek_blob_t & kek_blob, const bagdata_t & data)
 
 	parser.SetData(key_hdr);
 
-	if (g_debug > 0)
-		DumpBuffer(data.data, data.size, "KEK blob data");
-
 	if (!parser.GetUInt64(0x80, kek_blob.unk_80))
 		return false;
 
 	if (!parser.GetBytes(0x81, kek_blob.uuid, 0x10))
 		return false;
-
-	if (g_debug > 0)
-		DumpBuffer(kek_blob.uuid, 0x10, "KEK blob UUID");
 
 	if (!parser.GetBytes(0x82, reinterpret_cast<uint8_t *>(&kek_blob.unk_82), 8))
 		return false;
@@ -986,9 +963,6 @@ bool KeyManager::DecodeVEKBlob(vek_blob_t & vek_blob, const bagdata_t & data)
 	bagdata_t key_hdr;
 
 	parser.SetData(data);
-
-	if (g_debug > 0)
-		DumpBuffer(data.data, data.size, "VEK blob data");
 
 	if (!parser.GetAny(0xA3, key_hdr))
 		return false;

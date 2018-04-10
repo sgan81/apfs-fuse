@@ -494,6 +494,7 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 #ifndef DUMP_COMPRESSED
 				else if (!strcmp(attr_name, "com.apple.decmpfs"))
 				{
+					m_os << endl;
 					// Don't dump compressed data ...
 				}
 #endif
@@ -611,7 +612,12 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 			m_os << "[" << setw(8) << hash_calc << "] ";
 
 			if (hash_calc != hash_stored)
+			{
 				cerr << hex << "Hash not matching at name " << key << " : stored " << hash_stored << ", calc " << hash_calc << endl;
+
+				m_os << endl;
+				DumpHex(key_data, key_length, key_length);
+			}
 #endif
 
 			m_os << '\'' << (key_data + 12) << '\'';
