@@ -421,10 +421,12 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 			m_nodes.clear(); // TODO: Make this somewhat more intelligent ...
 #else
 			// This might be somewhat more intelligent ...
-			for (it = m_nodes.begin(); it != m_nodes.end(); it++)
+			for (it = m_nodes.begin(); it != m_nodes.end();)
 			{
 				if (it->second.use_count() == 1)
 					it = m_nodes.erase(it);
+				else
+					it++;
 			}
 #endif
 		}
