@@ -11,10 +11,14 @@ Thus, the driver may return compressed files instead of uncompressed ones ...
 ## Usage
 
 ### Compile the source code
-The following libraries are needed:
+The following libraries are needed (including the -dev packages):
 
 * FUSE 2.6 or greater
-* ICU
+* ICU (Only on Linux)
+
+Development tools:
+* cmake
+* gcc-c++ (or clang++)
 
 ```
 mkdir build
@@ -34,14 +38,15 @@ Supported options:
 * `-l`: Lax mode: when unexpected data is encountered, try to continue, even if this means
   data returning potentially incorrect data.
 * `-v n`: Instead of mounting the first volume in a container, mount volume n (starting at 0).
-* `-r recovery_key`: Mount an encrypted volume by supplying a Personal Recovery Key (PRK).
+* `-r recovery_key`: Mount an encrypted volume by supplying a password or Personal Recovery Key (PRK).
 * `-s n`: Find the container at offset n inside the device. This is useful when using an image file
   instead of a disk device, and therefore partitions are not exposed.
 
 The device has to be the one containing the APFS container. If a container contains more than one volume,
 the volume can be specified by the `-v` option.
 
-If a volume is encrypted, the apfs-fuse command will prompt for a password, unless a PRK is specified.
+If a volume is encrypted, the apfs-fuse command will prompt for a password, unless a password or PRK is
+specified on the command line. The PRK can also be used as password.
 
 ### Unmount a drive
 ```
