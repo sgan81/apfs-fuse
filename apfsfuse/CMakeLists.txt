@@ -4,7 +4,7 @@ include_directories(/usr/local/include/osxfuse/)
 link_directories(/usr/local/lib/)
 endif()
 
-add_executable(apfs-fuse main.cpp ApfsFuse.cpp)
+add_executable(apfs-fuse ApfsFuse.cpp)
 if(APPLE)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -framework CoreFoundation")
 target_link_libraries(apfs-fuse ApfsLib osxfuse)
