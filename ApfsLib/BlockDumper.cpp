@@ -613,7 +613,8 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 
 			if (hash_calc != hash_stored)
 			{
-				cerr << hex << "Hash not matching at name " << key << " : stored " << hash_stored << ", calc " << hash_calc << endl;
+				cerr << hex << "Hash not matching at name " << key << " : stored " << hash_stored << ", calc " << hash_calc << " '";
+				cerr << (key_data + 12) << "'" << endl;
 
 				m_os << endl;
 				DumpHex(key_data, key_length, key_length);
