@@ -12,8 +12,12 @@
 #include <intrin.h>
 
 #define bswap_64 _byteswap_uint64
-#else
+#endif
+#ifdef __linux__
 #include <byteswap.h>
+#endif
+#ifdef __APPLE__
+#define bswap_64 _OSSwapInt64
 #endif
 
 union Rfc3394_Unit {

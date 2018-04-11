@@ -17,34 +17,36 @@ You should have received a copy of the GNU General Public License
 along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifdef __linux__
+#ifdef __APPLE__
 
 #include <unistd.h>
+#include <sys/disk.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/fcntl.h>
-#include <linux/fs.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "DeviceLinux.h"
+#include <iostream>
+
+#include "DeviceMac.h"
 #include "Global.h"
 
-DeviceLinux::DeviceLinux()
+DeviceMac::DeviceMac()
 {
 	m_device = -1;
 	m_size = 0;
 }
 
-DeviceLinux::~DeviceLinux()
+DeviceMac::~DeviceMac()
 {
 	Close();
 }
 
-bool DeviceLinux::Open(const char* name)
+bool DeviceMac::Open(const char* name)
 {
-	m_device = open(name, O_RDONLY | O_LARGEFILE);
+	m_device = open(name, O_RDONLY);
 
 	if (m_device == -1)
 	{
@@ -52,9 +54,11 @@ bool DeviceLinux::Open(const char* name)
 		return false;
 	}
 
-	struct stat64 st;
+	struct stat st;
 
-	fstat64(m_device, &st);
+	fstat(m_device, &st);
+
+	std::cout << "st_mode = " << st.st_mode << std::endl;
 
 	if (S_ISREG(st.st_mode))
 	{
@@ -62,8 +66,20 @@ bool DeviceLinux::Open(const char* name)
 	}
 	else if (S_ISBLK(st.st_mode))
 	{
-		// Hmmm ...
-		ioctl(m_device, BLKGETSIZE64, &m_size);
+		uint64_t sector_count = 0;
+		uint32_t sector_size = 0;
+
+		ioctl(m_device, DKIOCGETBLOCKCOUNT, &sector_count);
+		ioctl(m_device, DKIOCGETBLOCKSIZE, &sector_size);
+
+		m_size = sector_size * sector_count;
+
+		std::cout << "Sector count = " << sector_count << std::endl;
+		std::cout << "Sector size  = " << sector_size << std::endl;
+	}
+	else
+	{
+		std::cout << "File mode unknown!" << std::endl;
 	}
 
 	if (g_debug > 0)
@@ -72,7 +88,7 @@ bool DeviceLinux::Open(const char* name)
 	return m_device != -1;
 }
 
-void DeviceLinux::Close()
+void DeviceMac::Close()
 {
 	if (m_device != -1)
 		close(m_device);
@@ -80,11 +96,11 @@ void DeviceLinux::Close()
 	m_size = 0;
 }
 
-bool DeviceLinux::Read(void* data, uint64_t offs, uint64_t len)
+bool DeviceMac::Read(void* data, uint64_t offs, uint64_t len)
 {
 	size_t nread;
 
-	nread = pread64(m_device, data, len, offs);
+	nread = pread(m_device, data, len, offs);
 
 	// TODO: Better error handling ...
 	return nread == len;

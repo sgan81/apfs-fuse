@@ -19,15 +19,15 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
-#ifdef __linux__
+#ifdef __APPLE__
 
 #include "Device.h"
 
-class DeviceLinux : public Device
+class DeviceMac : public Device
 {
 public:
-	DeviceLinux();
-	~DeviceLinux();
+	DeviceMac();
+	~DeviceMac();
 
 	bool Open(const char *name);
 	void Close();

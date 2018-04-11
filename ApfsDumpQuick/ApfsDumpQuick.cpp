@@ -29,8 +29,12 @@
 #ifdef _WIN32
 #include <ApfsLib/DeviceWinFile.h>
 #include <ApfsLib/DeviceWinPhys.h>
-#else
+#endif
+#ifdef __linux__
 #include <ApfsLib/DeviceLinux.h>
+#endif
+#ifdef __APPLE__
+#include <ApfsLib/DeviceMac.h>
 #endif
 
 #ifdef _WIN32
@@ -46,15 +50,19 @@ int main(int argc, char *argv[])
 #else
 	DeviceWinFile disk;
 #endif
-#else
+#endif
+#ifdef __linux__
 	DeviceLinux disk;
+#endif
+#ifdef __APPLE__
+	DeviceMac disk;
 #endif
 	int volumes_cnt;
 	int volume_id;
 
 	if (argc < 3)
 	{
-		std::cerr << "Syntax: Test <filename.dmg> <Logfile.txt>" << std::endl;
+		std::cerr << "Syntax: apfs-dump-quick <filename.dmg> <Logfile.txt>" << std::endl;
 		return -1;
 	}
 

@@ -20,6 +20,8 @@
 #ifdef __linux__
 #include <unicode/utypes.h>
 #include <unicode/normalizer2.h>
+#elif defined(__APPLE__)
+#include <CoreFoundation/CFString.h>
 #else
 #include "Unicode.h"
 #endif
@@ -28,7 +30,7 @@
 #include <iomanip>
 #include <vector>
 #include <sstream>
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <termios.h>
 #endif
 #include <stdio.h>
@@ -204,6 +206,40 @@ uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensit
 	return hash;
 }
 
+#elif defined(__APPLE__)
+
+uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensitive)
+{
+	char normalized[5120];
+	uint32_t hash;
+	std::vector<char32_t> normalized_u32;
+
+	CFStringRef str = CFStringCreateWithCString(kCFAllocatorDefault, utf8str, kCFStringEncodingUTF8);
+	CFMutableStringRef mstr = CFStringCreateMutableCopy(NULL, 0, str);
+
+	// TODO: Is the locale correct? Is it used at all?
+	if (case_insensitive)
+		CFStringFold(mstr, kCFCompareCaseInsensitive, NULL);
+
+	CFStringNormalize(mstr, kCFStringNormalizationFormD);
+
+	CFStringGetCString(mstr, normalized, sizeof(normalized) - 1, kCFStringEncodingUTF8);
+
+	CFRelease(mstr);
+	CFRelease(str);
+
+	normalized_u32.reserve(name_len + 16);
+	Utf8toU32(normalized_u32, reinterpret_cast<const uint8_t *>(normalized));
+
+	g_crc.SetCRC(0xFFFFFFFF);
+	g_crc.Calc(reinterpret_cast<const byte_t *>(normalized_u32.data()), normalized_u32.size() * sizeof(char32_t));
+	hash = g_crc.GetCRC();
+
+	hash = ((hash & 0x3FFFFF) << 10) | (name_len & 0x3FF);
+
+	return hash;
+}
+
 #else
 
 uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensitive)
@@ -229,7 +265,7 @@ uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensit
 
 bool GetPassword(std::string &pw)
 {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	struct termios told, tnew;
 	FILE *stream = stdin;
 
@@ -256,4 +292,65 @@ bool GetPassword(std::string &pw)
 
 	return true;
 #endif
+}
+
+bool Utf8toU32(std::vector<char32_t>& u32_str, const uint8_t * str)
+{
+	size_t ip = 0;
+	uint32_t ch;
+	int cnt = 0;
+	uint8_t c;
+	bool ok = true;
+
+	while (str[ip] != 0)
+	{
+		c = str[ip++];
+
+		if (cnt == 0)
+		{
+			if ((c & 0x80) == 0)
+				ch = c;
+			else if ((c & 0xE0) == 0xC0)
+			{
+				ch = c & 0x1F;
+				cnt = 1;
+			}
+			else if ((c & 0xF0) == 0xE0)
+			{
+				ch = c & 0x0F;
+				cnt = 2;
+			}
+			else if ((c & 0xF8) == 0xF0)
+			{
+				ch = c & 0x07;
+				cnt = 3;
+			}
+			else
+			{
+				ok = false;
+				break;
+			}
+		}
+		else
+		{
+			if ((c & 0xC0) == 0x80)
+			{
+				ch = (ch << 6) | (c & 0x3F);
+				--cnt;
+			}
+			else
+			{
+				ok = false;
+				break;
+			}
+		}
+
+		if (cnt == 0)
+		{
+			u32_str.push_back(ch);
+			ch = 0;
+		}
+	}
+
+	return ok;
 }

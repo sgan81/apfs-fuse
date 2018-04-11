@@ -19,20 +19,29 @@
 
 #define FUSE_USE_VERSION 26
 
+#ifdef __linux__
 #include <fuse/fuse.h>
 #include <fuse/fuse_lowlevel.h>
+#endif
+#ifdef __APPLE__
+#include <fuse/fuse.h>
+#include <fuse/fuse_lowlevel.h>
+#endif
 
 #include <getopt.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef __linux__
 #include <attr/xattr.h>
+#endif
 
 #include <ApfsLib/ApfsContainer.h>
 #include <ApfsLib/ApfsVolume.h>
 #include <ApfsLib/ApfsDir.h>
 #include <ApfsLib/Decmpfs.h>
 #include <ApfsLib/DeviceLinux.h>
+#include <ApfsLib/DeviceMac.h>
 
 #include <cassert>
 #include <cstring>
@@ -44,7 +53,12 @@
 
 static struct fuse_lowlevel_ops ops;
 
+#ifdef __linux__
 static DeviceLinux g_disk;
+#endif
+#ifdef __APPLE__
+static DeviceMac g_disk;
+#endif
 static ApfsContainer *g_container = nullptr;
 static ApfsVolume *g_volume = nullptr;
 
@@ -156,6 +170,7 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 			st.st_size = rec.ino.refcnt;
 		}
 
+#ifdef __linux__
 		// What about this?
 		// st.st_birthtime.tv_sec = rec.ino.birthtime / div_nsec;
 		// st.st_birthtime.tv_nsec = rec.ino.birthtime % div_nsec;
@@ -166,7 +181,17 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 		st.st_ctim.tv_nsec = rec.ino.ctime % div_nsec;
 		st.st_atim.tv_sec = rec.ino.atime / div_nsec;
 		st.st_atim.tv_nsec = rec.ino.atime % div_nsec;
-
+#endif
+#ifdef __APPLE__
+		st.st_birthtimespec.tv_sec = rec.ino.birthtime / div_nsec;
+		st.st_birthtimespec.tv_nsec = rec.ino.birthtime % div_nsec;
+		st.st_mtimespec.tv_sec = rec.ino.mtime / div_nsec;
+		st.st_mtimespec.tv_nsec = rec.ino.mtime % div_nsec;
+		st.st_ctimespec.tv_sec = rec.ino.ctime / div_nsec;
+		st.st_ctimespec.tv_nsec = rec.ino.ctime % div_nsec;
+		st.st_atimespec.tv_sec = rec.ino.ctime / div_nsec;
+		st.st_atimespec.tv_nsec = rec.ino.ctime % div_nsec;
+#endif
 		return true;
 	}
 }
@@ -213,6 +238,33 @@ static void apfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 		fuse_reply_err(req, ENOENT);
 }
 
+#ifdef __APPLE__
+static void apfs_getxattr_mac(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size, uint32_t position)
+{
+	ApfsDir dir(*g_volume);
+	bool rc = false;
+	std::vector<uint8_t> data;
+
+	if (g_debug > 0)
+		std::cout << "apfs_getxattr: " << std::hex << ino << " " << name << " => ";
+
+	rc = dir.GetAttribute(data, ino, name);
+
+	if (g_debug > 0)
+		std::cout << (rc ? "OK" : "FAIL") << std::endl;
+
+	if (!rc)
+		fuse_reply_err(req, ENOATTR);
+	else
+	{
+		if (size == 0)
+			fuse_reply_xattr(req, data.size()); // xattr size
+		else
+			fuse_reply_buf(req, reinterpret_cast<const char *>(data.data() + position), std::min(data.size(), size));
+	}
+}
+#endif
+#ifdef __linux__
 static void apfs_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 {
 	ApfsDir dir(*g_volume);
@@ -237,6 +289,7 @@ static void apfs_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 			fuse_reply_buf(req, reinterpret_cast<const char *>(data.data()), std::min(data.size(), size));
 	}
 }
+#endif
 
 static void apfs_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
@@ -381,7 +434,7 @@ static void apfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, st
 	File *file = reinterpret_cast<File *>(fi->fh);
 
 	if (g_debug > 0)
-		printf("apfs_read: ino=%016lX size=%016lX off=%016lX\n", ino, size, off);
+		printf("apfs_read: ino=%016lX size=%016lX off=%016llX\n", ino, size, off);
 
 	if (!file->IsCompressed())
 	{
@@ -568,7 +621,12 @@ int main(int argc, char *argv[])
 	// ops.bmap = apfs_bmap;
 	// ops.destroy = apfs_destroy;
 	ops.getattr = apfs_getattr;
+#ifdef __linux__
 	ops.getxattr = apfs_getxattr;
+#endif
+#ifdef __APPLE__
+	ops.getxattr = apfs_getxattr_mac;
+#endif
 	ops.listxattr = apfs_listxattr;
 	ops.lookup = apfs_lookup;
 	ops.open = apfs_open;

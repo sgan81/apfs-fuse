@@ -6,6 +6,7 @@
 .text
 
 .globl lzvn_decode
+.globl _lzvn_decode
 
 #	rdi: void *dst
 #	rsi: size_t dst_size
@@ -15,6 +16,7 @@
 #	rax: return size_t
 
 lzvn_decode:
+_lzvn_decode:
 	pushq	%rbp
 	movq	%rsp, %rbp
 	pushq	%rbx

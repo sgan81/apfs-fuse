@@ -155,14 +155,14 @@ int main(int argc, const char *argv[])
 {
 	if (argc < 3)
 	{
-		std::cerr << "Syntax: Apfs file.img output.txt [map.txt]" << std::endl;
+		std::cerr << "Syntax: apfs-dump file.img output.txt [map.txt]" << std::endl;
 		return 1;
 	}
 
 	std::ifstream dev;
 	std::ofstream os;
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 	signal(SIGINT, ctrl_c_handler);
 #endif
 

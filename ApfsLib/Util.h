@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <string>
 #include <ostream>
+#include <vector>
 
 #include "Global.h"
 
@@ -32,7 +33,6 @@ bool IsEmptyBlock(const void *data, size_t blksize);
 void DumpHex(std::ostream &os, const byte_t *data, size_t size, size_t line_size = 16);
 void DumpBuffer(const uint8_t *data, size_t len, const char *label);
 std::string uuidstr(const apfs_uuid_t &uuid);
-
-
 uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensitive);
 bool GetPassword(std::string &pw);
+bool Utf8toU32(std::vector<char32_t>& u32_str, const uint8_t * str);

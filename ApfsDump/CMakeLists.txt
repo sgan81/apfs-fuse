@@ -1,2 +1,7 @@
 add_executable(apfs-dump Apfs.cpp)
+if (APPLE)
+target_link_libraries(apfs-dump ApfsLib)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -framework CoreFoundation")
+else()
 target_link_libraries(apfs-dump ApfsLib icuuc)
+endif()

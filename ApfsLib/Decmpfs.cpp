@@ -28,6 +28,9 @@
 #ifdef __linux__
 #include <byteswap.h>
 #endif
+#ifdef __APPLE__
+#define bswap_32 _OSSwapInt32
+#endif
 
 #include "FastCompression.h"
 #include "Global.h"
