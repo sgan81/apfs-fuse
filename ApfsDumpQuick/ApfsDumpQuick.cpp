@@ -33,8 +33,8 @@ int main(int argc, char *argv[])
 	int volumes_cnt;
 	int volume_id;
 	std::unique_ptr<Device> disk;
-	size_t offset;
-	size_t size;
+	uint64_t offset;
+	uint64_t size;
 
 	if (argc < 3)
 	{

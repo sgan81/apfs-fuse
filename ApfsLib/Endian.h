@@ -42,6 +42,7 @@ Also helps making the driver run on big-endian architectures.
 #endif
 #ifdef __APPLE__
 // Definitions for macOS
+#include <libkern/OSByteOrder.h>
 #define bswap_16(x) _OSSwapInt16(x)
 #define bswap_32(x) _OSSwapInt32(x)
 #define bswap_64(x) _OSSwapInt64(x)
