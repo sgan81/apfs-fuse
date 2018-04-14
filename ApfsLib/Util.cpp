@@ -37,6 +37,7 @@
 
 #include "Util.h"
 #include "Crc32.h"
+#include "Inflate.h" // TODO: Replace with zlib ...
 
 static Crc32 g_crc(true, 0x1EDC6F41);
 
@@ -354,3 +355,20 @@ bool Utf8toU32(std::vector<char32_t>& u32_str, const uint8_t * str)
 
 	return ok;
 }
+
+size_t DecompressZLib(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size)
+{
+	size_t nwr = 0;
+
+	if (src[0] == 0x78)
+	{
+		Inflate inf;
+
+		nwr = inf.Decompress(dst, dst_size, src + 2, src_size - 2);
+
+		// assert(nwr == dst_size);
+	}
+
+	return nwr;
+}
+

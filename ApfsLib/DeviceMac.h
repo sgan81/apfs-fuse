@@ -29,8 +29,8 @@ public:
 	DeviceMac();
 	~DeviceMac();
 
-	bool Open(const char *name);
-	void Close();
+	bool Open(const char *name) override;
+	void Close() override;
 
 	bool Read(void *data, uint64_t offs, uint64_t len) override;
 

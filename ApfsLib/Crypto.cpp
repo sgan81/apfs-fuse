@@ -8,17 +8,7 @@
 #include <iostream>
 #include <iomanip>
 
-#ifdef _MSC_VER
-#include <intrin.h>
-
-#define bswap_64 _byteswap_uint64
-#endif
-#ifdef __linux__
-#include <byteswap.h>
-#endif
-#ifdef __APPLE__
-#define bswap_64 _OSSwapInt64
-#endif
+#include "Endian.h"
 
 union Rfc3394_Unit {
 	uint64_t u64[2];
@@ -27,6 +17,7 @@ union Rfc3394_Unit {
 
 constexpr uint64_t rfc_3394_default_iv = 0xA6A6A6A6A6A6A6A6ULL;
 
+// TODO: Not tested on big-endian machines ...
 void Rfc3394_KeyWrap(uint8_t *crypto, const uint8_t *plain, size_t size, const uint8_t *key, AES::Mode aes_mode, uint64_t iv)
 {
 	Rfc3394_Unit u;
@@ -54,7 +45,7 @@ void Rfc3394_KeyWrap(uint8_t *crypto, const uint8_t *plain, size_t size, const u
 			u.u64[1] = r[i];
 			u.u64[0] = a;
 			aes.Encrypt(u.u8, u.u8);
-			a = u.u64[0] ^ bswap_64(t);
+			a = u.u64[0] ^ bswap_be(t);
 			r[i] = u.u64[1];
 			t++;
 		}
@@ -65,6 +56,7 @@ void Rfc3394_KeyWrap(uint8_t *crypto, const uint8_t *plain, size_t size, const u
 		c[i + 1] = r[i];
 }
 
+// TODO: Not tested on big-endian machines ...
 bool Rfc3394_KeyUnwrap(uint8_t *plain, const uint8_t *crypto, size_t size, const uint8_t *key, AES::Mode aes_mode, uint64_t *iv)
 {
 	Rfc3394_Unit u;
@@ -89,7 +81,7 @@ bool Rfc3394_KeyUnwrap(uint8_t *plain, const uint8_t *crypto, size_t size, const
 	{
 		for (i = n - 1; i >= 0; i--)
 		{
-			u.u64[0] = a ^ bswap_64(t);
+			u.u64[0] = a ^ bswap_be(t);
 			u.u64[1] = r[i];
 			aes.Decrypt(u.u8, u.u8);
 			a = u.u64[0];

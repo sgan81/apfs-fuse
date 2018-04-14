@@ -467,8 +467,8 @@ int ApfsDir::CompareStdDirKey(const void *skey, size_t skey_len, const void *eke
 
 	ApfsDir *dir = reinterpret_cast<ApfsDir *>(context);
 
-	uint64_t ks = *reinterpret_cast<const uint64_t *>(skey);
-	uint64_t ke = *reinterpret_cast<const uint64_t *>(ekey);
+	uint64_t ks = *reinterpret_cast<const le<uint64_t> *>(skey);
+	uint64_t ke = *reinterpret_cast<const le<uint64_t> *>(ekey);
 
 	// std::cout << std::hex << std::uppercase << std::setfill('0');
 
@@ -497,6 +497,7 @@ int ApfsDir::CompareStdDirKey(const void *skey, size_t skey_len, const void *eke
 				if ((e->hash & 0xFFFFFC00) > (s->hash & 0xFFFFFC00))
 					return 1;
 
+				// TODO: This is not case insensitive ...
 				for (size_t k = 0; k < (e->hash & 0x3FF); k++)
 				{
 					if (e->name[k] < s->name[k])

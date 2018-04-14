@@ -25,40 +25,16 @@
 #include <ApfsLib/ApfsVolume.h>
 #include <ApfsLib/BlockDumper.h>
 #include <ApfsLib/ApfsDir.h>
-
-#ifdef _WIN32
-#include <ApfsLib/DeviceWinFile.h>
-#include <ApfsLib/DeviceWinPhys.h>
-#endif
-#ifdef __linux__
-#include <ApfsLib/DeviceLinux.h>
-#endif
-#ifdef __APPLE__
-#include <ApfsLib/DeviceMac.h>
-#endif
-
-#ifdef _WIN32
-#undef WIN_PHYS_DEV_TEST
-#endif
+#include <ApfsLib/GptPartitionMap.h>
 
 int main(int argc, char *argv[])
 {
 	bool rc;
-#ifdef _WIN32
-#ifdef WIN_PHYS_DEV_TEST
-	DeviceWinPhys disk;
-#else
-	DeviceWinFile disk;
-#endif
-#endif
-#ifdef __linux__
-	DeviceLinux disk;
-#endif
-#ifdef __APPLE__
-	DeviceMac disk;
-#endif
 	int volumes_cnt;
 	int volume_id;
+	std::unique_ptr<Device> disk;
+	size_t offset;
+	size_t size;
 
 	if (argc < 3)
 	{
@@ -68,9 +44,9 @@ int main(int argc, char *argv[])
 
 	g_debug = 16;
 
-	rc = disk.Open(argv[1]);
+	disk.reset(Device::OpenDevice(argv[1]));
 
-	if (!rc)
+	if (!disk)
 	{
 		std::cerr << "Unable to open file " << argv[1] << std::endl;
 		return -1;
@@ -82,20 +58,30 @@ int main(int argc, char *argv[])
 	if (!st.is_open())
 	{
 		std::cerr << "Unable to open output file " << argv[2] << std::endl;
+		disk->Close();
 		return -1;
 	}
 
-#ifdef WIN_PHYS_DEV_TEST
-	ApfsContainer *container = new ApfsContainer(disk, 0xC805000, 0xE8D45AC000);
-#else
-	ApfsContainer *container = new ApfsContainer(disk, 0, disk.GetSize());
-#endif
+	offset = 0;
+	size = disk->GetSize();
+
+	GptPartitionMap gpt;
+	if (gpt.LoadAndVerify(*disk.get()))
+	{
+		int n = gpt.FindFirstAPFSPartition();
+		if (n != -1)
+			gpt.GetPartitionOffsetAndSize(n, offset, size);
+	}
+
+	ApfsContainer *container = new ApfsContainer(*disk.get(), offset, size);
+
 	rc = container->Init();
 
 	if (!rc)
 	{
 		std::cerr << "Unable to init container." << std::endl;
 		delete container;
+		disk->Close();
 		return -1;
 	}
 
@@ -163,7 +149,7 @@ int main(int argc, char *argv[])
 
 	st.close();
 
-	disk.Close();
+	disk->Close();
 
 	return 0;
 }

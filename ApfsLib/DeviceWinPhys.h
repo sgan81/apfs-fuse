@@ -19,6 +19,8 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
+#ifdef _WIN32
+
 #include "Device.h"
 
 // #define WIN32_LEAN_AND_MEAN
@@ -31,8 +33,8 @@ public:
 	DeviceWinPhys();
 	~DeviceWinPhys();
 
-	bool Open(const char *name);
-	void Close();
+	bool Open(const char *name) override;
+	void Close() override;
 
 	bool Read(void *data, uint64_t offs, uint64_t len) override;
 	uint64_t GetSize() const override;
@@ -42,3 +44,4 @@ private:
 	uint64_t m_size;
 };
 
+#endif

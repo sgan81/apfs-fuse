@@ -21,6 +21,7 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 
 #ifdef __linux__
 
+#include <cstddef>
 #include "Device.h"
 
 class DeviceLinux : public Device
@@ -29,8 +30,8 @@ public:
 	DeviceLinux();
 	~DeviceLinux();
 
-	bool Open(const char *name);
-	void Close();
+	bool Open(const char *name) override;
+	void Close() override;
 
 	bool Read(void *data, uint64_t offs, uint64_t len) override;
 

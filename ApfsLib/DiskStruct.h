@@ -22,6 +22,7 @@
 #include <cstdint>
 
 #include "Global.h"
+#include "Endian.h"
 
 constexpr uint64_t KeyType_Snapshot_1 = 0x1000000000000000ULL;
 constexpr uint64_t KeyType_BlockMap = 0x2000000000000000ULL;
@@ -41,233 +42,233 @@ constexpr uint64_t KeyType_Hardlink_C = 0xC000000000000000ULL;
 
 struct APFS_BlockHeader
 {
-	uint64_t checksum;
-	uint64_t node_id;
-	uint64_t version;
-	uint32_t type;
-	uint32_t subtype;
+	le<uint64_t> checksum;
+	le<uint64_t> node_id;
+	le<uint64_t> version;
+	le<uint32_t> type;
+	le<uint32_t> subtype;
 };
 
 static_assert(sizeof(APFS_BlockHeader) == 0x20, "BlockHeader size wrong");
 
 struct APFS_TableHeader // at 0x20
 {
-	uint16_t page;
-	uint16_t level;
-	uint32_t entries_cnt;
+	le<uint16_t> page;
+	le<uint16_t> level;
+	le<uint32_t> entries_cnt;
 };
 
 static_assert(sizeof(APFS_TableHeader) == 0x8, "TableHeader size wrong");
 
 struct APFS_BTHeader // at 0x20
 {
-	uint16_t flags; // Bit 0x4 : Fixed
-	uint16_t level; // 0 = Leaf
-	uint32_t entries_cnt;
-	uint16_t keys_offs;
-	uint16_t keys_len;
-	uint16_t free_offs;
-	uint16_t free_len;
-	uint16_t unk_30;
-	uint16_t unk_32;
-	uint16_t unk_34;
-	uint16_t unk_36;
+	le<uint16_t> flags; // Bit 0x4 : Fixed
+	le<uint16_t> level; // 0 = Leaf
+	le<uint32_t> entries_cnt;
+	le<uint16_t> keys_offs;
+	le<uint16_t> keys_len;
+	le<uint16_t> free_offs;
+	le<uint16_t> free_len;
+	le<uint16_t> unk_30;
+	le<uint16_t> unk_32;
+	le<uint16_t> unk_34;
+	le<uint16_t> unk_36;
 };
 
 static_assert(sizeof(APFS_BTHeader) == 0x18, "BTHeader size wrong");
 
 struct APFS_BTFooter
 {
-	uint32_t unk_FD8;
-	uint32_t unk_FDC; // 0x1000 - Node Size?
-	uint32_t min_key_size; // Key Size - or 0
-	uint32_t min_val_size; // Value Size - or 0
-	uint32_t max_key_size; // (Max) Key Size - or 0
-	uint32_t max_val_size; // (Max) Value Size - or 0
-	uint64_t entries_cnt; // Total entries in B*-Tree
-	uint64_t nodes_cnt; // Total nodes in B*-Tree
+	le<uint32_t> unk_FD8;
+	le<uint32_t> unk_FDC; // 0x1000 - Node Size?
+	le<uint32_t> min_key_size; // Key Size - or 0
+	le<uint32_t> min_val_size; // Value Size - or 0
+	le<uint32_t> max_key_size; // (Max) Key Size - or 0
+	le<uint32_t> max_val_size; // (Max) Value Size - or 0
+	le<uint64_t> entries_cnt; // Total entries in B*-Tree
+	le<uint64_t> nodes_cnt; // Total nodes in B*-Tree
 };
 
 static_assert(sizeof(APFS_BTFooter) == 0x28, "BTFooter size wrong");
 
 struct APFS_BTEntry
 {
-	uint16_t key_offs; // offs = base + key_offs
-	uint16_t key_len;
-	uint16_t value_offs; // offs = 0x1000 - value_offs
-	uint16_t value_len;
+	le<uint16_t> key_offs; // offs = base + key_offs
+	le<uint16_t> key_len;
+	le<uint16_t> value_offs; // offs = 0x1000 - value_offs
+	le<uint16_t> value_len;
 };
 
 struct APFS_BTEntryFixed
 {
-	uint16_t key_offs;
-	uint16_t value_offs;
+	le<uint16_t> key_offs;
+	le<uint16_t> value_offs;
 };
 
 // Entries in Bitmap Table
 
 struct APFS_BitmapPtr
 {
-	uint64_t version;
-	uint64_t offset;
-	uint32_t bits_total;
-	uint32_t bits_avail;
-	uint64_t block;
+	le<uint64_t> version;
+	le<uint64_t> offset;
+	le<uint32_t> bits_total;
+	le<uint32_t> bits_avail;
+	le<uint64_t> block;
 };
 
 // Entries in BT 0/E
 
 struct APFS_Inode
 {
-	uint64_t parent_id;
-	uint64_t object_id;
-	uint64_t birthtime;
-	uint64_t mtime;
-	uint64_t ctime;
-	uint64_t atime;
-	uint64_t unk_30; // ? usually 0x8000
-	uint64_t refcnt;
-	uint32_t unk_40;
-	uint32_t flags;  // 0x20: compressed
-	uint32_t uid; // uid (somehow modified)
-	uint32_t gid; // gid (somehow modified)
-	uint64_t mode;
-	uint32_t unk_58;
-	uint16_t entries_cnt;
-	uint16_t entries_len;
+	le<uint64_t> parent_id;
+	le<uint64_t> object_id;
+	le<uint64_t> birthtime;
+	le<uint64_t> mtime;
+	le<uint64_t> ctime;
+	le<uint64_t> atime;
+	le<uint64_t> unk_30; // ? usually 0x8000
+	le<uint64_t> refcnt;
+	le<uint32_t> unk_40;
+	le<uint32_t> flags;  // 0x20: compressed
+	le<uint32_t> uid; // uid (somehow modified)
+	le<uint32_t> gid; // gid (somehow modified)
+	le<uint64_t> mode;
+	le<uint32_t> unk_58;
+	le<uint16_t> entries_cnt;
+	le<uint16_t> entries_len;
 };
 
 struct APFS_InodeEntry
 {
-	uint16_t type; // No idea ...
-	uint16_t len; // Pad to multiple of 8
+	le<uint16_t> type; // No idea ...
+	le<uint16_t> len; // Pad to multiple of 8
 };
 
 struct APFS_Inode_Sizes // Object, after filename
 {
-	uint64_t size;
-	uint64_t size_on_disk;
-	uint64_t unk_10;
-	uint64_t size_2;
-	uint64_t unk_20;
+	le<uint64_t> size;
+	le<uint64_t> size_on_disk;
+	le<uint64_t> unk_10;
+	le<uint64_t> size_2;
+	le<uint64_t> unk_20;
 };
 
 struct APFS_Key_Name_Old
 {
-	uint64_t parent_id;
-	uint16_t name_len;
+	le<uint64_t> parent_id;
+	le<uint16_t> name_len;
 	char name[0x400];
 };
 
 struct APFS_Key_Name
 {
-	uint64_t parent_id;
-	uint32_t hash; // Lowest byte is the name len
+	le<uint64_t> parent_id;
+	le<uint32_t> hash; // Lowest byte is the name len
 	char name[0x400];
 };
 
 struct APFS_Name
 {
-	uint64_t id;
-	uint64_t timestamp;
-	uint16_t unk;
+	le<uint64_t> id;
+	le<uint64_t> timestamp;
+	le<uint16_t> unk;
 };
 
 struct APFS_Name_SLink
 {
-	uint16_t unk_12;
-	uint16_t unk_14;
-	uint8_t unk_16;
-	uint8_t unk_17;
-	uint16_t unk_18;
-	uint64_t obj_id;
+	le<uint16_t> unk_12;
+	le<uint16_t> unk_14;
+	le<uint8_t> unk_16;
+	le<uint8_t> unk_17;
+	le<uint16_t> unk_18;
+	le<uint64_t> obj_id;
 };
 
 struct APFS_Key_Extent
 {
-	uint64_t inode;
-	uint64_t offset;
+	le<uint64_t> inode;
+	le<uint64_t> offset;
 };
 
 struct APFS_Extent
 {
-	uint64_t size;
-	uint64_t block;
-	uint64_t crypto_id;
+	le<uint64_t> size;
+	le<uint64_t> block;
+	le<uint64_t> crypto_id;
 };
 
 struct APFS_Key_Attribute
 {
-	uint64_t inode_key;
-	uint16_t name_len;
+	le<uint64_t> inode_key;
+	le<uint16_t> name_len;
 	char name[0x400];
 };
 
 struct APFS_Attribute
 {
-	uint16_t type;
-	uint16_t size;
+	le<uint16_t> type;
+	le<uint16_t> size;
 };
 
 struct APFS_AttributeLink
 {
-	uint64_t object_id;
-	uint64_t size;
-	uint64_t size_on_disk;
-	uint64_t unk[3];
+	le<uint64_t> object_id;
+	le<uint64_t> size;
+	le<uint64_t> size_on_disk;
+	le<uint64_t> unk[3];
 };
 
 struct APFS_IDMapping
 {
-	uint32_t type; // type?
-	uint32_t subtype;
-	uint64_t unk_08; // size?
-	uint64_t unk_10;
-	uint64_t nodeid;
-	uint64_t block;
+	le<uint32_t> type; // type?
+	le<uint32_t> subtype;
+	le<uint64_t> unk_08; // size?
+	le<uint64_t> unk_10;
+	le<uint64_t> nodeid;
+	le<uint64_t> block;
 };
 
 struct APFS_Key_B_NodeID_Map
 {
-	uint64_t nodeid;
-	uint64_t version;
+	le<uint64_t> nodeid;
+	le<uint64_t> version;
 };
 
 struct APFS_Value_B_NodeID_Map
 {
-	uint32_t flags;
-	uint32_t size;
-	uint64_t blockid;
+	le<uint32_t> flags;
+	le<uint32_t> size;
+	le<uint64_t> blockid;
 };
 
 struct APFS_Value_F
 {
-	uint64_t block_cnt;
-	uint64_t obj_id;
-	uint32_t unk_10;
+	le<uint64_t> block_cnt;
+	le<uint64_t> obj_id;
+	le<uint32_t> unk_10;
 };
 
 struct APFS_Value_10_1
 {
-	uint64_t unk_00;
-	uint64_t unk_08;
-	uint64_t tstamp_10;
-	uint64_t tstamp_18;
-	uint64_t unk_20;
-	uint32_t type_28;
-	uint32_t unk_2C;
-	uint16_t namelen;
+	le<uint64_t> unk_00;
+	le<uint64_t> unk_08;
+	le<uint64_t> tstamp_10;
+	le<uint64_t> tstamp_18;
+	le<uint64_t> unk_20;
+	le<uint32_t> type_28;
+	le<uint32_t> unk_2C;
+	le<uint16_t> namelen;
 };
 
 struct APFS_Value_10_B
 {
-	uint64_t id;
+	le<uint64_t> id;
 };
 
 struct APFS_Key_8_9
 {
-	uint64_t version;
-	uint64_t blk_id; // Block-ID
+	le<uint64_t> version;
+	le<uint64_t> blk_id; // Block-ID
 	// Value = Number of blocks
 	// If no value, the number of blocks is 1
 };
@@ -275,36 +276,36 @@ struct APFS_Key_8_9
 struct APFS_Superblock_NXSB // Ab 0x20
 {
 	APFS_BlockHeader hdr;
-	uint32_t signature; // 'NXSB' / 0x4253584E
-	uint32_t block_size;
-	uint64_t block_count;
-	uint64_t unk_30;
-	uint64_t unk_38;
-	uint64_t unk_40;
+	le<uint32_t> signature; // 'NXSB' / 0x4253584E
+	le<uint32_t> block_size;
+	le<uint64_t> block_count;
+	le<uint64_t> unk_30;
+	le<uint64_t> unk_38;
+	le<uint64_t> unk_40;
 	apfs_uuid_t container_guid;
-	uint64_t next_nodeid; // Next node id (?)
-	uint64_t next_version; // Next version number (?)
-	uint32_t sb_area_cnt; // Number of blocks for NXSB + 4_C ?
-	uint32_t spaceman_area_cnt; // Number of blocks for the rest
-	uint64_t blockid_sb_area_start; // Block-ID (0x4000000C) - No
-	uint64_t blockid_spaceman_area_start; // Block-ID (0x80000005) => Node-ID 0x400
-	uint32_t next_sb; // Next 4_C + NXSB? (+sb_area_start)
-	uint32_t next_spaceman; // Next 8_5/2/11? (+blockid_spaceman_area_start)
-	uint32_t current_sb_start; // Start 4_C+NXSB block (+sb_area_start)
-	uint32_t current_sb_len; // Length 4_C+NXSB block
-	uint32_t current_spaceman_start; // Start 8_5/2/11 blocks (+blockid_spaceman_area_start)
-	uint32_t current_spaceman_len; // No of 8_5/2/11 blocks
-	uint64_t nodeid_8x5;     // Node-ID (0x400) => (0x80000005)
-	uint64_t blockid_volhdr; // Block-ID => (0x4000000B) => B*-Tree for mapping node-id -> volume APSB superblocks
-	uint64_t nodeid_8x11;    // Node-ID (0x401) => (0x80000011)
-	uint32_t unk_B0;
-	uint32_t unk_B4;
-	uint64_t nodeid_apsb[100]; // List of the node-id's of the volume superblocks (not sure about the length of this list though ...)
-	uint64_t unk_3D8[0x23];
-	uint64_t unk_4F0[4];
-	uint64_t keybag_blk_start;
-	uint64_t keybag_blk_count;
-	uint64_t unk_520;
+	le<uint64_t> next_nodeid; // Next node id (?)
+	le<uint64_t> next_version; // Next version number (?)
+	le<uint32_t> sb_area_cnt; // Number of blocks for NXSB + 4_C ?
+	le<uint32_t> spaceman_area_cnt; // Number of blocks for the rest
+	le<uint64_t> blockid_sb_area_start; // Block-ID (0x4000000C) - No
+	le<uint64_t> blockid_spaceman_area_start; // Block-ID (0x80000005) => Node-ID 0x400
+	le<uint32_t> next_sb; // Next 4_C + NXSB? (+sb_area_start)
+	le<uint32_t> next_spaceman; // Next 8_5/2/11? (+blockid_spaceman_area_start)
+	le<uint32_t> current_sb_start; // Start 4_C+NXSB block (+sb_area_start)
+	le<uint32_t> current_sb_len; // Length 4_C+NXSB block
+	le<uint32_t> current_spaceman_start; // Start 8_5/2/11 blocks (+blockid_spaceman_area_start)
+	le<uint32_t> current_spaceman_len; // No of 8_5/2/11 blocks
+	le<uint64_t> nodeid_8x5;     // Node-ID (0x400) => (0x80000005)
+	le<uint64_t> blockid_volhdr; // Block-ID => (0x4000000B) => B*-Tree for mapping node-id -> volume APSB superblocks
+	le<uint64_t> nodeid_8x11;    // Node-ID (0x401) => (0x80000011)
+	le<uint32_t> unk_B0;
+	le<uint32_t> unk_B4;
+	le<uint64_t> nodeid_apsb[100]; // List of the node-id's of the volume superblocks (not sure about the length of this list though ...)
+	le<uint64_t> unk_3D8[0x23];
+	le<uint64_t> unk_4F0[4];
+	le<uint64_t> keybag_blk_start;
+	le<uint64_t> keybag_blk_count;
+	le<uint64_t> unk_520;
 	// There's some more stuff here, but I have no idea about it's meaning ...
 };
 
@@ -313,50 +314,50 @@ static_assert(sizeof(APFS_Superblock_NXSB) == 0x528, "NXSB Superblock size wrong
 struct APFS_Superblock_APSB_AccessInfo
 {
 	char accessor[0x20];
-	uint64_t timestamp;
-	uint64_t version;
+	le<uint64_t> timestamp;
+	le<uint64_t> version;
 };
 
 struct APFS_Superblock_APSB
 {
 	APFS_BlockHeader hdr;
-	uint32_t signature; // APSB, 0x42535041
-	uint32_t unk_24;
-	uint64_t features_28; // Features 3
-	uint64_t features_30; // Features 2
-    uint64_t features_38; // Features: & 0x09: 0x00 = old format (iOS), 0x01 = case-insensitive, 0x08 = case-sensitive
-	uint64_t unk_40;
-	uint64_t blocks_reserved;
-	uint64_t blocks_quota;
-	uint64_t unk_58; // Node-ID
-	uint64_t unk_60;
-	uint32_t unk_68;
-	uint32_t unk_6C;
-	uint32_t unk_70;
-	uint32_t unk_74;
-	uint32_t unk_78; // 40000002
-	uint32_t unk_7C; // 40000002
-	uint64_t blockid_nodemap; // Block ID -> 4000000B -> Node Map Tree Root (40000002/B) - Node Map only for Directory!
-	uint64_t nodeid_rootdir; // Node ID -> Root Directory
-	uint64_t blockid_blockmap; // Block ID -> 40000002/F Block Map Tree Root
-	uint64_t blockid_4xBx10_map; // Block ID -> Root of 40000002/10 Tree
-	uint64_t unk_A0;
-	uint64_t unk_A8;
-	uint64_t unk_B0;
-	uint64_t unk_B8;
-	uint64_t unk_C0;
-	uint64_t unk_C8;
-	uint64_t unk_D0;
-	uint64_t unk_D8;
-	uint64_t unk_E0;
-	uint64_t unk_E8;
+	le<uint32_t> signature; // APSB, 0x42535041
+	le<uint32_t> unk_24;
+	le<uint64_t> features_28; // Features 3
+	le<uint64_t> features_30; // Features 2
+    le<uint64_t> features_38; // Features: & 0x09: 0x00 = old format (iOS), 0x01 = case-insensitive, 0x08 = case-sensitive
+	le<uint64_t> unk_40;
+	le<uint64_t> blocks_reserved;
+	le<uint64_t> blocks_quota;
+	le<uint64_t> unk_58; // Node-ID
+	le<uint64_t> unk_60;
+	le<uint32_t> unk_68;
+	le<uint32_t> unk_6C;
+	le<uint32_t> unk_70;
+	le<uint32_t> unk_74;
+	le<uint32_t> unk_78; // 40000002
+	le<uint32_t> unk_7C; // 40000002
+	le<uint64_t> blockid_nodemap; // Block ID -> 4000000B -> Node Map Tree Root (40000002/B) - Node Map only for Directory!
+	le<uint64_t> nodeid_rootdir; // Node ID -> Root Directory
+	le<uint64_t> blockid_blockmap; // Block ID -> 40000002/F Block Map Tree Root
+	le<uint64_t> blockid_4xBx10_map; // Block ID -> Root of 40000002/10 Tree
+	le<uint64_t> unk_A0;
+	le<uint64_t> unk_A8;
+	le<uint64_t> unk_B0;
+	le<uint64_t> unk_B8;
+	le<uint64_t> unk_C0;
+	le<uint64_t> unk_C8;
+	le<uint64_t> unk_D0;
+	le<uint64_t> unk_D8;
+	le<uint64_t> unk_E0;
+	le<uint64_t> unk_E8;
 	apfs_uuid_t guid;
-	uint64_t timestamp_100;
-    uint64_t flags_108; // TODO: No version, but flags: Bit 0x1: 0 = Encrypted, 1 = Unencrypted. Bit 0x2: Effaceable
+	le<uint64_t> timestamp_100;
+    le<uint64_t> flags_108; // TODO: No version, but flags: Bit 0x1: 0 = Encrypted, 1 = Unencrypted. Bit 0x2: Effaceable
 	APFS_Superblock_APSB_AccessInfo access_info[9];
 	char vol_name[0x100];
-	uint64_t unk_3C0;
-	uint64_t unk_3C8;
+	le<uint64_t> unk_3C0;
+	le<uint64_t> unk_3C8;
 };
 
 static_assert(sizeof(APFS_Superblock_APSB) == 0x3D0, "APSB Superblock size wrong");
@@ -372,9 +373,9 @@ static_assert(sizeof(APFS_Block_4_7_Bitmaps) == 0xFE8, "Block-40000007 size wron
 
 struct APFS_Entry_4_B
 {
-	uint32_t type_1;
-	uint32_t type_2;
-	uint64_t blk;
+	le<uint32_t> type_1;
+	le<uint32_t> type_2;
+	le<uint64_t> blk;
 };
 
 struct APFS_Block_4_B_BTreeRootPtr
@@ -398,55 +399,55 @@ static_assert(sizeof(APFS_Block_4_C) == 0xFF0, "Block-4000000C size wrong");
 struct APFS_Block_8_5_Spaceman
 {
 	APFS_BlockHeader hdr;
-	uint32_t unk_20;
-	uint32_t unk_24;
-	uint32_t unk_28;
-	uint32_t unk_2C;
-	uint64_t blocks_total;
-	uint64_t unk_38;
-	uint64_t unk_40;
-	uint64_t blocks_free;
-	uint64_t unk_50;
-	uint64_t unk_58;
-	uint64_t unk_60;
-	uint64_t unk_68;
-	uint64_t unk_70;
-	uint64_t unk_78;
-	uint64_t unk_80;
-	uint64_t unk_88;
-	uint32_t unk_90;
-	uint32_t unk_94;
-	uint64_t blockcnt_bitmaps_98; // Container-Bitmaps
-	uint32_t unk_A0;
-	uint32_t blockcnt_bitmaps_A4; // Mgr-Bitmaps?
-	uint64_t blockid_begin_bitmaps_A8; // Mgr-Bitmaps
-	uint64_t blockid_bitmaps_B0; // Container-Bitmaps
-	uint64_t unk_B8;
-	uint64_t unk_C0;
-	uint64_t unk_C8;
-	uint64_t nodeid_obsolete_1; // Obsolete B*-Tree fuer Mgr-Bitmap-Blocks
-	uint64_t unk_D8;
-	uint64_t unk_E0;
-	uint64_t unk_E8;
-	uint64_t unk_F0;
-	uint64_t nodeid_obsolete_2; // Obsolete B*-Tree fuer Volume;
-	uint64_t unk_100;
-	uint64_t unk_108;
-	uint64_t unk_110;
-	uint64_t unk_118;
-	uint64_t unk_120;
-	uint64_t unk_128;
-	uint64_t unk_130;
-	uint64_t unk_138;
-	uint16_t unk_140;
-	uint16_t unk_142;
-	uint32_t unk_144;
-	uint32_t unk_148;
-	uint32_t unk_14C;
-	uint64_t unk_150;
-	uint64_t unk_158;
-	uint16_t unk_160[0x10];
-	uint64_t blockid_vol_bitmap_hdr;
+	le<uint32_t> unk_20;
+	le<uint32_t> unk_24;
+	le<uint32_t> unk_28;
+	le<uint32_t> unk_2C;
+	le<uint64_t> blocks_total;
+	le<uint64_t> unk_38;
+	le<uint64_t> unk_40;
+	le<uint64_t> blocks_free;
+	le<uint64_t> unk_50;
+	le<uint64_t> unk_58;
+	le<uint64_t> unk_60;
+	le<uint64_t> unk_68;
+	le<uint64_t> unk_70;
+	le<uint64_t> unk_78;
+	le<uint64_t> unk_80;
+	le<uint64_t> unk_88;
+	le<uint32_t> unk_90;
+	le<uint32_t> unk_94;
+	le<uint64_t> blockcnt_bitmaps_98; // Container-Bitmaps
+	le<uint32_t> unk_A0;
+	le<uint32_t> blockcnt_bitmaps_A4; // Mgr-Bitmaps?
+	le<uint64_t> blockid_begin_bitmaps_A8; // Mgr-Bitmaps
+	le<uint64_t> blockid_bitmaps_B0; // Container-Bitmaps
+	le<uint64_t> unk_B8;
+	le<uint64_t> unk_C0;
+	le<uint64_t> unk_C8;
+	le<uint64_t> nodeid_obsolete_1; // Obsolete B*-Tree fuer Mgr-Bitmap-Blocks
+	le<uint64_t> unk_D8;
+	le<uint64_t> unk_E0;
+	le<uint64_t> unk_E8;
+	le<uint64_t> unk_F0;
+	le<uint64_t> nodeid_obsolete_2; // Obsolete B*-Tree fuer Volume;
+	le<uint64_t> unk_100;
+	le<uint64_t> unk_108;
+	le<uint64_t> unk_110;
+	le<uint64_t> unk_118;
+	le<uint64_t> unk_120;
+	le<uint64_t> unk_128;
+	le<uint64_t> unk_130;
+	le<uint64_t> unk_138;
+	le<uint16_t> unk_140;
+	le<uint16_t> unk_142;
+	le<uint32_t> unk_144;
+	le<uint32_t> unk_148;
+	le<uint32_t> unk_14C;
+	le<uint64_t> unk_150;
+	le<uint64_t> unk_158;
+	le<uint16_t> unk_160[0x10];
+	le<uint64_t> blockid_vol_bitmap_hdr;
 };
 
 static_assert(sizeof(APFS_Block_8_5_Spaceman) == 0x188, "Spaceman Header wrong size");

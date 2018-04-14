@@ -23,14 +23,7 @@
 #include <cassert>
 
 #include "Decmpfs.h"
-#include "Inflate.h"
-
-#ifdef __linux__
-#include <byteswap.h>
-#endif
-#ifdef __APPLE__
-#define bswap_32 _OSSwapInt32
-#endif
+#include "Endian.h"
 
 #include "FastCompression.h"
 #include "Global.h"
@@ -39,40 +32,24 @@
 
 struct RsrcForkHeader
 {
-	uint32_t data_off_be;
-	uint32_t mgmt_off_be;
-	uint32_t data_size_be;
-	uint32_t mgmt_size_be;
+	be<uint32_t> data_offset;
+	be<uint32_t> mgmt_offset;
+	be<uint32_t> data_size;
+	be<uint32_t> mgmt_size;
 };
 
 struct CmpfRsrcEntry
 {
 	// 1 64K-Block
-	uint32_t off;
-	uint32_t size;
+	le<uint32_t> off;
+	le<uint32_t> size;
 };
 
 struct CmpfRsrc
 {
-	uint32_t entries;
+	le<uint32_t> entries;
 	CmpfRsrcEntry entry[32];
 };
-
-static size_t DecompressZLib(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size)
-{
-	size_t nwr = 0;
-
-	if (src[0] == 0x78)
-	{
-		Inflate inf;
-
-		nwr = inf.Decompress(dst, dst_size, src + 2, src_size - 2);
-
-		// assert(nwr == dst_size);
-	}
-
-	return nwr;
-}
 
 bool IsDecompAlgoSupported(uint16_t algo)
 {
@@ -177,28 +154,30 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		RsrcForkHeader rsrc_hdr;
 
 		memcpy(&rsrc_hdr, rsrc.data(), sizeof(rsrc_hdr));
+		/*
 		rsrc_hdr.data_off_be = bswap_32(rsrc_hdr.data_off_be);
 		rsrc_hdr.data_size_be = bswap_32(rsrc_hdr.data_size_be);
 		rsrc_hdr.mgmt_off_be = bswap_32(rsrc_hdr.mgmt_off_be);
 		rsrc_hdr.mgmt_size_be = bswap_32(rsrc_hdr.mgmt_size_be);
+		*/
 
 		if (g_debug > 8)
 		{
 			std::cout << "computed values:" << std::endl;
-			std::cout << " data offset=" << rsrc_hdr.data_off_be << std::endl;
-			std::cout << " data size=" << rsrc_hdr.data_size_be << std::endl;
-			std::cout << " mgmt offset=" << rsrc_hdr.mgmt_off_be << std::endl;
-			std::cout << " mgmt size=" << rsrc_hdr.mgmt_size_be << std::endl;
+			std::cout << " data offset=" << rsrc_hdr.data_offset << std::endl;
+			std::cout << " data size=" << rsrc_hdr.data_size << std::endl;
+			std::cout << " mgmt offset=" << rsrc_hdr.mgmt_offset << std::endl;
+			std::cout << " mgmt size=" << rsrc_hdr.mgmt_size << std::endl;
 		}
 
 		// uint32_t rsrc_size = bswap_32(*reinterpret_cast<uint32_t *>(rsrc.data() + rsrc_hdr.data_off_be));
-		if (rsrc_hdr.data_off_be > rsrc.size())
+		if (rsrc_hdr.data_offset > rsrc.size())
 		{
 			if (g_debug > 0)
 				std::cout << "invalid data offset in resource fork header" << std::endl;
 			return false;
 		}
-		const uint8_t *cmpf_rsrc_base = rsrc.data() + rsrc_hdr.data_off_be + sizeof(uint32_t);
+		const uint8_t *cmpf_rsrc_base = rsrc.data() + rsrc_hdr.data_offset + sizeof(uint32_t);
 		const CmpfRsrc *cmpf_rsrc = reinterpret_cast<const CmpfRsrc *>(cmpf_rsrc_base);
 
 		decompressed.resize((hdr->size + 0xFFFF) & 0xFFFF0000);
@@ -217,7 +196,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			size_t src_offset = cmpf_rsrc->entry[k].off;
 			const uint8_t *src = cmpf_rsrc_base + src_offset;
 			size_t src_len = cmpf_rsrc->entry[k].size;
-			size_t entry_last_offset = rsrc_hdr.data_off_be + src_offset + src_len - 1;
+			size_t entry_last_offset = rsrc_hdr.data_offset + src_offset + src_len - 1;
 			if (entry_last_offset > rsrc.size())
 			{
 				if (g_debug > 0)
@@ -229,7 +208,8 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			}
 
 			size_t expected = expected_block_len(k, hdr->size);
-			if ((src_len == 0x10001) || ((src[0] & 0x0f) == 0x0f)) {
+			if ((src_len == 0x10001) || ((src[0] & 0x0f) == 0x0f))
+			{
 				// not compressed
 				src++;
 				src_len--;

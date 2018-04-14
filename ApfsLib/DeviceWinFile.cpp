@@ -17,8 +17,9 @@ You should have received a copy of the GNU General Public License
 along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef _WIN32
+
 #include "DeviceWinFile.h"
-#include "Global.h"
 
 DeviceWinFile::DeviceWinFile()
 {
@@ -27,6 +28,7 @@ DeviceWinFile::DeviceWinFile()
 
 DeviceWinFile::~DeviceWinFile()
 {
+	Close();
 }
 
 bool DeviceWinFile::Open(const char * name)
@@ -56,3 +58,5 @@ bool DeviceWinFile::Read(void *data, uint64_t offs, uint64_t len)
 	// TODO: Fehlerbehandlung ...
 	return true;
 }
+
+#endif

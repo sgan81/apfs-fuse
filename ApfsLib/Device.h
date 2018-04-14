@@ -29,6 +29,11 @@ protected:
 public:
 	virtual ~Device();
 
+	virtual bool Open(const char *name) = 0;
+	virtual void Close() = 0;
+
 	virtual bool Read(void *data, uint64_t offs, uint64_t len) = 0;
 	virtual uint64_t GetSize() const = 0;
+
+	static Device *OpenDevice(const char *name);
 };

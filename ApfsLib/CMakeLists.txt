@@ -26,13 +26,22 @@ add_library(ApfsLib
 	Decmpfs.h
 	Device.cpp
 	Device.h
+	DeviceDMG.cpp
+	DeviceDMG.h
 	DeviceLinux.cpp
 	DeviceLinux.h
 	DeviceMac.cpp
 	DeviceMac.h
+	DeviceWinFile.cpp
+	DeviceWinFile.h
+	DeviceWinPhys.cpp
+	DeviceWinPhys.h
 	DiskStruct.h
+	Endian.h
 	FastCompression.h
 	Global.h
+	GptPartitionMap.cpp
+	GptPartitionMap.h
 	Inflate.cpp
 	Inflate.h
 	KeyMgmt.cpp

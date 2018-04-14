@@ -17,8 +17,9 @@ You should have received a copy of the GNU General Public License
 along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef _WIN32
+
 #include "DeviceWinPhys.h"
-#include "PartitionMap.h"
 
 DeviceWinPhys::DeviceWinPhys()
 {
@@ -28,6 +29,7 @@ DeviceWinPhys::DeviceWinPhys()
 
 DeviceWinPhys::~DeviceWinPhys()
 {
+	Close();
 }
 
 bool DeviceWinPhys::Open(const char *name)
@@ -85,3 +87,5 @@ uint64_t DeviceWinPhys::GetSize() const
 {
 	return m_size;
 }
+
+#endif

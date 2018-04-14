@@ -260,11 +260,16 @@ paket-files/
 __pycache__/
 *.pyc
 
-# Eigene Files
+# Own Files
 Data/
 
 # Linux
 build/
 .kdev4/
 data/
+doc/
+
+# Mac
+.DS_Store
+xcode/
 

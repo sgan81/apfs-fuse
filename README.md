@@ -1,12 +1,23 @@
 # APFS FUSE Driver for Linux
 
 This project is a read-only FUSE driver for the new Apple File System. Since Apple didn't yet document
-the disk format of APFS, this driver should be considered experimental... It may not be able to read all
+the disk format of APFS, this driver should be considered experimental. It may not be able to read all
 files, it may return wrong data, or it may simply crash. Use at your own risk. But since it's read-only,
 at least the data on your apfs drive should be safe.
 
 Be aware that not all compression methods are supported yet (only the ones I have encountered so far).
-Thus, the driver may return compressed files instead of uncompressed ones ...
+Thus, the driver may return compressed files instead of uncompressed ones. Although most of the time it
+should just report an error.
+
+## Changelog
+
+| Date | Comment |
+|------|---------|
+| 2018-04-14 | Added support for partition tables (GPT only) |
+| 2018-04-10 | Fixed and extended FileVault encryption support |
+| 2018-03-28 | Added support for FileVault encryption |
+| 2017-10-25 | Added support for encryption |
+| 2017-10-14 | Initial version |
 
 ## Usage
 
@@ -41,6 +52,12 @@ Supported options:
 * `-r recovery_key`: Mount an encrypted volume by supplying a password or Personal Recovery Key (PRK).
 * `-s n`: Find the container at offset n inside the device. This is useful when using an image file
   instead of a disk device, and therefore partitions are not exposed.
+* `-p n`: Find the container at partition n inside the device.
+
+If you are using an image file containing partitions, the driver will now detect if there is a valid GPT
+partition table. If there is, it will look for the first APFS partition and use that one for the container.
+If your drive contains more than one APFS container, you can specify the partition/container id with the
+`-p` option.
 
 The device has to be the one containing the APFS container. If a container contains more than one volume,
 the volume can be specified by the `-v` option.
@@ -62,6 +79,7 @@ The following features are implemented:
 * Hardlinks (it seems ...)
 * Extended attributes
 * Encryption (at least full-disk encryption)
+* Automatic detection of GPT partition tables
 
 ## Limitations
 These things are not supported (yet):

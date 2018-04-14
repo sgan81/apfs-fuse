@@ -42,6 +42,7 @@
 #include <ApfsLib/Decmpfs.h>
 #include <ApfsLib/DeviceLinux.h>
 #include <ApfsLib/DeviceMac.h>
+#include <ApfsLib/GptPartitionMap.h>
 
 #include <cassert>
 #include <cstring>
@@ -52,13 +53,7 @@
 
 
 static struct fuse_lowlevel_ops ops;
-
-#ifdef __linux__
-static DeviceLinux g_disk;
-#endif
-#ifdef __APPLE__
-static DeviceMac g_disk;
-#endif
+static Device *g_disk = nullptr;
 static ApfsContainer *g_container = nullptr;
 static ApfsVolume *g_volume = nullptr;
 
@@ -581,7 +576,17 @@ struct apfs {
 
 void usage(const char *name)
 {
-	std::cout << name << " [-d level] [-o options] [-v volume-id] [-r passphrase] [-s offset] <device> <dir>" << std::endl;
+	std::cout << name << " [options] <device> <dir>" << std::endl;
+	//  [-d level] [-o options] [-v volume-id] [-r passphrase] [-s offset]
+	std::cout << std::endl;
+	std::cout << "Options:" << std::endl;
+	std::cout << "-d level      : Enable debug output in the console." << std::endl;
+	std::cout << "-o options    : Additional mount options." << std::endl;
+	std::cout << "-v volume-id  : Specify number of volume to be mounted." << std::endl;
+	std::cout << "-r passphrase : Specify volume passphrase. The driver will ask for it if needed." << std::endl;
+	std::cout << "-s offset     : Specify offset to the beginning of the container." << std::endl;
+	std::cout << "-p partition  : Specify partition id containing the container." << std::endl;
+	std::cout << "-l            : Allow driver to return potentially corrupt data instead of failing, if it can't handle something." << std::endl;
 }
 
 bool add_option(std::string &optstr, const char *name, const char *value)
@@ -609,7 +614,9 @@ int main(int argc, char *argv[])
 	std::string mount_options;
 	std::string passphrase;
 	unsigned int volume_id = 0;
-	size_t container_offset = 0;
+	uint64_t container_offset = 0;
+	uint64_t container_size = 0;
+	int partition_id = -1;
 
 	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/ios_11_0_1.img";
 	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/apfs_2vol_test_rw.dmg";
@@ -638,7 +645,7 @@ int main(int argc, char *argv[])
 	ops.releasedir = apfs_releasedir;
 	// ops.statfs = apfs_statfs;
 
-	while ((opt = getopt(argc, argv, "d:o:v:r:s:l")) != -1)
+	while ((opt = getopt(argc, argv, "d:o:p:v:r:s:l")) != -1)
 	{
 		switch (opt)
 		{
@@ -647,6 +654,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'o':
 				add_option(mount_options, optarg, nullptr);
+				break;
+			case 'p':
+				partition_id = strtoul(optarg, nullptr, 10);
 				break;
 			case 'v':
 				volume_id = strtoul(optarg, nullptr, 10);
@@ -678,23 +688,54 @@ int main(int argc, char *argv[])
 
 	add_option(mount_options, "ro", nullptr);
 
-	if (!g_disk.Open(dev_path))
+	g_disk = Device::OpenDevice(dev_path);
+
+	if (!g_disk)
 	{
 		std::cerr << "Error opening device!" << std::endl;
 		return 1;
 	}
-	if (container_offset >= g_disk.GetSize()) {
+
+	container_size = g_disk->GetSize();
+
+	if (container_offset >= container_size)
+	{
 		std::cerr << "Invalid container offset specified" << std::endl;
+		g_disk->Close();
+		delete g_disk;
 		return 1;
 	}
-	g_container = new ApfsContainer(g_disk, container_offset, g_disk.GetSize() - container_offset);
+
+	if (container_offset == 0)
+	{
+		GptPartitionMap gpt;
+		bool rc;
+
+		rc = gpt.LoadAndVerify(*g_disk);
+		if (rc)
+		{
+			if (g_debug > 0)
+				std::cout << "Found valid GPT partition table. Looking for APFS partition." << std::endl;
+
+			if (partition_id == -1)
+				partition_id = gpt.FindFirstAPFSPartition();
+
+			if (partition_id != -1)
+				gpt.GetPartitionOffsetAndSize(partition_id, container_offset, container_size);
+		}
+	}
+	else
+		container_size -= container_offset;
+
+	g_container = new ApfsContainer(*g_disk, container_offset, container_size);
 	g_container->Init();
 	g_volume = g_container->GetVolume(volume_id, passphrase);
 	if (!g_volume)
 	{
 		std::cerr << "Unable to get volume!" << std::endl;
 		delete g_container;
-		g_disk.Close();
+		g_disk->Close();
+		delete g_disk;
 		return 1;
 	}
 
@@ -710,8 +751,10 @@ int main(int argc, char *argv[])
 		struct fuse_session *se;
 
 		se = fuse_lowlevel_new(&args, &ops, sizeof(ops), NULL);
-		if (se != NULL) {
-			if (fuse_set_signal_handlers(se) != -1) {
+		if (se != NULL)
+		{
+			if (fuse_set_signal_handlers(se) != -1)
+			{
 				fuse_session_add_chan(se, ch);
 				err = fuse_session_loop(se);
 				fuse_remove_signal_handlers(se);
@@ -725,7 +768,8 @@ int main(int argc, char *argv[])
 
 	delete g_volume;
 	delete g_container;
-	g_disk.Close();
+	g_disk->Close();
+	delete g_disk;
 
 	return err ? 1 : 0;
 }
