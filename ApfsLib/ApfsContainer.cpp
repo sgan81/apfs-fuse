@@ -83,7 +83,7 @@ bool ApfsContainer::Init()
 
 	for (bid = m_sb.blockid_sb_area_start; bid < (m_sb.blockid_sb_area_start + m_sb.sb_area_cnt); bid++)
 	{
-		m_disk.Read(tmp.data(), bid * m_sb.block_size, m_sb.block_size);
+		m_disk.Read(tmp.data(), m_part_start + bid * m_sb.block_size, m_sb.block_size);
 		if (!VerifyBlock(tmp.data(), tmp.size()))
 			continue;
 
@@ -103,7 +103,7 @@ bool ApfsContainer::Init()
 		if (g_debug > 0)
 			std::cout << "Found more recent version " << max_version << " than superblock 0 contained (" << m_sb.hdr.version << ")." << std::endl;
 
-		m_disk.Read(tmp.data(), max_bid * m_sb.block_size, m_sb.block_size);
+		m_disk.Read(tmp.data(), m_part_start + max_bid * m_sb.block_size, m_sb.block_size);
 		memcpy(&m_sb, tmp.data(), sizeof(APFS_Superblock_NXSB));
 	}
 #endif
