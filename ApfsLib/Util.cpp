@@ -26,6 +26,8 @@
 #include "Unicode.h"
 #endif
 
+#include <cassert>
+
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -370,5 +372,59 @@ size_t DecompressZLib(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t 
 	}
 
 	return nwr;
+}
+
+size_t DecompressADC(uint8_t * dst, size_t dst_size, const uint8_t * src, size_t src_size)
+{
+	size_t in_idx = 0;
+	size_t out_idx = 0;
+	uint8_t ctl;
+	int len;
+	int dist;
+	int cnt;
+
+	for (;;)
+	{
+		if (in_idx >= src_size)
+			break;
+		if (out_idx >= dst_size)
+			break;
+
+		ctl = src[in_idx++];
+
+		if (ctl & 0x80)
+		{
+			len = (ctl & 0x7F) + 1;
+
+			for (cnt = 0; cnt < len; cnt++)
+				dst[out_idx++] = src[in_idx++];
+		}
+		else
+		{
+			if (ctl & 0x40)
+			{
+				len = ctl - 0x3C;
+				dist = src[in_idx++];
+				dist = (dist << 8) | src[in_idx++];
+				dist += 1;
+			}
+			else
+			{
+				len = ((ctl >> 2) & 0xF) + 3;
+				dist = (((ctl & 3) << 8) | src[in_idx++]) + 1;
+			}
+
+			for (cnt = 0; cnt < len; cnt++)
+			{
+				dst[out_idx] = dst[out_idx - dist];
+				out_idx++;
+			}
+		}
+	}
+
+	assert(in_idx == src_size);
+	assert(out_idx == dst_size);
+
+	return out_idx;
 }
 

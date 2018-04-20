@@ -18,7 +18,7 @@ public:
 	int FindFirstAPFSPartition();
 	bool GetPartitionOffsetAndSize(int partnum, uint64_t &offset, uint64_t &size);
 
-	void ListEntries();
+	// void ListEntries();
 
 private:
 	Crc32 m_crc;

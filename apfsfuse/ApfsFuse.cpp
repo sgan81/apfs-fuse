@@ -429,7 +429,7 @@ static void apfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, st
 	File *file = reinterpret_cast<File *>(fi->fh);
 
 	if (g_debug > 0)
-		printf("apfs_read: ino=%016lX size=%016lX off=%016llX\n", ino, size, off);
+		std::cout << std::hex << "apfs_read: ino=" << ino << " size=" << size << " off=" << off << std::endl;
 
 	if (!file->IsCompressed())
 	{

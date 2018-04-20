@@ -68,6 +68,8 @@ int main(int argc, char *argv[])
 	GptPartitionMap gpt;
 	if (gpt.LoadAndVerify(*disk.get()))
 	{
+		std::cout << "Info: Found valid GPT partition table. Dumping first APFS partition." << std::endl;
+
 		int n = gpt.FindFirstAPFSPartition();
 		if (n != -1)
 			gpt.GetPartitionOffsetAndSize(n, offset, size);

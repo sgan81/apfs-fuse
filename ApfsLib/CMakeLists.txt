@@ -24,6 +24,8 @@ add_library(ApfsLib
 	Crypto.h
 	Decmpfs.cpp
 	Decmpfs.h
+	Des.cpp
+	Des.h
 	Device.cpp
 	Device.h
 	DeviceDMG.cpp
@@ -46,8 +48,14 @@ add_library(ApfsLib
 	Inflate.h
 	KeyMgmt.cpp
 	KeyMgmt.h
+	PList.cpp
+	PList.h
+	Sha1.cpp
+	Sha1.h
 	Sha256.cpp
 	Sha256.h
+	TripleDes.cpp
+	TripleDes.h
 	Util.cpp
 	Util.h
 	lzvn_decode.s)

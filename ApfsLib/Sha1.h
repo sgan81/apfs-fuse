@@ -3,11 +3,11 @@
 #include <cstddef>
 #include <cstdint>
 
-class SHA256
+class Sha1
 {
 public:
-	SHA256();
-	~SHA256();
+	Sha1();
+	~Sha1();
 
 	void Init();
 	void Update(const void *data, size_t size);
@@ -17,9 +17,10 @@ private:
 	void Round();
 
 	uint8_t m_buffer[64];
-	uint32_t m_hash[8];
-	uint32_t m_bufferPtr;
-	size_t m_byteCnt;
+	uint32_t m_hash[5];
+	uint64_t m_bit_cnt;
+	size_t m_buf_idx;
 
-	static const uint32_t m_k[64];
+	static const uint32_t m_K[4];
 };
+

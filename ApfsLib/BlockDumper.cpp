@@ -469,7 +469,7 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 
 			m_os << " => " << attr->type << " " << attr->size;
 
-			if (attr->type == 1 && attr->size == 0x30)
+			if ((attr->type & 1) && attr->size == 0x30)
 			{
 				const APFS_AttributeLink *attrlnk = reinterpret_cast<const APFS_AttributeLink *>(value_data + 4);
 

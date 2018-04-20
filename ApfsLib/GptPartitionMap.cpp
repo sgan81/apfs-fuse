@@ -43,6 +43,7 @@ static_assert(sizeof(PMAP_Entry) == 128, "PMAP Entry wrong size");
 
 static const PM_GUID partitiontype_apfs = { 0xEF, 0x57, 0x34, 0x7C, 0x00, 0x00, 0xAA, 0x11, 0xAA, 0x11, 0x00, 0x30, 0x65, 0x43, 0xEC, 0xAC };
 
+/*
 static void PrintGUID(const PM_GUID &guid)
 {
 	printf("%02X%02X%02X%02X-", guid[3], guid[2], guid[1], guid[0]);
@@ -51,6 +52,7 @@ static void PrintGUID(const PM_GUID &guid)
 	printf("%02X%02X-", guid[9], guid[8]);
 	printf("%02X%02X%02X%02X%02X%02X", guid[10], guid[11], guid[12], guid[13], guid[14], guid[15]);
 }
+*/
 
 GptPartitionMap::GptPartitionMap() : m_crc(true)
 {
@@ -126,7 +128,7 @@ int GptPartitionMap::FindFirstAPFSPartition()
 
 	const PMAP_GptHeader *hdr = reinterpret_cast<const PMAP_GptHeader *>(m_gpt_data.data() + 0x200);
 	const PMAP_Entry *entry = reinterpret_cast<const PMAP_Entry *>(m_gpt_data.data() + (0x200 * hdr->PartitionEntryLBA));
-	int k;
+	unsigned int k;
 	int rc = -1;
 
 	for (k = 0; k < hdr->NumberOfPartitionEntries; k++)
@@ -158,6 +160,7 @@ bool GptPartitionMap::GetPartitionOffsetAndSize(int partnum, uint64_t & offset, 
 	return true;
 }
 
+/*
 void GptPartitionMap::ListEntries()
 {
 	if (m_gpt_data.size() == 0)
@@ -187,3 +190,4 @@ void GptPartitionMap::ListEntries()
 		printf("\n");
 	}
 }
+*/

@@ -134,7 +134,7 @@ void ScanBlocks(std::ostream &os, std::istream &dev)
 			bd.DumpNode(block, blk_nr);
 		else
 		{
-#if 1
+#if 0
 			os << std::hex << std::setw(16) << blk_nr << std::endl;
 			DumpBlockTrunc(os, block);
 			os << std::endl;

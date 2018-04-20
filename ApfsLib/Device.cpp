@@ -27,7 +27,7 @@
 #include "DeviceMac.h"
 #include "DeviceDMG.h"
 
-#define DISABLE_DMG // DMG support is not really ready yet ...
+#undef DISABLE_DMG
 
 Device::Device()
 {
@@ -63,7 +63,7 @@ Device * Device::OpenDevice(const char * name)
 #endif
 #else
 #ifndef DISABLE_DMG
-	if (!strncmp(name, "/dev/", 5))
+	if (strncmp(name, "/dev/", 5))
 		dmg = new DeviceDMG();
 #endif
 #endif

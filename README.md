@@ -13,6 +13,7 @@ should just report an error.
 
 | Date | Comment |
 |------|---------|
+| 2018-04-20 | Added support for mounting DMGs |
 | 2018-04-14 | Added support for partition tables (GPT only) |
 | 2018-04-10 | Fixed and extended FileVault encryption support |
 | 2018-03-28 | Added support for FileVault encryption |
@@ -65,6 +66,10 @@ the volume can be specified by the `-v` option.
 If a volume is encrypted, the apfs-fuse command will prompt for a password, unless a password or PRK is
 specified on the command line. The PRK can also be used as password.
 
+**NEW**: It is now possible to directly mount DMG files. The driver will automatically detect if a dmg
+has to be mounted and take appropriate action. If a dmg is encrypted, you will be asked for the password.
+Note that dmg support is currently a bit slow (especially when compressed), but it should work properly.
+
 ### Unmount a drive
 ```
 fusermount -u <mount-directory>
@@ -80,6 +85,7 @@ The following features are implemented:
 * Extended attributes
 * Encryption (at least full-disk encryption)
 * Automatic detection of GPT partition tables
+* **NEW**: Direct mounting of DMG images (supports zlib/adc compression and encryption)
 
 ## Limitations
 These things are not supported (yet):

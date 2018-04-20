@@ -1,3 +1,4 @@
+#include "Sha1.h"
 #include "Sha256.h"
 #include "Crypto.h"
 #include "Util.h"
@@ -98,47 +99,135 @@ bool Rfc3394_KeyUnwrap(uint8_t *plain, const uint8_t *crypto, size_t size, const
 	return a == rfc_3394_default_iv;
 }
 
+void HMAC_SHA1(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len, uint8_t *mac)
+{
+	uint8_t kdata[0x40];
+	uint8_t digest[0x14];
+	constexpr uint8_t ipad = 0x36;
+	constexpr uint8_t opad = 0x5C;
+	Sha1 sha1;
+
+	if (key_len > sizeof(kdata))
+	{
+		sha1.Init();
+		sha1.Update(key, key_len);
+		sha1.Final(digest);
+
+		memcpy(kdata, digest, sizeof(digest));
+		key_len = sizeof(digest);
+	}
+	else
+	{
+		memcpy(kdata, key, key_len);
+	}
+	if (key_len < sizeof(kdata))
+		memset(kdata + key_len, 0, sizeof(kdata) - key_len);
+
+	for (size_t k = 0; k < sizeof(kdata); k++)
+		kdata[k] ^= ipad;
+
+	sha1.Init();
+	sha1.Update(kdata, sizeof(kdata));
+	sha1.Update(data, data_len);
+	sha1.Final(digest);
+
+	for (size_t k = 0; k < sizeof(kdata); k++)
+		kdata[k] ^= (ipad ^ opad);
+
+	sha1.Init();
+	sha1.Update(kdata, sizeof(kdata));
+	sha1.Update(digest, sizeof(digest));
+	sha1.Final(mac);
+
+	memset(digest, 0, sizeof(digest));
+}
+
 void HMAC_SHA256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len, uint8_t *mac)
 {
 	uint8_t kdata[0x40];
 	uint8_t digest[0x20];
 	constexpr uint8_t ipad = 0x36;
 	constexpr uint8_t opad = 0x5C;
-	SHA256 sha;
+	SHA256 sha256;
 
-	if (key_len > 0x40)
+	if (key_len > sizeof(kdata))
 	{
-		sha.Init();
-		sha.Update(key, key_len);
-		sha.Final(digest);
+		sha256.Init();
+		sha256.Update(key, key_len);
+		sha256.Final(digest);
 
-		memcpy(kdata, digest, 0x20);
-		key_len = 0x20;
+		memcpy(kdata, digest, sizeof(digest));
+		key_len = sizeof(digest);
 	}
 	else
 	{
 		memcpy(kdata, key, key_len);
 	}
-	if (key_len < 0x40)
-		memset(kdata + key_len, 0, 0x40 - key_len);
+	if (key_len < sizeof(kdata))
+		memset(kdata + key_len, 0, sizeof(kdata) - key_len);
 
-	for (size_t k = 0; k < 0x40; k++)
+	for (size_t k = 0; k < sizeof(kdata); k++)
 		kdata[k] ^= ipad;
 
-	sha.Init();
-	sha.Update(kdata, 0x40);
-	sha.Update(data, data_len);
-	sha.Final(digest);
+	sha256.Init();
+	sha256.Update(kdata, sizeof(kdata));
+	sha256.Update(data, data_len);
+	sha256.Final(digest);
 
-	for (size_t k = 0; k < 0x40; k++)
+	for (size_t k = 0; k < sizeof(kdata); k++)
 		kdata[k] ^= (ipad ^ opad);
 
-	sha.Init();
-	sha.Update(kdata, 0x40);
-	sha.Update(digest, 0x20);
-	sha.Final(mac);
+	sha256.Init();
+	sha256.Update(kdata, sizeof(kdata));
+	sha256.Update(digest, sizeof(digest));
+	sha256.Final(mac);
 
 	memset(digest, 0, sizeof(digest));
+}
+
+void PBKDF2_HMAC_SHA1(const uint8_t* pw, size_t pw_len, const uint8_t* salt, size_t salt_len, int iterations, uint8_t* derived_key, size_t dk_len)
+{
+	assert(salt_len <= 0x20);
+	assert(dk_len <= 0x20);
+
+	constexpr size_t h_len = 0x14;
+	size_t r;
+	size_t l;
+	uint8_t t[h_len];
+	uint8_t u[h_len];
+	uint8_t s[0x24];
+	size_t k;
+	int j;
+	uint32_t i;
+	size_t n;
+
+	r = dk_len % h_len;
+	l = dk_len / h_len;
+	if (r > 0) l++;
+
+	for (i = 1, k = 0; k < dk_len; i++, k += h_len)
+	{
+		// F(P,S,c,i)
+
+		memcpy(s, salt, salt_len);
+		s[salt_len + 0] = (i >> 24) & 0xFF;
+		s[salt_len + 1] = (i >> 16) & 0xFF;
+		s[salt_len + 2] = (i >> 8) & 0xFF;
+		s[salt_len + 3] = i & 0xFF;
+
+		HMAC_SHA1(pw, pw_len, s, salt_len + 4, u);
+		memcpy(t, u, sizeof(t));
+
+		for (j = 1; j < iterations; j++)
+		{
+			HMAC_SHA1(pw, pw_len, u, sizeof(u), u);
+			for (n = 0; n < h_len; n++)
+				t[n] ^= u[n];
+		}
+
+		for (n = 0; n < h_len && (n + k) < dk_len; n++)
+			derived_key[n + k] = t[n];
+	}
 }
 
 void PBKDF2_HMAC_SHA256(const uint8_t* pw, size_t pw_len, const uint8_t* salt, size_t salt_len, int iterations, uint8_t* derived_key, size_t dk_len)
