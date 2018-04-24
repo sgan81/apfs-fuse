@@ -27,6 +27,7 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <iostream>
 
 #include "DeviceLinux.h"
 #include "Global.h"
@@ -48,7 +49,7 @@ bool DeviceLinux::Open(const char* name)
 
 	if (m_device == -1)
 	{
-		printf("Opening device %s failed. %s\n", name, strerror(errno));
+		std::cout << "Opening device " << name << " failed with error " << strerror(errno) << std::endl;
 		return false;
 	}
 
@@ -67,7 +68,7 @@ bool DeviceLinux::Open(const char* name)
 	}
 
 	if (g_debug > 0)
-		printf("Device %s opened. Size is %zu bytes.\n", name, m_size);
+		std::cout << "Device " << name << " opened. Size is " << m_size << std::endl;
 
 	return m_device != -1;
 }

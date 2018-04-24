@@ -40,7 +40,7 @@ public:
 
 private:
 	std::ifstream m_vol;
-	size_t m_size;
+	uint64_t m_size;
 };
 
 #endif

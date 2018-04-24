@@ -38,7 +38,7 @@ public:
 
 private:
 	int m_device;
-	size_t m_size;
+	uint64_t m_size;
 };
 
 #endif

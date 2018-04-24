@@ -473,7 +473,7 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 						st << "Salt    : " << hexstr(kek.salt, sizeof(kek.salt)) << endl;
 						st << endl;
 
-#if 1 // Test decryption of keys
+#if 0 // Test decryption of keys
 						string pw;
 						uint8_t dk[0x20] = { 0 };
 						uint8_t kekk[0x20] = { 0 };

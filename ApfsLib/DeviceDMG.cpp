@@ -359,7 +359,7 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 	// Get data if necessary
 	// Decompress: cache data
 
-	size_t entry_idx = UINT64_MAX;
+	size_t entry_idx = m_sections.size();
 	size_t rd_offs;
 	size_t rd_size;
 	char *bdata = reinterpret_cast<char *>(data);
@@ -384,7 +384,7 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 			beg = mid + 1;
 	}
 
-	if (entry_idx == UINT64_MAX)
+	if (entry_idx == m_sections.size())
 		return false;
 
 	while (len > 0)

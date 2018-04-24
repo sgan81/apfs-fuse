@@ -50,7 +50,7 @@ bool DeviceMac::Open(const char* name)
 
 	if (m_device == -1)
 	{
-		printf("Opening device %s failed. %s\n", name, strerror(errno));
+		std::cout << "Opening device " << name << " failed with error " << strerror(errno) << std::endl;
 		return false;
 	}
 
@@ -83,7 +83,7 @@ bool DeviceMac::Open(const char* name)
 	}
 
 	if (g_debug > 0)
-		printf("Device %s opened. Size is %zu bytes.\n", name, m_size);
+		std::cout << "Device " << name << " opened. Size is " << m_size << std::endl;
 
 	return m_device != -1;
 }
