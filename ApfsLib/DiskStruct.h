@@ -43,8 +43,8 @@ constexpr uint64_t KeyType_Hardlink_C = 0xC000000000000000ULL;
 struct APFS_BlockHeader
 {
 	le<uint64_t> checksum;
-	le<uint64_t> node_id;
-	le<uint64_t> version;
+	le<uint64_t> nid;
+	le<uint64_t> xid;
 	le<uint32_t> type;
 	le<uint32_t> subtype;
 };
@@ -109,7 +109,7 @@ struct APFS_BTEntryFixed
 
 struct APFS_BitmapPtr
 {
-	le<uint64_t> version;
+	le<uint64_t> xid;
 	le<uint64_t> offset;
 	le<uint32_t> bits_total;
 	le<uint32_t> bits_avail;
@@ -224,34 +224,34 @@ struct APFS_IDMapping
 	le<uint32_t> subtype;
 	le<uint64_t> unk_08; // size?
 	le<uint64_t> unk_10;
-	le<uint64_t> nodeid;
+	le<uint64_t> nid;
 	le<uint64_t> block;
 };
 
 struct APFS_Key_B_NodeID_Map
 {
-	le<uint64_t> nodeid;
-	le<uint64_t> version;
+	le<uint64_t> nid;
+	le<uint64_t> xid;
 };
 
 struct APFS_Value_B_NodeID_Map
 {
 	le<uint32_t> flags;
 	le<uint32_t> size;
-	le<uint64_t> blockid;
+	le<uint64_t> bid;
 };
 
 struct APFS_Value_F
 {
 	le<uint64_t> block_cnt;
-	le<uint64_t> obj_id;
+	le<uint64_t> oid;
 	le<uint32_t> unk_10;
 };
 
-struct APFS_Value_10_1
+struct APFS_Value_10_1_Snapshot
 {
-	le<uint64_t> unk_00;
-	le<uint64_t> unk_08;
+	le<uint64_t> bid_bomap; // Blockid of 4/F (BlkID->ObjID)
+	le<uint64_t> bid_apsb; // Blockid of 4/D (Superblock)
 	le<uint64_t> tstamp_10;
 	le<uint64_t> tstamp_18;
 	le<uint64_t> unk_20;
@@ -267,8 +267,8 @@ struct APFS_Value_10_B
 
 struct APFS_Key_8_9
 {
-	le<uint64_t> version;
-	le<uint64_t> blk_id; // Block-ID
+	le<uint64_t> xid;
+	le<uint64_t> bid; // Block-ID
 	// Value = Number of blocks
 	// If no value, the number of blocks is 1
 };
@@ -283,24 +283,24 @@ struct APFS_Superblock_NXSB // Ab 0x20
 	le<uint64_t> unk_38;
 	le<uint64_t> unk_40;
 	apfs_uuid_t container_guid;
-	le<uint64_t> next_nodeid; // Next node id (?)
-	le<uint64_t> next_version; // Next version number (?)
+	le<uint64_t> next_nid; // Next node id (?)
+	le<uint64_t> next_xid; // Next transaction id (?)
 	le<uint32_t> sb_area_cnt; // Number of blocks for NXSB + 4_C ?
 	le<uint32_t> spaceman_area_cnt; // Number of blocks for the rest
-	le<uint64_t> blockid_sb_area_start; // Block-ID (0x4000000C) - No
-	le<uint64_t> blockid_spaceman_area_start; // Block-ID (0x80000005) => Node-ID 0x400
+	le<uint64_t> bid_sb_area_start; // Block-ID (0x4000000C) - No
+	le<uint64_t> bid_spaceman_area_start; // Block-ID (0x80000005) => Node-ID 0x400
 	le<uint32_t> next_sb; // Next 4_C + NXSB? (+sb_area_start)
 	le<uint32_t> next_spaceman; // Next 8_5/2/11? (+blockid_spaceman_area_start)
 	le<uint32_t> current_sb_start; // Start 4_C+NXSB block (+sb_area_start)
 	le<uint32_t> current_sb_len; // Length 4_C+NXSB block
 	le<uint32_t> current_spaceman_start; // Start 8_5/2/11 blocks (+blockid_spaceman_area_start)
 	le<uint32_t> current_spaceman_len; // No of 8_5/2/11 blocks
-	le<uint64_t> nodeid_8x5;     // Node-ID (0x400) => (0x80000005)
-	le<uint64_t> blockid_volhdr; // Block-ID => (0x4000000B) => B*-Tree for mapping node-id -> volume APSB superblocks
-	le<uint64_t> nodeid_8x11;    // Node-ID (0x401) => (0x80000011)
+	le<uint64_t> nid_spaceman;     // Node-ID (0x400) => (0x80000005)
+	le<uint64_t> bid_nodemap; // Block-ID => (0x4000000B) => B*-Tree for mapping node-id -> volume APSB superblocks
+	le<uint64_t> nid_8x11;    // Node-ID (0x401) => (0x80000011)
 	le<uint32_t> unk_B0;
 	le<uint32_t> unk_B4;
-	le<uint64_t> nodeid_apsb[100]; // List of the node-id's of the volume superblocks (not sure about the length of this list though ...)
+	le<uint64_t> nid_apsb[100]; // List of the node-id's of the volume superblocks (not sure about the length of this list though ...)
 	le<uint64_t> unk_3D8[0x23];
 	le<uint64_t> unk_4F0[4];
 	le<uint64_t> keybag_blk_start;
@@ -315,7 +315,7 @@ struct APFS_Superblock_APSB_AccessInfo
 {
 	char accessor[0x20];
 	le<uint64_t> timestamp;
-	le<uint64_t> version;
+	le<uint64_t> xid;
 };
 
 struct APFS_Superblock_APSB
@@ -448,6 +448,7 @@ struct APFS_Block_8_5_Spaceman
 	le<uint64_t> unk_158;
 	le<uint16_t> unk_160[0x10];
 	le<uint64_t> blockid_vol_bitmap_hdr;
+	// Ab A08 bid bitmap-header
 };
 
 static_assert(sizeof(APFS_Block_8_5_Spaceman) == 0x188, "Spaceman Header wrong size");

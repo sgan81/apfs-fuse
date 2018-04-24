@@ -25,7 +25,6 @@
 #include "Decmpfs.h"
 #include "Endian.h"
 
-#include "FastCompression.h"
 #include "Global.h"
 #include "Util.h"
 
@@ -101,11 +100,11 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 	const uint8_t *cdata = compressed.data() + sizeof(CompressionHeader);
 	size_t csize = compressed.size() - sizeof(CompressionHeader);
 
+	if (g_debug > 8)
+		std::cout << "DecompressFile " << compressed.size() << " => " << hdr->size << ", algo = " << hdr->algo << std::endl;
+
 	if (hdr->algo == 3)
 	{
-		if (g_debug > 8)
-			std::cout << "DecompressFile " << compressed.size() << " => " << hdr->size << std::endl;
-
 		decompressed.resize(hdr->size);
 
 		if (compressed[0x10] == 0x78)
@@ -268,7 +267,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		if (cdata[0] == 0x06)
 			decompressed.assign(cdata + 1, cdata + csize);
 		else
-			lzvn_decode(decompressed.data(), decompressed.size(), cdata, csize);
+			DecompressLZVN(decompressed.data(), decompressed.size(), cdata, csize);
 	}
 	else if (hdr->algo == 8)
 	{
@@ -299,8 +298,10 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			std::cout << "allocated: " << decompressed_new_size << std::endl;
 		}
 
+		/*
 		if (g_debug > 8)
 			DumpBuffer(rsrc.data(), rsrc.size(), "rsrc content");
+		*/
 
 		for (k = 0; (k << 16) < decompressed.size(); k++)
 		{
@@ -351,7 +352,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			}
 			else
 			{
-				size_t decoded_size = lzvn_decode(dst, dst_len, src, src_len);
+				size_t decoded_size = DecompressLZVN(reinterpret_cast<uint8_t *>(dst), dst_len, src, src_len);
 				if (g_debug > 8)
 					std::cout << "lzvn_decode got " << decoded_size << std::endl;
 

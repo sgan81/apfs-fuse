@@ -1,4 +1,4 @@
-﻿/*
+/*
 	This file is part of apfs-fuse, a read-only implementation of APFS
 	(Apple File System) for FUSE.
 	Copyright (C) 2017 Simon Gander
@@ -70,10 +70,10 @@ void BTreeEntry::clear()
 	m_node.reset();
 }
 
-BTreeNode::BTreeNode(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nodeid_parent, uint64_t blkid) :
+BTreeNode::BTreeNode(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nid_parent, uint64_t bid) :
 	m_tree(tree),
-	m_nodeid_parent(nodeid_parent),
-	m_block_id(blkid)
+	m_nid_parent(nid_parent),
+	m_bid(bid)
 {
 	m_block.assign(block, block + blocksize);
 	m_hdr = reinterpret_cast<const APFS_BlockHeader *>(m_block.data());
@@ -82,25 +82,25 @@ BTreeNode::BTreeNode(BTree &tree, const uint8_t *block, size_t blocksize, uint64
 	assert(m_bt->keys_offs == 0);
 
 	m_keys_start = 0x38 + m_bt->keys_len;
-	m_vals_start = (nodeid_parent != 0) ? blocksize : blocksize - sizeof(APFS_BTFooter);
+	m_vals_start = (nid_parent != 0) ? blocksize : blocksize - sizeof(APFS_BTFooter);
 }
 
-std::shared_ptr<BTreeNode> BTreeNode::CreateNode(BTree & tree, const uint8_t * block, size_t blocksize, uint64_t nodeid_parent, uint64_t blkid)
+std::shared_ptr<BTreeNode> BTreeNode::CreateNode(BTree & tree, const uint8_t * block, size_t blocksize, uint64_t nid_parent, uint64_t bid)
 {
 	const APFS_BTHeader *bt = reinterpret_cast<const APFS_BTHeader *>(block + sizeof(APFS_BlockHeader));
 
 	if (bt->flags & 4)
-		return std::make_shared<BTreeNodeFix>(tree, block, blocksize, nodeid_parent, blkid);
+		return std::make_shared<BTreeNodeFix>(tree, block, blocksize, nid_parent, bid);
 	else
-		return std::make_shared<BTreeNodeVar>(tree, block, blocksize, nodeid_parent, blkid);
+		return std::make_shared<BTreeNodeVar>(tree, block, blocksize, nid_parent, bid);
 }
 
 BTreeNode::~BTreeNode()
 {
 }
 
-BTreeNodeFix::BTreeNodeFix(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nodeid_parent, uint64_t blkid) :
-	BTreeNode(tree, block, blocksize, nodeid_parent, blkid)
+BTreeNodeFix::BTreeNodeFix(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nid_parent, uint64_t bid) :
+	BTreeNode(tree, block, blocksize, nid_parent, bid)
 {
 	m_entries = reinterpret_cast<const APFS_BTEntryFixed *>(m_block.data() + 0x38);
 }
@@ -129,8 +129,8 @@ bool BTreeNodeFix::GetEntry(BTreeEntry & result, uint32_t index) const
 	return true;
 }
 
-BTreeNodeVar::BTreeNodeVar(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nodeid_parent, uint64_t blkid) :
-	BTreeNode(tree, block, blocksize, nodeid_parent, blkid)
+BTreeNodeVar::BTreeNodeVar(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nid_parent, uint64_t bid) :
+	BTreeNode(tree, block, blocksize, nid_parent, bid)
 {
 	m_entries = reinterpret_cast<const APFS_BTEntry *>(m_block.data() + 0x38);
 }
@@ -166,7 +166,7 @@ BTree::BTree(ApfsContainer &container, ApfsVolume *volume) :
 
 	m_root_node = nullptr;
 	m_nodeid_map = nullptr;
-	m_version = 0;
+	m_xid = 0;
 	m_debug = false;
 }
 
@@ -177,12 +177,12 @@ BTree::~BTree()
 #endif
 }
 
-bool BTree::Init(uint64_t root_node_id, uint64_t version, ApfsNodeMapper *node_map)
+bool BTree::Init(uint64_t nid_root, uint64_t xid, ApfsNodeMapper *node_map)
 {
 	m_nodeid_map = node_map;
-	m_version = version;
+	m_xid = xid;
 
-	m_root_node = GetNode(root_node_id, 0);
+	m_root_node = GetNode(nid_root, 0);
 
 	if (m_root_node)
 	{
@@ -191,7 +191,7 @@ bool BTree::Init(uint64_t root_node_id, uint64_t version, ApfsNodeMapper *node_m
 	}
 	else
 	{
-		std::cerr << "ERROR: could not find root_node_id " << root_node_id << std::endl;
+		std::cerr << "ERROR: could not find root_node_id " << nid_root << std::endl;
 		return false;
 	}
 }
@@ -356,12 +356,12 @@ void BTree::DumpTreeInternal(BlockDumper& out, const std::shared_ptr<BTreeNode> 
 	}
 }
 
-std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
+std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nid, uint64_t nid_parent)
 {
 	std::shared_ptr<BTreeNode> node;
 
 #ifdef BTREE_USE_MAP
-	std::map<uint64_t, std::shared_ptr<BTreeNode>>::iterator it = m_nodes.find(nodeid);
+	std::map<uint64_t, std::shared_ptr<BTreeNode>>::iterator it = m_nodes.find(nid);
 
 	if (it != m_nodes.end())
 	{
@@ -374,15 +374,15 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 
 		ni.flags = 0;
 		ni.size = 0x1000;
-		ni.block_no = nodeid;
+		ni.bid = nid;
 
 		std::vector<byte_t> blk;
 
 		if (m_nodeid_map)
 		{
-			if (!m_nodeid_map->GetBlockID(ni, nodeid, m_version))
+			if (!m_nodeid_map->GetBlockID(ni, nid, m_xid))
 			{
-				std::cerr << "ERROR: m_nodeid_map available, but no nodeid " << std::hex << nodeid << " with version " << m_version << std::endl;
+				std::cerr << "ERROR: m_nodeid_map available, but no nodeid " << std::hex << nid << " with version " << m_xid << std::endl;
 				return node;
 			}
 		}
@@ -392,7 +392,7 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 		if (m_volume)
 		{
 			// TODO: is the crypto_id always equal to the block ID here?
-			if (!m_volume->ReadBlocks(blk.data(), ni.block_no, 1, (ni.flags & 4) != 0, ni.block_no))
+			if (!m_volume->ReadBlocks(blk.data(), ni.bid, 1, (ni.flags & 4) != 0, ni.bid))
 			{
 				std::cerr << "ERROR: volume ReadBlocks failed!" << std::endl;
 				return node;
@@ -406,14 +406,14 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 		}
 		else
 		{
-			if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), ni.block_no))
+			if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), ni.bid))
 			{
 				std::cerr << "ERROR: ReadAndVerifyHeaderBlock failed!" << std::endl;
 				return node;
 			}
 		}
 
-		node = BTreeNode::CreateNode(*this, blk.data(), blk.size(), parentid, ni.block_no);
+		node = BTreeNode::CreateNode(*this, blk.data(), blk.size(), nid_parent, ni.bid);
 #ifdef BTREE_USE_MAP
 		if (m_nodes.size() > BTREE_MAP_MAX_NODES)
 		{
@@ -431,7 +431,7 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nodeid, uint64_t parentid)
 #endif
 		}
 
-		m_nodes[nodeid] = node;
+		m_nodes[nid] = node;
 #endif
 	}
 

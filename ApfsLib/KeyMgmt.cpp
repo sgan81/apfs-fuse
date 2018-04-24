@@ -321,6 +321,8 @@ std::string hexstr(const uint8_t *data, size_t size)
 	return st.str();
 }
 
+#undef DUMP_RAW_KEYS
+
 void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 {
 	using namespace std;
@@ -342,8 +344,10 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 		return;
 	}
 
+#ifdef DUMP_RAW_KEYS
 	DumpHex(st, m_data.data(), m_data.size());
 	st << endl;
+#endif
 
 	const keybag_hdr_t &hdr = *reinterpret_cast<const keybag_hdr_t *>(m_data.data());
 
@@ -398,8 +402,10 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 					st << "Unk 80  : " << bhdr.unk_80 << endl;
 					st << "HMAC    : " << hexstr(bhdr.hmac, sizeof(bhdr.hmac)) << endl;
 					st << "Salt    : " << hexstr(bhdr.salt, sizeof(bhdr.salt)) << endl;
+#ifdef DUMP_RAW_KEYS
 					st << "Data    :" << endl;
 					DumpHex(st, bhdr.blob.data, bhdr.blob.size);
+#endif
 					st << endl;
 
 					vek_blob_t vek;
@@ -447,8 +453,10 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 					st << "Unk 80  : " << bhdr.unk_80 << endl;
 					st << "HMAC    : " << hexstr(bhdr.hmac, sizeof(bhdr.hmac)) << endl;
 					st << "Salt    : " << hexstr(bhdr.salt, sizeof(bhdr.salt)) << endl;
+#ifdef DUMP_RAW_KEYS
 					st << "Data    :" << endl;
 					DumpHex(st, bhdr.blob.data, bhdr.blob.size);
+#endif
 					st << endl;
 
 					kek_blob_t kek;
@@ -465,7 +473,7 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 						st << "Salt    : " << hexstr(kek.salt, sizeof(kek.salt)) << endl;
 						st << endl;
 
-#if 0 // Test decryption of keys
+#if 1 // Test decryption of keys
 						string pw;
 						uint8_t dk[0x20] = { 0 };
 						uint8_t kekk[0x20] = { 0 };
@@ -477,7 +485,7 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 						st << "[Decryption Check]" << endl;
 						PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(pw.c_str()), pw.size(), kek.salt, sizeof(kek.salt), kek.iterations, dk, sizeof(dk));
 						st << "PW DKey : " << hexstr(dk, sizeof(dk)) << endl;
-						if (kek.unk_82.unk_00 == 0 || kek_unk_82.unk_00 == 0x10)
+						if (kek.unk_82.unk_00 == 0 || kek.unk_82.unk_00 == 0x10)
 							Rfc3394_KeyUnwrap(kekk, kek.wrapped_kek, 0x20, dk, AES::AES_256, &iv);
 						else if (kek.unk_82.unk_00 == 2)
 							Rfc3394_KeyUnwrap(kekk, kek.wrapped_kek, 0x10, dk, AES::AES_128, &iv);

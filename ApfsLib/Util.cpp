@@ -39,7 +39,12 @@
 
 #include "Util.h"
 #include "Crc32.h"
-#include "Inflate.h" // TODO: Replace with zlib ...
+
+#include <zlib.h>
+
+extern "C" {
+#include <3rdparty/lzfse/src/lzvn_decode_base.h>
+}
 
 static Crc32 g_crc(true, 0x1EDC6F41);
 
@@ -360,18 +365,38 @@ bool Utf8toU32(std::vector<char32_t>& u32_str, const uint8_t * str)
 
 size_t DecompressZLib(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size)
 {
-	size_t nwr = 0;
+	// size_t nwr = 0;
+	int ret;
 
-	if (src[0] == 0x78)
+	z_stream strm;
+
+	memset(&strm, 0, sizeof(strm));
+	strm.zalloc = Z_NULL;
+	strm.zfree = Z_NULL;
+	strm.avail_in = src_size;
+	strm.avail_out = dst_size;
+	strm.next_in = const_cast<uint8_t *>(src);
+	strm.next_out = dst;
+
+	ret = inflateInit2(&strm, 15);
+	if (ret != Z_OK)
 	{
-		Inflate inf;
-
-		nwr = inf.Decompress(dst, dst_size, src + 2, src_size - 2);
-
-		// assert(nwr == dst_size);
+		std::cerr << "DecompressZLib: inflateInit failed." << std::endl;
+		return 0;
 	}
 
-	return nwr;
+	do {
+		ret = inflate(&strm, Z_NO_FLUSH);
+		if (ret == Z_NEED_DICT || ret == Z_DATA_ERROR || ret == Z_MEM_ERROR)
+		{
+			strm.avail_out = 0;
+			break;
+		}
+	} while (ret != Z_STREAM_END);
+
+	inflateEnd(&strm);
+
+	return strm.avail_out;
 }
 
 size_t DecompressADC(uint8_t * dst, size_t dst_size, const uint8_t * src, size_t src_size)
@@ -426,5 +451,23 @@ size_t DecompressADC(uint8_t * dst, size_t dst_size, const uint8_t * src, size_t
 	assert(out_idx == dst_size);
 
 	return out_idx;
+}
+
+size_t DecompressLZVN(uint8_t * dst, size_t dst_size, const uint8_t * src, size_t src_size)
+{
+	lzvn_decoder_state state;
+
+	memset(&state, 0, sizeof(state));
+
+	state.src = src;
+	state.src_end = src + src_size;
+	state.dst = dst;
+	state.dst_begin = dst;
+	state.dst_end = dst + dst_size;
+	state.dst_current = dst;
+
+	lzvn_decode(&state);
+
+	return static_cast<size_t>(state.dst - dst);
 }
 

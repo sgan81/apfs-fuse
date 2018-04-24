@@ -1,0 +1,3 @@
+[submodule "3rdparty/lzfse"]
+	path = 3rdparty/lzfse
+	url = https://github.com/lzfse/lzfse.git

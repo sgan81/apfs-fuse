@@ -25,7 +25,7 @@ struct node_info_t
 {
 	uint32_t flags;
 	uint32_t size;
-	uint64_t block_no;
+	uint64_t bid;
 };
 
 class ApfsNodeMapper
@@ -34,5 +34,5 @@ public:
 	ApfsNodeMapper();
 	virtual ~ApfsNodeMapper();
 
-	virtual bool GetBlockID(node_info_t &res, uint64_t nodeid, uint64_t version) = 0;
+	virtual bool GetBlockID(node_info_t &res, uint64_t nid, uint64_t xid) = 0;
 };

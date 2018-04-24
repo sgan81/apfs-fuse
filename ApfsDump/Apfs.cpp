@@ -21,9 +21,11 @@
 #include <iostream>
 #include <iomanip>
 
+#include <ApfsLib/Device.h>
 #include <ApfsLib/Util.h>
 #include <ApfsLib/DiskStruct.h>
 #include <ApfsLib/BlockDumper.h>
+#include <ApfsLib/GptPartitionMap.h>
 
 #ifdef __linux__
 #include <signal.h>
@@ -47,12 +49,11 @@ void DumpBlockTrunc(std::ostream &os, const byte_t *data)
 	DumpHex(os, data, sz);
 }
 
-void MapBlocks(std::ostream &os, std::istream &dev)
+void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 {
 	using namespace std;
 
-	uint64_t size;
-	uint64_t blk_nr;
+	uint64_t bid;
 	uint8_t block[BLOCKSIZE];
 	const APFS_BlockHeader * const blk = reinterpret_cast<const APFS_BlockHeader *>(block);
 	const APFS_TableHeader * const tbl = reinterpret_cast<const APFS_TableHeader *>(block + sizeof(APFS_BlockHeader));
@@ -63,15 +64,9 @@ void MapBlocks(std::ostream &os, std::istream &dev)
 	os << "[Block]  | Node ID  | Version  | Type     | Subtype  | Flgs | Levl | Entries  | Description" << endl;
 	os << "---------+----------+----------+----------+----------+------+------+----------+---------------------------------" << endl;
 
-	dev.seekg(0, std::ios::end);
-	size = dev.tellg();
-	dev.seekg(0);
-
-	size /= BLOCKSIZE;
-
-	for (blk_nr = 0; blk_nr < size && !g_abort; blk_nr++)
+	for (bid = 0; bid < bcnt && !g_abort; bid++)
 	{
-		dev.read(reinterpret_cast<char *>(block), BLOCKSIZE);
+		dev.Read(block, (bid_start + bid) * BLOCKSIZE, BLOCKSIZE);
 
 		if (IsEmptyBlock(block, BLOCKSIZE))
 		{
@@ -83,9 +78,9 @@ void MapBlocks(std::ostream &os, std::istream &dev)
 
 		if (VerifyBlock(block, BLOCKSIZE))
 		{
-			os << setw(8) << blk_nr << " | ";
-			os << setw(8) << blk->node_id << " | ";
-			os << setw(8) << blk->version << " | ";
+			os << setw(8) << bid << " | ";
+			os << setw(8) << blk->nid << " | ";
+			os << setw(8) << blk->xid << " | ";
 			os << setw(8) << blk->type << " | ";
 			os << setw(8) << blk->subtype << " | ";
 			os << setw(4) << tbl->page << " | ";
@@ -99,7 +94,7 @@ void MapBlocks(std::ostream &os, std::istream &dev)
 		}
 		else
 		{
-			os << setw(8) << blk_nr;
+			os << setw(8) << bid;
 			os << " |          |          |          |          |      |      |          | Data" << endl;
 			last_was_used = true;
 		}
@@ -108,30 +103,23 @@ void MapBlocks(std::ostream &os, std::istream &dev)
 	os << endl;
 }
 
-void ScanBlocks(std::ostream &os, std::istream &dev)
+void ScanBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 {
 	BlockDumper bd(os, BLOCKSIZE);
-	uint64_t size;
-	uint64_t blk_nr;
+	uint64_t bid;
 	uint8_t block[BLOCKSIZE];
-
-	dev.seekg(0, std::ios::end);
-	size = dev.tellg();
-	dev.seekg(0);
-
-	size /= BLOCKSIZE;
 
 	bd.SetTextFlags(0x01);
 
-	for (blk_nr = 0; blk_nr < size && !g_abort; blk_nr++)
+	for (bid = 0; bid < bcnt && !g_abort; bid++)
 	{
-		dev.read(reinterpret_cast<char *>(block), BLOCKSIZE);
+		dev.Read(block, (bid_start + bid) * BLOCKSIZE, BLOCKSIZE);
 
 		if (IsEmptyBlock(block, BLOCKSIZE))
 			continue;
 
 		if (VerifyBlock(block, BLOCKSIZE))
-			bd.DumpNode(block, blk_nr);
+			bd.DumpNode(block, bid);
 		else
 		{
 #if 0
@@ -159,20 +147,41 @@ int main(int argc, const char *argv[])
 		return 1;
 	}
 
-	std::ifstream dev;
+	Device *dev;
 	std::ofstream os;
+	uint64_t bid_start = 0;
+	uint64_t bcnt = 0;
+
+	g_debug = 16;
 
 #if defined(__linux__) || defined(__APPLE__)
 	signal(SIGINT, ctrl_c_handler);
 #endif
 
-	dev.open(argv[1], std::ios::binary);
+	dev = Device::OpenDevice(argv[1]);
 
-	if (!dev.is_open())
+	if (!dev)
 	{
-		std::cerr << "File " << argv[1] << " not found." << std::endl;
+		std::cerr << "Device " << argv[1] << " not found." << std::endl;
 		return 2;
 	}
+
+	{
+		GptPartitionMap pmap;
+		if (pmap.LoadAndVerify(*dev))
+		{
+			int partid = pmap.FindFirstAPFSPartition();
+			if (partid >= 0)
+			{
+				pmap.GetPartitionOffsetAndSize(partid, bid_start, bcnt);
+				bid_start /= BLOCKSIZE;
+				bcnt /= BLOCKSIZE;
+			}
+		}
+	}
+
+	if (bcnt == 0)
+		bcnt = dev->GetSize() / BLOCKSIZE;
 
 	if (argc > 3)
 	{
@@ -180,10 +189,12 @@ int main(int argc, const char *argv[])
 		if (!os.is_open())
 		{
 			std::cerr << "Could not open output file " << argv[3] << std::endl;
+			dev->Close();
+			delete dev;
 			return 3;
 		}
 
-		MapBlocks(os, dev);
+		MapBlocks(os, *dev, bid_start, bcnt);
 		os.close();
 	}
 
@@ -191,13 +202,17 @@ int main(int argc, const char *argv[])
 	if (!os.is_open())
 	{
 		std::cerr << "Could not open output file " << argv[2] << std::endl;
+		dev->Close();
+		delete dev;
 		return 3;
 	}
 
-	ScanBlocks(os, dev);
+	ScanBlocks(os, *dev, bid_start, bcnt);
 
-	dev.close();
+	dev->Close();
 	os.close();
+
+	delete dev;
 
 	return 0;
 }

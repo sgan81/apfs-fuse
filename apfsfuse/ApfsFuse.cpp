@@ -1,4 +1,4 @@
-﻿/*
+/*
 	This file is part of apfs-fuse, a read-only implementation of APFS
 	(Apple File System) for FUSE.
 	Copyright (C) 2017 Simon Gander
@@ -755,6 +755,8 @@ int main(int argc, char *argv[])
 		{
 			if (fuse_set_signal_handlers(se) != -1)
 			{
+				if (g_debug == 0)
+					fuse_daemonize(0);
 				fuse_session_add_chan(se, ch);
 				err = fuse_session_loop(se);
 				fuse_remove_signal_handlers(se);

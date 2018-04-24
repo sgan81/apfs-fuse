@@ -75,14 +75,14 @@ int main(int argc, char *argv[])
 			gpt.GetPartitionOffsetAndSize(n, offset, size);
 	}
 
-	ApfsContainer *container = new ApfsContainer(*disk.get(), offset, size);
+	std::unique_ptr<ApfsContainer> container(new ApfsContainer(*disk.get(), offset, size));
 
 	rc = container->Init();
 
 	if (!rc)
 	{
 		std::cerr << "Unable to init container." << std::endl;
-		delete container;
+		container.reset();
 		disk->Close();
 		return -1;
 	}
@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
 
 #endif
 
-	delete container;
+	container.reset();
 
 	st.close();
 

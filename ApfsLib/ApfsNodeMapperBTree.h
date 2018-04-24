@@ -32,8 +32,8 @@ public:
 	ApfsNodeMapperBTree(ApfsContainer &container);
 	virtual ~ApfsNodeMapperBTree();
 
-	bool Init(uint64_t hdr_block_id, uint64_t version);
-	bool GetBlockID(node_info_t &info, uint64_t nodeid, uint64_t version) override;
+	bool Init(uint64_t bid_root, uint64_t xid);
+	bool GetBlockID(node_info_t &info, uint64_t nid, uint64_t xid) override;
 
 	void dump(BlockDumper &bd) { m_tree.dump(bd); }
 

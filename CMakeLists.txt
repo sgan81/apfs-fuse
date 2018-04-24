@@ -14,6 +14,7 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 
 include_directories(.)
 
+add_subdirectory(3rdparty/lzfse)
 add_subdirectory(ApfsLib)
 add_subdirectory(ApfsDump)
 add_subdirectory(ApfsDumpQuick)

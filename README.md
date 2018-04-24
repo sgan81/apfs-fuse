@@ -27,11 +27,21 @@ The following libraries are needed (including the -dev packages):
 
 * FUSE 2.6 or greater
 * ICU (Only on Linux)
+* zlib
 
 Development tools:
 * cmake
 * gcc-c++ (or clang++)
 
+Clone the repository:
+```
+git clone https://github.com/sgan81/apfs-fuse.git
+git submodule init
+git submodule update
+```
+The driver uses Apple's lzfse library and includes it as a submodule.
+
+Compile the thing:
 ```
 mkdir build
 cd build

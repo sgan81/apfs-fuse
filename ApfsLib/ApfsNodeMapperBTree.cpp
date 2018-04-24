@@ -36,13 +36,13 @@ static int CompareNodeMapKey(const void *skey, size_t skey_len, const void *ekey
 	const APFS_Key_B_NodeID_Map *skey_map = reinterpret_cast<const APFS_Key_B_NodeID_Map *>(skey);
 	const APFS_Key_B_NodeID_Map *ekey_map = reinterpret_cast<const APFS_Key_B_NodeID_Map *>(ekey);
 
-	if (ekey_map->nodeid < skey_map->nodeid)
+	if (ekey_map->nid < skey_map->nid)
 		return -1;
-	if (ekey_map->nodeid > skey_map->nodeid)
+	if (ekey_map->nid > skey_map->nid)
 		return 1;
-	if (ekey_map->version < skey_map->version)
+	if (ekey_map->xid < skey_map->xid)
 		return -1;
-	if (ekey_map->version > skey_map->version)
+	if (ekey_map->xid > skey_map->xid)
 		return 1;
 	return 0;
 }
@@ -57,13 +57,13 @@ ApfsNodeMapperBTree::~ApfsNodeMapperBTree()
 {
 }
 
-bool ApfsNodeMapperBTree::Init(uint64_t hdr_block_id, uint64_t version)
+bool ApfsNodeMapperBTree::Init(uint64_t bid_root, uint64_t xid)
 {
 	std::vector<byte_t> blk;
 
 	blk.resize(m_container.GetBlocksize());
 
-	if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), hdr_block_id))
+	if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), bid_root))
 	{
 		std::cerr << "ERROR: header block NOT verified" << std::endl;
 		return false;
@@ -77,10 +77,10 @@ bool ApfsNodeMapperBTree::Init(uint64_t hdr_block_id, uint64_t version)
 		return false;
 	}
 
-	return m_tree.Init(m_root_ptr.entry[0].blk, version);
+	return m_tree.Init(m_root_ptr.entry[0].blk, xid);
 }
 
-bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nodeid, uint64_t version)
+bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t xid)
 {
 	APFS_Key_B_NodeID_Map key;
 
@@ -89,15 +89,15 @@ bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nodeid, uint64_
 
 	BTreeEntry res;
 
-	key.nodeid = nodeid;
-	key.version = version;
+	key.nid = nid;
+	key.xid = xid;
 
 	// std::cout << std::hex << "GetBlockID: nodeid = " << nodeid << ", version = " << version << " => blockid = ";
 
 	if (!m_tree.Lookup(res, &key, sizeof(key), CompareNodeMapKey, this, false))
 	{
 		// std::cout << "NOT FOUND" << std::endl;
-		std::cerr << std::hex << "nodeid " << nodeid << " version " << version << " NOT FOUND!!!" << std::endl;
+		std::cerr << std::hex << "nid " << nid << " xid " << xid << " NOT FOUND!!!" << std::endl;
 		return false;
 	}
 
@@ -106,10 +106,10 @@ bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nodeid, uint64_
 	rkey = reinterpret_cast<const APFS_Key_B_NodeID_Map *>(res.key);
 	val = reinterpret_cast<const APFS_Value_B_NodeID_Map *>(res.val);
 
-	if (key.nodeid != rkey->nodeid)
+	if (key.nid != rkey->nid)
 	{
 		// std::cout << "NOT FOUND" << std::endl;
-		std::cerr << std::hex << "nodeid " << nodeid << " version " << version << " NOT FOUND!!!" << std::endl;
+		std::cerr << std::hex << "nid " << nid << " xid " << xid << " NOT FOUND!!!" << std::endl;
 		return false;
 	}
 
@@ -117,7 +117,7 @@ bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nodeid, uint64_
 
 	info.flags = val->flags;
 	info.size = val->size;
-	info.block_no = val->blockid;
+	info.bid = val->bid;
 
 	return true;
 }

@@ -1,4 +1,3 @@
-enable_language(C ASM)
 add_library(ApfsLib
 	Aes.cpp
 	Aes.h
@@ -40,12 +39,9 @@ add_library(ApfsLib
 	DeviceWinPhys.h
 	DiskStruct.h
 	Endian.h
-	FastCompression.h
 	Global.h
 	GptPartitionMap.cpp
 	GptPartitionMap.h
-	Inflate.cpp
-	Inflate.h
 	KeyMgmt.cpp
 	KeyMgmt.h
 	PList.cpp
@@ -57,5 +53,4 @@ add_library(ApfsLib
 	TripleDes.cpp
 	TripleDes.h
 	Util.cpp
-	Util.h
-	lzvn_decode.s)
+	Util.h)

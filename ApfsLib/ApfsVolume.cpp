@@ -63,7 +63,7 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 	if (m_sb.signature != 0x42535041)
 		return false;
 
-	if (!m_nodemap_dir.Init(m_sb.blockid_nodemap, m_sb.hdr.version))
+	if (!m_nodemap_dir.Init(m_sb.blockid_nodemap, m_sb.hdr.xid))
 		std::cerr << "WARNING: m_nodemap_dir init failed" << std::endl;
 
 	if ((m_sb.flags_108 & 3) != 1)
@@ -94,13 +94,13 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 		m_is_encrypted = true;
 	}
 
-	if (!m_bt_directory.Init(m_sb.nodeid_rootdir, m_sb.hdr.version, &m_nodemap_dir))
+	if (!m_bt_directory.Init(m_sb.nodeid_rootdir, m_sb.hdr.xid, &m_nodemap_dir))
 		std::cerr << "WARNING: m_bt_directory init failed" << std::endl;
 
-	if (!m_bt_blockmap.Init(m_sb.blockid_blockmap, m_sb.hdr.version))
+	if (!m_bt_blockmap.Init(m_sb.blockid_blockmap, m_sb.hdr.xid))
 		std::cerr << "WARNING: m_bt_blockmap init failed" << std::endl;
 
-	if (!m_bt_snapshots.Init(m_sb.blockid_4xBx10_map, m_sb.hdr.version))
+	if (!m_bt_snapshots.Init(m_sb.blockid_4xBx10_map, m_sb.hdr.xid))
 		std::cerr << "WARNING: m_bt_snapshots init failed" << std::endl;
 
 	return true;

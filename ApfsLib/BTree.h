@@ -68,17 +68,17 @@ private:
 class BTreeNode
 {
 protected:
-	BTreeNode(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nodeid_parent, uint64_t blkid);
+	BTreeNode(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nid_parent, uint64_t bid);
 
 public:
-	static std::shared_ptr<BTreeNode> CreateNode(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nodeid_parent, uint64_t blkid);
+	static std::shared_ptr<BTreeNode> CreateNode(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nid_parent, uint64_t bid);
 
 	virtual ~BTreeNode();
 
-	uint64_t nodeid() const { return m_hdr->node_id; }
+	uint64_t nodeid() const { return m_hdr->nid; }
 	uint32_t entries_cnt() const { return m_bt->entries_cnt; }
 	uint16_t level() const { return m_bt->level; }
-	uint64_t blockid() const { return m_block_id; }
+	uint64_t blockid() const { return m_bid; }
 
 	virtual bool GetEntry(BTreeEntry &result, uint32_t index) const = 0;
 	// virtual uint32_t Find(const void *key, size_t key_size, BTCompareFunc func) const = 0;
@@ -92,8 +92,8 @@ protected:
 	uint16_t m_keys_start; // Up
 	uint16_t m_vals_start; // Dn
 
-	const uint64_t m_nodeid_parent;
-	const uint64_t m_block_id;
+	const uint64_t m_nid_parent;
+	const uint64_t m_bid;
 
 	const APFS_BlockHeader *m_hdr;
 	const APFS_BTHeader *m_bt;
@@ -102,7 +102,7 @@ protected:
 class BTreeNodeFix : public BTreeNode
 {
 public:
-	BTreeNodeFix(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nodeid_parent, uint64_t blkid);
+	BTreeNodeFix(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nid_parent, uint64_t bid);
 
 	bool GetEntry(BTreeEntry &result, uint32_t index) const override;
 	// uint32_t Find(const void *key, size_t key_size, BTCompareFunc func) const override;
@@ -114,7 +114,7 @@ private:
 class BTreeNodeVar : public BTreeNode
 {
 public:
-	BTreeNodeVar(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nodeid_parent, uint64_t blkid);
+	BTreeNodeVar(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nid_parent, uint64_t bid);
 
 	bool GetEntry(BTreeEntry &result, uint32_t index) const override;
 	// uint32_t Find(const void *key, size_t key_size, BTCompareFunc func) const override;
@@ -139,7 +139,7 @@ public:
 	BTree(ApfsContainer &container, ApfsVolume *vol = nullptr);
 	~BTree();
 
-	bool Init(uint64_t root_node_id, uint64_t version, ApfsNodeMapper *node_map = nullptr);
+	bool Init(uint64_t nid_root, uint64_t xid, ApfsNodeMapper *node_map = nullptr);
 
 	bool Lookup(BTreeEntry &result, const void *key, size_t key_size, BTCompareFunc func, void *context, bool exact);
 	bool GetIterator(BTreeIterator &it, const void *key, size_t key_size, BTCompareFunc func, void *context);
@@ -156,7 +156,7 @@ private:
 	uint32_t Find(const std::shared_ptr<BTreeNode> &node, const void *key, size_t key_size, BTCompareFunc func, void *context);
 	int FindBin(const std::shared_ptr<BTreeNode> &node, const void *key, size_t key_size, BTCompareFunc func, void *context, FindMode mode);
 
-	std::shared_ptr<BTreeNode> GetNode(uint64_t nodeid, uint64_t parentid);
+	std::shared_ptr<BTreeNode> GetNode(uint64_t nid, uint64_t nid_parent);
 
 	ApfsContainer &m_container;
 	ApfsVolume *m_volume;
@@ -166,7 +166,7 @@ private:
 
 	APFS_BTFooter m_treeinfo;
 
-	uint64_t m_version;
+	uint64_t m_xid;
 	bool m_debug;
 
 #ifdef BTREE_USE_MAP

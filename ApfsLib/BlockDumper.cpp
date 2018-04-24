@@ -129,13 +129,13 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 
 void BlockDumper::DumpNodeHeader(const APFS_BlockHeader *blk, uint64_t blk_nr)
 {
-	m_os << "[Block]          | Checksum         | Node ID          | Version          | Type     | Subtype  | Description" << endl;
+	m_os << "[Block]          | Checksum         | Node ID          | Transaction ID   | Type     | Subtype  | Description" << endl;
 	m_os << "-----------------+------------------+------------------+------------------+----------+----------+-----------------------" << endl;
 
 	m_os << setw(16) << blk_nr << " | ";
 	m_os << setw(16) << blk->checksum << " | ";
-	m_os << setw(16) << blk->node_id << " | ";
-	m_os << setw(16) << blk->version << " | ";
+	m_os << setw(16) << blk->nid << " | ";
+	m_os << setw(16) << blk->xid << " | ";
 	m_os << setw(8) << blk->type << " | ";
 	m_os << setw(8) << blk->subtype << " | ";
 	m_os << GetNodeType(blk->type, blk->subtype) << endl;
@@ -497,6 +497,11 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 					m_os << endl;
 					// Don't dump compressed data ...
 				}
+				else if (!strncmp(attr_name, "com.apple.metadata:", 19))
+				{
+					m_os << endl;
+					// Not really interested in e-mail metadata ...
+				}
 #endif
 				else
 				{
@@ -677,8 +682,8 @@ void BlockDumper::DumpBTEntry_4_B(const byte_t * key_ptr, size_t key_length, con
 
 	const APFS_Key_B_NodeID_Map *ekey = reinterpret_cast<const APFS_Key_B_NodeID_Map *>(key_ptr);
 
-	m_os << setw(16) << ekey->nodeid << " | ";
-	m_os << setw(16) << ekey->version << " => ";
+	m_os << setw(16) << ekey->nid << " | ";
+	m_os << setw(16) << ekey->xid << " => ";
 
 	if (index)
 	{
@@ -696,7 +701,7 @@ void BlockDumper::DumpBTEntry_4_B(const byte_t * key_ptr, size_t key_length, con
 
 			m_os << setw(8) << val->flags << " | ";
 			m_os << setw(8) << val->size << " | ";
-			m_os << setw(16) << val->blockid << endl;
+			m_os << setw(16) << val->bid << endl;
 		}
 	}
 }
@@ -728,7 +733,7 @@ void BlockDumper::DumpBTEntry_4_F(const byte_t * key_ptr, size_t key_length, con
 			const APFS_Value_F *val = reinterpret_cast<const APFS_Value_F *>(val_ptr);
 
 			m_os << setw(16) << val->block_cnt << " | ";
-			m_os << setw(16) << val->obj_id << " | ";
+			m_os << setw(16) << val->oid << " | ";
 			m_os << setw(8) << val->unk_10 << endl;
 		}
 	}
@@ -770,9 +775,9 @@ void BlockDumper::DumpBTEntry_4_10(const byte_t * key_ptr, size_t key_length, co
 			{
 			case 0x1:
 			{
-				const APFS_Value_10_1 *val = reinterpret_cast<const APFS_Value_10_1 *>(val_ptr);
-				m_os << setw(16) << val->unk_00 << " ";
-				m_os << setw(16) << val->unk_08 << " ";
+				const APFS_Value_10_1_Snapshot *val = reinterpret_cast<const APFS_Value_10_1_Snapshot *>(val_ptr);
+				m_os << setw(16) << val->bid_bomap << " ";
+				m_os << setw(16) << val->bid_apsb << " ";
 				// m_os << setw(16) << val->tstamp_10 << " ";
 				// m_os << setw(16) << val->tstamp_18 << " ";
 				m_os << "[" << tstamp(val->tstamp_10) << "] ";
@@ -817,8 +822,8 @@ void BlockDumper::DumpBTEntry_8_9(const byte_t * key_ptr, size_t key_length, con
 	assert(key_length == 0x10);
 	assert(value_length == 0x08);
 
-	m_os << setw(16) << key->version << " | ";
-	m_os << setw(16) << key->blk_id << " => ";
+	m_os << setw(16) << key->xid << " | ";
+	m_os << setw(16) << key->bid << " => ";
 
 	if (!val_ptr)
 		m_os << "----------------" << endl;
@@ -880,7 +885,7 @@ void BlockDumper::DumpBlk_0_D()
 	{
 		m_os << "Accessor Info    : " << sb->access_info[k].accessor << endl;
 		m_os << "Timestamp        : " << tstamp(sb->access_info[k].timestamp) << endl;
-		m_os << "Version          : " << setw(16) << sb->access_info[k].version << endl;
+		m_os << "Version          : " << setw(16) << sb->access_info[k].xid << endl;
 	}
 	m_os << "Volume Name      : " << sb->vol_name << endl;
 	m_os << "Unknown 0x3C0    : " << setw(16) << sb->unk_3C0 << endl;
@@ -903,7 +908,7 @@ void BlockDumper::DumpBlk_4_7()
 
 	for (k = 0; k < blk->tbl.entries_cnt; k++)
 	{
-		m_os << setw(16) << blk->bmp[k].version << " | ";
+		m_os << setw(16) << blk->bmp[k].xid << " | ";
 		m_os << setw(16) << blk->bmp[k].offset << " | ";
 		m_os << setw(8) << blk->bmp[k].bits_total << " | ";
 		m_os << setw(8) << blk->bmp[k].bits_avail << " | ";
@@ -949,7 +954,7 @@ void BlockDumper::DumpBlk_4_C()
 		m_os << setw(8) << blk->entry[k].subtype << " | ";
 		m_os << setw(16) << blk->entry[k].unk_08 << " | ";
 		m_os << setw(16) << blk->entry[k].unk_10 << " | ";
-		m_os << setw(16) << blk->entry[k].nodeid << " | ";
+		m_os << setw(16) << blk->entry[k].nid << " | ";
 		m_os << setw(16) << blk->entry[k].block << endl;
 	}
 }
@@ -966,26 +971,26 @@ void BlockDumper::DumpBlk_8_1()
 	m_os << "Unknown 0x38     : " << setw(16) << sb->unk_38 << endl;
 	m_os << "Unknown 0x40     : " << setw(16) << sb->unk_40 << endl;
 	m_os << "GUID             : " << setw(16) << uuidstr(sb->container_guid) << endl;
-	m_os << "Next Node ID     : " << setw(16) << sb->next_nodeid << endl;
-	m_os << "Next Version     : " << setw(16) << sb->next_version << endl;
-	m_os << "No of NXSB & 4_C : " << setw(8) << sb->sb_area_cnt << endl;
-	m_os << "No of other Hdr  : " << setw(8) << sb->spaceman_area_cnt << endl;
-	m_os << "Block-ID SB Area : " << setw(16) << sb->blockid_sb_area_start << endl;
-	m_os << "Block-ID SM Area : " << setw(16) << sb->blockid_spaceman_area_start << endl;
+	m_os << "Next Node ID     : " << setw(16) << sb->next_nid << endl;
+	m_os << "Next XID         : " << setw(16) << sb->next_xid << endl;
+	m_os << "Size of SB Area  : " << setw(8) << sb->sb_area_cnt << endl;
+	m_os << "Size of SM Area  : " << setw(8) << sb->spaceman_area_cnt << endl;
+	m_os << "Block-ID SB Area : " << setw(16) << sb->bid_sb_area_start << endl;
+	m_os << "Block-ID SM Area : " << setw(16) << sb->bid_spaceman_area_start << endl;
 	m_os << "Next NXSB        : " << setw(8) << sb->next_sb << endl;
 	m_os << "Next SpMgr       : " << setw(8) << sb->next_spaceman << endl;
 	m_os << "Curr SB Start    : " << setw(8) << sb->current_sb_start << endl;
 	m_os << "Curr SB Len      : " << setw(8) << sb->current_sb_len << endl;
 	m_os << "Curr SM Start    : " << setw(8) << sb->current_spaceman_start << endl;
 	m_os << "Curr SM Len      : " << setw(8) << sb->current_spaceman_len << endl;
-	m_os << "Node-ID SM Hdr   : " << setw(16) << sb->nodeid_8x5 << endl;
-	m_os << "Block-ID Vol-Hdr : " << setw(16) << sb->blockid_volhdr << endl;
-	m_os << "Node-ID 8-11 Hdr : " << setw(16) << sb->nodeid_8x11 << endl;
+	m_os << "Node-ID SM Hdr   : " << setw(16) << sb->nid_spaceman << endl;
+	m_os << "Block-ID NodeMap : " << setw(16) << sb->bid_nodemap << endl;
+	m_os << "Node-ID 8-11 Hdr : " << setw(16) << sb->nid_8x11 << endl;
 	m_os << "Unknown 0xB0     : " << setw(8) << sb->unk_B0 << endl;
 	m_os << "Unknown 0xB4     : " << setw(8) << sb->unk_B4 << endl;
 
-	for (size_t k = 0; (k < 100) && (sb->nodeid_apsb[k] != 0); k++)
-		m_os << "Node-ID APSB " << setw(2) << k << "  : " << setw(16) << sb->nodeid_apsb[k] << endl;
+	for (size_t k = 0; (k < 100) && (sb->nid_apsb[k] != 0); k++)
+		m_os << "Node-ID APSB " << setw(2) << k << "  : " << setw(16) << sb->nid_apsb[k] << endl;
 
 	m_os << endl;
 
@@ -1026,7 +1031,7 @@ void BlockDumper::DumpBlk_8_5()
 	m_os << "00A8 BID MgrBmp  : " << setw(16) << b->blockid_begin_bitmaps_A8 << endl;
 	m_os << "00B0 BID VolBmp  : " << setw(16) << b->blockid_bitmaps_B0 << endl;
 	m_os << "00B8             : " << setw(16) << b->unk_B8 << endl;
-	m_os << "Spaceman" << endl;
+	// m_os << "Spaceman" << endl;
 	m_os << "00C0             : " << setw(16) << b->unk_C0 << endl;
 	m_os << "00C8             : " << setw(16) << b->unk_C8 << endl;
 	m_os << "00D0 NID Obs 1   : " << setw(16) << b->nodeid_obsolete_1 << endl;
