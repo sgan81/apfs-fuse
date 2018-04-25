@@ -22,6 +22,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <mutex>
 
 #include "Global.h"
 #include "DiskStruct.h"
@@ -171,6 +172,7 @@ private:
 
 #ifdef BTREE_USE_MAP
 	std::map<uint64_t, std::shared_ptr<BTreeNode>> m_nodes;
+	std::mutex m_mutex;
 #endif
 };
 

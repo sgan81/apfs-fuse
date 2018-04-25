@@ -361,13 +361,15 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nid, uint64_t nid_parent)
 	std::shared_ptr<BTreeNode> node;
 
 #ifdef BTREE_USE_MAP
+	m_mutex.lock();
 	std::map<uint64_t, std::shared_ptr<BTreeNode>>::iterator it = m_nodes.find(nid);
 
 	if (it != m_nodes.end())
-	{
 		node = it->second;
-	}
-	else
+
+	m_mutex.unlock();
+
+	if (!node)
 #endif
 	{
 		node_info_t ni;
@@ -415,6 +417,8 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nid, uint64_t nid_parent)
 
 		node = BTreeNode::CreateNode(*this, blk.data(), blk.size(), nid_parent, ni.bid);
 #ifdef BTREE_USE_MAP
+		m_mutex.lock();
+
 		if (m_nodes.size() > BTREE_MAP_MAX_NODES)
 		{
 #if 0
@@ -426,12 +430,14 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nid, uint64_t nid_parent)
 				if (it->second.use_count() == 1)
 					it = m_nodes.erase(it);
 				else
-					it++;
+					++it;
 			}
 #endif
 		}
 
 		m_nodes[nid] = node;
+
+		m_mutex.unlock();
 #endif
 	}
 
