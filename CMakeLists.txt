@@ -12,7 +12,7 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 
-include_directories(.)
+include_directories(. 3rdparty/lzfse/src)
 
 add_subdirectory(3rdparty/lzfse)
 add_subdirectory(ApfsLib)

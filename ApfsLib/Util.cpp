@@ -41,9 +41,11 @@
 #include "Crc32.h"
 
 #include <zlib.h>
+#include <bzlib.h>
 
 extern "C" {
-#include <3rdparty/lzfse/src/lzvn_decode_base.h>
+#include <lzfse.h>
+#include <lzvn_decode_base.h>
 }
 
 static Crc32 g_crc(true, 0x1EDC6F41);
@@ -469,5 +471,30 @@ size_t DecompressLZVN(uint8_t * dst, size_t dst_size, const uint8_t * src, size_
 	lzvn_decode(&state);
 
 	return static_cast<size_t>(state.dst - dst);
+}
+
+size_t DecompressBZ2(uint8_t * dst, size_t dst_size, const uint8_t * src, size_t src_size)
+{
+	bz_stream strm;
+
+	memset(&strm, 0, sizeof(strm));
+
+	BZ2_bzDecompressInit(&strm, 0, 0);
+
+	strm.next_in = const_cast<char *>(reinterpret_cast<const char *>(src));
+	strm.avail_in = src_size;
+	strm.next_out = reinterpret_cast<char *>(dst);
+	strm.avail_out = dst_size;
+
+	BZ2_bzDecompress(&strm);
+
+	BZ2_bzDecompressEnd(&strm);
+
+	return strm.total_out_lo32;
+}
+
+size_t DecompressLZFSE(uint8_t * dst, size_t dst_size, const uint8_t * src, size_t src_size)
+{
+	return lzfse_decode_buffer(dst, dst_size, src, src_size, nullptr);
 }
 

@@ -39,3 +39,5 @@ bool Utf8toU32(std::vector<char32_t>& u32_str, const uint8_t * str);
 size_t DecompressZLib(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 size_t DecompressADC(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 size_t DecompressLZVN(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
+size_t DecompressBZ2(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
+size_t DecompressLZFSE(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);

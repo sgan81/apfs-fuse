@@ -28,6 +28,7 @@ The following libraries are needed (including the -dev packages):
 * FUSE 2.6 or greater
 * ICU (Only on Linux)
 * zlib
+* bzip2
 
 Development tools:
 * cmake

@@ -437,8 +437,14 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 				case 0x80000005:
 					DecompressZLib(sect.cache, sect.disk_length, compr_buf, sect.dmg_length);
 					break;
+				case 0x80000006:
+					DecompressBZ2(sect.cache, sect.disk_length, compr_buf, sect.dmg_length);
+					break;
+				case 0x80000007:
+					DecompressLZFSE(sect.cache, sect.disk_length, compr_buf, sect.dmg_length);
+					break;
 				default:
-					return false; // TODO - bzip2, lzfse
+					return false;
 					break;
 				}
 
