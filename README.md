@@ -37,12 +37,13 @@ Development tools:
 Clone the repository:
 ```
 git clone https://github.com/sgan81/apfs-fuse.git
+cd apfs-fuse
 git submodule init
 git submodule update
 ```
 The driver uses Apple's lzfse library and includes it as a submodule.
 
-Compile the thing:
+Compile the driver:
 ```
 mkdir build
 cd build
