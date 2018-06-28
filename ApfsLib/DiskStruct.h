@@ -37,6 +37,22 @@ constexpr uint64_t KeyType_Unknown_A = 0xA000000000000000ULL;
 constexpr uint64_t KeyType_Snapshot_B = 0xB000000000000000ULL;
 constexpr uint64_t KeyType_Hardlink_C = 0xC000000000000000ULL;
 
+enum BlockType
+{
+	BlockType_NXSB = 1,
+	BlockType_BTRoot = 2,
+	BlockType_BTNode = 3,
+	BlockType_SpacemanHeader = 5,
+	BlockType_BitmapHeader = 7,
+	BlockType_BTreeRootPtr = 11,
+	BlockType_IDMapping = 12,
+	BlockType_APSB = 13
+	// 0x14: Pointer to EFI driver, pointed to by NXSB/4F8, signature 'JSDR'
+	// 0x18: Unknown, signature 'BALF', Length 0x880. Contains pointer to 0x19 ...
+	// 0x19: U64 Pointer to B-Tree type 0x1A, U32 Unknown
+	// 0x1B: No idea, looks like some kind of bitmap ...
+};
+
 #pragma pack(push)
 #pragma pack(1)
 
@@ -45,9 +61,17 @@ struct APFS_BlockHeader
 	le<uint64_t> checksum;
 	le<uint64_t> nid;
 	le<uint64_t> xid;
-	le<uint32_t> type;
+	le<uint16_t> type;
+	le<uint16_t> flags; // See below
 	le<uint32_t> subtype;
 };
+
+/*
+Known Flags:
+0x1000 Encrypted
+0x4000 Belongs to volume
+0x8000 Belongs to container
+*/
 
 static_assert(sizeof(APFS_BlockHeader) == 0x20, "BlockHeader size wrong");
 
@@ -194,7 +218,7 @@ struct APFS_Extent
 {
 	le<uint64_t> size;
 	le<uint64_t> block;
-	le<uint64_t> crypto_id;
+	le<uint64_t> xts_blkid;
 };
 
 struct APFS_Key_Attribute

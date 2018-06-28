@@ -61,8 +61,8 @@ void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 
 	os << hex << uppercase << setfill('0');
 
-	os << "[Block]  | Node ID  | Version  | Type     | Subtype  | Flgs | Levl | Entries  | Description" << endl;
-	os << "---------+----------+----------+----------+----------+------+------+----------+---------------------------------" << endl;
+	os << "[Block]  | Node ID  | Version  | Type | Flgs | Subtype  | Page | Levl | Entries  | Description" << endl;
+	os << "---------+----------+----------+------+------+----------+------+------+----------+---------------------------------" << endl;
 
 	for (bid = 0; bid < bcnt && !g_abort; bid++)
 	{
@@ -71,7 +71,7 @@ void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 		if (IsEmptyBlock(block, BLOCKSIZE))
 		{
 			if (last_was_used)
-				os << "---------+----------+----------+----------+----------+------+------+----------+ Empty" << endl;
+				os << "---------+----------+----------+------+------+----------+------+------+----------+ Empty" << endl;
 			last_was_used = false;
 			continue;
 		}
@@ -81,13 +81,13 @@ void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 			os << setw(8) << bid << " | ";
 			os << setw(8) << blk->nid << " | ";
 			os << setw(8) << blk->xid << " | ";
-			os << setw(8) << blk->type << " | ";
+			os << setw(4) << blk->type << " | ";
 			os << setw(8) << blk->subtype << " | ";
 			os << setw(4) << tbl->page << " | ";
 			os << setw(4) << tbl->level << " | ";
 			os << setw(8) << tbl->entries_cnt << " | ";
 			os << BlockDumper::GetNodeType(blk->type, blk->subtype);
-			if ((blk->type & 0xFFFFFFF) == 2)
+			if (blk->type == 2)
 				os << " [Root]";
 			os << endl;
 			last_was_used = true;
@@ -95,7 +95,7 @@ void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 		else
 		{
 			os << setw(8) << bid;
-			os << " |          |          |          |          |      |      |          | Data" << endl;
+			os << " |          |          |      |      |          |      |      |          | Data" << endl;
 			last_was_used = true;
 		}
 	}
@@ -126,7 +126,7 @@ void ScanBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt
 			os << std::hex << std::setw(16) << blk_nr << std::endl;
 			DumpBlockTrunc(os, block);
 			os << std::endl;
-			os << "========================================================================================================================" << std::endl;
+			os << "===========================================================================================================================" << std::endl;
 			os << std::endl;
 #endif
 		}
@@ -152,7 +152,7 @@ int main(int argc, const char *argv[])
 	uint64_t bid_start = 0;
 	uint64_t bcnt = 0;
 
-	g_debug = 16;
+	g_debug = 255;
 
 #if defined(__linux__) || defined(__APPLE__)
 	signal(SIGINT, ctrl_c_handler);

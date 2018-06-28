@@ -30,8 +30,6 @@
 int g_debug = 0;
 bool g_lax = false;
 
-#undef KEYBAG_DEBUG
-
 ApfsContainer::ApfsContainer(Device &disk, uint64_t start, uint64_t len) :
 	m_disk(disk),
 	m_part_start(start),
@@ -88,7 +86,7 @@ bool ApfsContainer::Init()
 			continue;
 
 		const APFS_Superblock_NXSB *sb = reinterpret_cast<const APFS_Superblock_NXSB *>(tmp.data());
-		if (sb->hdr.type != 0x80000001)
+		if (sb->hdr.type != BlockType_NXSB)
 			continue;
 
 		if (sb->hdr.xid > max_xid)
@@ -100,7 +98,7 @@ bool ApfsContainer::Init()
 
 	if (max_xid > m_sb.hdr.xid)
 	{
-		if (g_debug > 0)
+		if (g_debug & Dbg_Errors)
 			std::cout << "Found more recent xid " << max_xid << " than superblock 0 contained (" << m_sb.hdr.xid << ")." << std::endl;
 
 		m_disk.Read(tmp.data(), m_part_start + max_bid * m_sb.block_size, m_sb.block_size);

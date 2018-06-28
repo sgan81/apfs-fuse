@@ -37,8 +37,11 @@ class BlockDumper;
 class ApfsContainer;
 class ApfsVolume;
 
+// This enables a rudimentary disk cache ...
 #define BTREE_USE_MAP
-#define BTREE_MAP_MAX_NODES 8192 // TODO: Think about a better solution. 8192 will take max. 32 MB of RAM
+// TODO: Think about a better solution.
+// 8192 will take max. 32 MB of RAM. Higher may be faster, but use more RAM.
+#define BTREE_MAP_MAX_NODES 8192
 
 // ekey < skey: -1, ekey > skey: 1, ekey == skey: 0
 typedef int(*BTCompareFunc)(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context);

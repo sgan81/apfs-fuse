@@ -191,7 +191,7 @@ bool BTree::Init(uint64_t nid_root, uint64_t xid, ApfsNodeMapper *node_map)
 	}
 	else
 	{
-		std::cerr << "ERROR: could not find root_node_id " << nid_root << std::endl;
+		std::cerr << "ERROR: BTree Init: Unable to get root node " << nid_root << std::endl;
 		return false;
 	}
 }
@@ -384,7 +384,7 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nid, uint64_t nid_parent)
 		{
 			if (!m_nodeid_map->GetBlockID(ni, nid, m_xid))
 			{
-				std::cerr << "ERROR: m_nodeid_map available, but no nodeid " << std::hex << nid << " with version " << m_xid << std::endl;
+				std::cerr << "ERROR: GetNode: Node mapper: nid " << std::hex << nid << " xid " << m_xid << " not found." << std::endl;
 				return node;
 			}
 		}
@@ -394,15 +394,21 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nid, uint64_t nid_parent)
 		if (m_volume)
 		{
 			// TODO: is the crypto_id always equal to the block ID here?
+			// I think so, the xts id and the block id only differ when the
+			// volume has been converted from a HFS/FileVault volume, which
+			// used CoreStorage. After conversions, the block numbers do not
+			// match anymore, since the CoreStorage data has been removed
+			// and assigned to the apfs volume. But the metadata is always
+			// fresh and therefore the ids should match.
 			if (!m_volume->ReadBlocks(blk.data(), ni.bid, 1, (ni.flags & 4) != 0, ni.bid))
 			{
-				std::cerr << "ERROR: volume ReadBlocks failed!" << std::endl;
+				std::cerr << "ERROR: GetNode: ReadBlocks failed!" << std::endl;
 				return node;
 			}
 
 			if (!VerifyBlock(blk.data(), blk.size()))
 			{
-				std::cerr << "ERROR: (volume) VerifyBlock failed!" << std::endl;
+				std::cerr << "ERROR: GetNode: VerifyBlock failed!" << std::endl;
 				return node;
 			}
 		}
@@ -410,7 +416,7 @@ std::shared_ptr<BTreeNode> BTree::GetNode(uint64_t nid, uint64_t nid_parent)
 		{
 			if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), ni.bid))
 			{
-				std::cerr << "ERROR: ReadAndVerifyHeaderBlock failed!" << std::endl;
+				std::cerr << "ERROR: GetNode: ReadAndVerifyHeaderBlock failed!" << std::endl;
 				return node;
 			}
 		}

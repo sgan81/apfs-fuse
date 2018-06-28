@@ -82,7 +82,7 @@ bool DeviceMac::Open(const char* name)
 		std::cout << "File mode unknown!" << std::endl;
 	}
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << "Device " << name << " opened. Size is " << m_size << std::endl;
 
 	return m_device != -1;

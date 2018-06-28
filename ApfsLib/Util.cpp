@@ -23,7 +23,7 @@
 #elif defined(__APPLE__)
 #include <CoreFoundation/CFString.h>
 #else
-#include "Unicode.h"
+// TODO
 #endif
 
 #include <cassert>
@@ -259,7 +259,9 @@ uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensit
 	uint32_t hash;
 
 	Utf8toU32(u32_name, reinterpret_cast<const uint8_t *>(utf8str));
-	NormalizeFilename(u32_normalized, u32_name, case_insensitive);
+	
+	// NormalizeFilename(u32_normalized, u32_name, case_insensitive); // TODO
+	u32_normalized = u32_name;
 
 	g_crc.SetCRC(0xFFFFFFFF);
 	g_crc.Calc(reinterpret_cast<const byte_t *>(u32_normalized.data()), u32_normalized.size() * sizeof(char32_t));

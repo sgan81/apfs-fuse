@@ -65,15 +65,15 @@ bool ApfsNodeMapperBTree::Init(uint64_t bid_root, uint64_t xid)
 
 	if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), bid_root))
 	{
-		std::cerr << "ERROR: header block NOT verified" << std::endl;
+		std::cerr << "ERROR: Invalid header block 0x" << std::hex << bid_root << std::endl;
 		return false;
 	}
 
 	memcpy(&m_root_ptr, blk.data(), sizeof(APFS_Block_4_B_BTreeRootPtr));
 
-	if (m_root_ptr.hdr.type != 0x4000000B)
+	if (m_root_ptr.hdr.type != BlockType_BTreeRootPtr)
 	{
-		std::cerr << "ERROR: wrong header type 0x" << std::hex << m_root_ptr.hdr.type << std::endl;
+		std::cerr << "ERROR: Wrong header type 0x" << std::hex << m_root_ptr.hdr.type << std::endl;
 		return false;
 	}
 
@@ -84,8 +84,8 @@ bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t x
 {
 	APFS_Key_B_NodeID_Map key;
 
-	const APFS_Key_B_NodeID_Map *rkey = nullptr;
-	const APFS_Value_B_NodeID_Map *val = nullptr;
+	const APFS_Key_B_NodeID_Map *res_key = nullptr;
+	const APFS_Value_B_NodeID_Map *res_val = nullptr;
 
 	BTreeEntry res;
 
@@ -103,10 +103,10 @@ bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t x
 
 	assert(res.val_len == sizeof(APFS_Value_B_NodeID_Map));
 
-	rkey = reinterpret_cast<const APFS_Key_B_NodeID_Map *>(res.key);
-	val = reinterpret_cast<const APFS_Value_B_NodeID_Map *>(res.val);
+	res_key = reinterpret_cast<const APFS_Key_B_NodeID_Map *>(res.key);
+	res_val = reinterpret_cast<const APFS_Value_B_NodeID_Map *>(res.val);
 
-	if (key.nid != rkey->nid)
+	if (key.nid != res_key->nid)
 	{
 		// std::cout << "NOT FOUND" << std::endl;
 		std::cerr << std::hex << "nid " << nid << " xid " << xid << " NOT FOUND!!!" << std::endl;
@@ -115,9 +115,9 @@ bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t x
 
 	// std::cout << val->blockid << std::endl;
 
-	info.flags = val->flags;
-	info.size = val->size;
-	info.bid = val->bid;
+	info.flags = res_val->flags;
+	info.size = res_val->size;
+	info.bid = res_val->bid;
 
 	return true;
 }

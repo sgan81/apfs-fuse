@@ -306,7 +306,7 @@ bool DeviceDMG::Open(const char * name)
 
 	if (koly.xml_offset != 0)
 	{
-		if (g_debug > 0)
+		if (g_debug & Dbg_Info)
 			printf("Loading DMG using XML plist.\n");
 
 		if (!ProcessHeaderXML(koly.xml_offset, koly.xml_length))

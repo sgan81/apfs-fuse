@@ -46,7 +46,7 @@ public:
 
 	ApfsContainer &getContainer() const { return m_container; }
 
-	bool ReadBlocks(byte_t *data, uint64_t blkid, uint64_t blkcnt, bool decrypt, uint64_t crypto_id);
+	bool ReadBlocks(byte_t *data, uint64_t blkid, uint64_t blkcnt, bool decrypt, uint64_t xts_blkid);
 
 private:
 	ApfsContainer &m_container;

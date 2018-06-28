@@ -92,7 +92,7 @@ static size_t expected_block_len(int block_number, size_t uncompressed_file_size
 
 bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompressed, const std::vector<uint8_t> &compressed)
 {
-#if 1
+#if 1 // Disable to get compressed data
 	if (compressed.size() < sizeof(CompressionHeader))
 		return false;
 
@@ -100,7 +100,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 	const uint8_t *cdata = compressed.data() + sizeof(CompressionHeader);
 	size_t csize = compressed.size() - sizeof(CompressionHeader);
 
-	if (g_debug > 8)
+	if (g_debug & Dbg_Cmpfs)
 		std::cout << "DecompressFile " << compressed.size() << " => " << hdr->size << ", algo = " << hdr->algo << std::endl;
 
 	if (hdr->algo == 3)
@@ -112,9 +112,8 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			size_t decoded_bytes = DecompressZLib(decompressed.data(), decompressed.size(), cdata, csize);
 			if (decoded_bytes != hdr->size)
 			{
-				if (g_debug > 0)
-					std::cout << "Expected " << hdr->size << " bytes in compressed stream, "
-						  << "got " << decoded_bytes << std::endl;
+				if (g_debug & Dbg_Errors)
+					std::cout << "DecompressFile: Expected " << hdr->size << " bytes in compressed stream, got " << decoded_bytes << std::endl;
 				if (!g_lax)
 					return false;
 			}
@@ -128,7 +127,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 	{
 		std::vector<uint8_t> rsrc;
 
-		if (g_debug > 8)
+		if (g_debug & Dbg_Cmpfs)
 		{
 			std::cout << "type=4: zlib in resource fork" << std::endl;
 			std::cout << " stream info: size=" << compressed.size() << std::endl;
@@ -138,13 +137,13 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		bool rc = dir.GetAttribute(rsrc, ino, "com.apple.ResourceFork");
 		if (!rc)
 		{
-			if (g_debug > 0)
-				std::cout << "Could not read resource fork" << std::endl;
+			if (g_debug & Dbg_Errors)
+				std::cout << "DecompressFile: Could not read resource fork" << std::endl;
 			decompressed.clear();
 			return false;
 		}
 
-		if (g_debug > 8)
+		if (g_debug & Dbg_Cmpfs)
 		{
 			std::cout << "read " << rsrc.size() << " bytes from resource fork" << std::endl;
 			DumpBuffer(rsrc.data(), rsrc.size(), "rsrc content");
@@ -153,14 +152,8 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		RsrcForkHeader rsrc_hdr;
 
 		memcpy(&rsrc_hdr, rsrc.data(), sizeof(rsrc_hdr));
-		/*
-		rsrc_hdr.data_off_be = bswap_32(rsrc_hdr.data_off_be);
-		rsrc_hdr.data_size_be = bswap_32(rsrc_hdr.data_size_be);
-		rsrc_hdr.mgmt_off_be = bswap_32(rsrc_hdr.mgmt_off_be);
-		rsrc_hdr.mgmt_size_be = bswap_32(rsrc_hdr.mgmt_size_be);
-		*/
 
-		if (g_debug > 8)
+		if (g_debug & Dbg_Cmpfs)
 		{
 			std::cout << "computed values:" << std::endl;
 			std::cout << " data offset=" << rsrc_hdr.data_offset << std::endl;
@@ -172,7 +165,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		// uint32_t rsrc_size = bswap_32(*reinterpret_cast<uint32_t *>(rsrc.data() + rsrc_hdr.data_off_be));
 		if (rsrc_hdr.data_offset > rsrc.size())
 		{
-			if (g_debug > 0)
+			if (g_debug & Dbg_Errors)
 				std::cout << "invalid data offset in resource fork header" << std::endl;
 			return false;
 		}
@@ -181,7 +174,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 
 		decompressed.resize((hdr->size + 0xFFFF) & 0xFFFF0000);
 
-		if (g_debug > 8)
+		if (g_debug & Dbg_Cmpfs)
 			std::cout << "Decompressed size according to header: " << hdr->size << std::endl;
 
 		// Inflate may write past 0x10000 with incorrect input. This provides
@@ -198,7 +191,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			size_t entry_last_offset = rsrc_hdr.data_offset + src_offset + src_len - 1;
 			if (entry_last_offset > rsrc.size())
 			{
-				if (g_debug > 0)
+				if (g_debug & Dbg_Errors)
 				{
 					std::cout << "Invalid entry (k=" << k << ") in block map: "
 					          << "block size extends past end of resource fork" << std::endl;
@@ -214,7 +207,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 				src_len--;
 				if (src_len != expected)
 				{
-					if (g_debug > 0)
+					if (g_debug & Dbg_Errors)
 						std::cout << "Invalid content in block " << k << ": expected "
 						          << expected << " bytes, but uncompressed block has size "
 							  << src_len << std::endl;
@@ -223,7 +216,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 				}
 				memcpy(blk, src, src_len);
 			} else if (src_len > 0x10000) {
-				if (g_debug > 0) {
+				if (g_debug & Dbg_Errors) {
 					std::cout << "Invalid map entry: offset=" << src_offset
 						<< ", size=" << src_len << "." << std::endl;
 				}
@@ -232,12 +225,12 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 
 				off = DecompressZLib(blk, 0x10000, cmpf_rsrc_base + cmpf_rsrc->entry[k].off, cmpf_rsrc->entry[k].size);
 
-				if (g_debug > 8)
+				if (g_debug & Dbg_Cmpfs)
 					std::cout << "DecompressZLib dst = " << (0x10000 * k) << " / 10000 src = " << cmpf_rsrc->entry[k].off << " / " << cmpf_rsrc->entry[k].size << " => " << off << std::endl;
 
 				if (off != expected)
 				{
-					if (g_debug > 0)
+					if (g_debug & Dbg_Errors)
 						std::cout << "Wrong uncompressed size for block " << k << ": expected "
 							  << expected << " bytes, found " << off << std::endl;
 					if (!g_lax)
@@ -246,7 +239,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 
 				if ((0x10000 * (k + 1) - 1) > decompressed.size())
 				{
-					if (g_debug > 0)
+					if (g_debug & Dbg_Errors)
 						std::cout << "More decompressed data than expected!" << std::endl;
 
 					if (!g_lax)
@@ -259,7 +252,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 	}
 	else if (hdr->algo == 7)
 	{
-		if (g_debug > 8)
+		if (g_debug & Dbg_Cmpfs)
 			std::cout << "Decompress LZVN compressed file " << compressed.size() << " => " << hdr->size << std::endl;
 
 		decompressed.resize(hdr->size);
@@ -271,7 +264,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 	}
 	else if (hdr->algo == 8)
 	{
-		if (g_debug > 8)
+		if (g_debug & Dbg_Cmpfs)
 			std::cout << "Decompress LZVN compressed resource file" << std::endl;
 
 		std::vector<uint8_t> rsrc;
@@ -291,7 +284,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 
 		decompressed.resize(decompressed_new_size);
 
-		if (g_debug > 8)
+		if (g_debug & Dbg_Cmpfs)
 		{
 			std::cout << "rsrc data size = " << rsrc.size() << std::endl;
 			std::cout << "hdr claims that size is " << hdr->size << std::endl;
@@ -299,7 +292,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		}
 
 		/*
-		if (g_debug > 8)
+		if (g_debug & Dbg_Cmpfs)
 			DumpBuffer(rsrc.data(), rsrc.size(), "rsrc content");
 		*/
 
@@ -311,7 +304,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			const uint8_t *src = rsrc.data() + off_list[k];
 			size_t src_len = off_list[k+1] - off_list[k];
 			size_t expected = expected_block_len(k, hdr->size);
-			if (g_debug > 8)
+			if (g_debug & Dbg_Cmpfs)
 			{
 				std::cout << " k=" << k << ": off_list[k]=" << off_list[k] << std::endl;
 				std::cout << " size=" << src_len;
@@ -320,7 +313,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			}
 			if ((off_list[k+1] < off_list[k]) || (off_list[k+1] > rsrc.size()))
 			{
-				if (g_debug > 0)
+				if (g_debug & Dbg_Errors)
 					std::cout << "invalid offset" << std::endl;
 
 				return false;
@@ -334,7 +327,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 				src_len--;
 				if (src_len != expected)
 				{
-					if (g_debug > 0)
+					if (g_debug & Dbg_Errors)
 						std::cout << "Invalid content in block " << k << ": expected "
 						          << expected << " bytes, but uncompressed block has size "
 							  << src_len << std::endl;
@@ -345,7 +338,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			}
 			else if (src_len > 0x10000)
 			{
-				if (g_debug > 0)
+				if (g_debug & Dbg_Errors)
 					std::cout << "Invalid compressed block size";
 				if (!g_lax)
 					return false;
@@ -353,12 +346,12 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			else
 			{
 				size_t decoded_size = DecompressLZVN(reinterpret_cast<uint8_t *>(dst), dst_len, src, src_len);
-				if (g_debug > 8)
+				if (g_debug & Dbg_Cmpfs)
 					std::cout << "lzvn_decode got " << decoded_size << std::endl;
 
 				if (decoded_size != expected)
 				{
-					if (g_debug > 0)
+					if (g_debug & Dbg_Errors)
 						std::cout << "Wrong uncompressed size for block " << k << ": expected "
 							  << expected << " bytes, found " << decoded_size << std::endl;
 					if (!g_lax)
@@ -373,7 +366,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 	}
 	else
 	{
-		if (g_debug > 0)
+		if (g_debug & Dbg_Errors)
 			std::cout << "DecompressFile: Unknown Algorithm " << hdr->algo << std::endl;
 
 		std::cerr << "Unknown algo " << hdr->algo << std::endl;

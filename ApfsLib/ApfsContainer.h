@@ -56,9 +56,8 @@ private:
 	Device &m_disk;
 	const uint64_t m_part_start;
 	const uint64_t m_part_len;
+
 	std::string m_passphrase;
-	std::string m_passphrase_kek_struct;
-	std::string m_volume_kek_struct;
 
 	APFS_Superblock_NXSB m_sb;
 

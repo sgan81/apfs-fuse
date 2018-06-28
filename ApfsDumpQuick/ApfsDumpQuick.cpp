@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	g_debug = 16;
+	g_debug = 255;
 
 	disk.reset(Device::OpenDevice(argv[1]));
 

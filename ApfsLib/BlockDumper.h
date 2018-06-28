@@ -55,15 +55,13 @@ private:
 	void DumpBlk_8_11();
 
 	void DumpBTNode_0();
-	void DumpBTNode_4();
-	void DumpBTNode_8();
 
-	void DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_4_B(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_4_F(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_4_10(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_4_13(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_8_9(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_E(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_B(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_F(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_10(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_13(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_9(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
 
 	void DumpBTEntry_Unk(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
 
@@ -71,7 +69,7 @@ private:
 	void DumpHex(const byte_t *data, size_t size, size_t line_size = 16);
 
 public:
-	static const char * GetNodeType(uint32_t type, uint32_t subtype);
+	static const char * GetNodeType(uint16_t type, uint32_t subtype);
 
 private:
 	static std::string tstamp(uint64_t apfs_time);

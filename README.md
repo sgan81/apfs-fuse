@@ -23,12 +23,13 @@ should just report an error.
 ## Usage
 
 ### Compile the source code
-The following libraries are needed (including the -dev packages):
+The following libraries are needed (including the -dev/-devel packages):
 
 * FUSE 2.6 or greater
 * ICU (Only on Linux)
 * zlib
 * bzip2
+* libattr (on some Linux distributions)
 
 Development tools:
 * cmake

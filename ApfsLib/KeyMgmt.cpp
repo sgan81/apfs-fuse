@@ -581,12 +581,6 @@ bool KeyManager::GetPasswordHint(std::string& hint, const apfs_uuid_t& volume_uu
 	key_data_t recs_block;
 	key_data_t hint_data;
 
-	if (g_debug > 0)
-	{
-		std::cout << "Password hint: looking for key type 3 for volume "
-			<< uuidstr(volume_uuid) << " in m_container_bag" << std::endl;
-	}
-
 	if (!m_container_bag.FindKey(volume_uuid, 3, recs_block))
 		return false;
 
@@ -597,15 +591,8 @@ bool KeyManager::GetPasswordHint(std::string& hint, const apfs_uuid_t& volume_uu
 
 	Keybag recs_bag;
 
-	if (g_debug > 0)
-		std::cout << "Trying to load key bag from recs_block" << std::endl;
-
 	if (!LoadKeybag(recs_bag, 0x72656373, recs_ext.blk, recs_ext.bcnt, volume_uuid))
 		return false;
-
-	if (g_debug > 0)
-		std::cout << "Password hint: looking for key type 4 for volume "
-			<< uuidstr(volume_uuid) << " in recs_bag" << std::endl;
 
 	if (!recs_bag.FindKey(volume_uuid, 4, hint_data))
 		return false;
@@ -625,42 +612,31 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	kek_blob_t kek_blob;
 	vek_blob_t vek_blob;
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Crypto)
 	{
-		std::cout << "GetVolumeKey: Dumping container keybag." << std::endl;
+		std::cout.setf(std::ios::hex | std::ios::uppercase);
+		std::cout.fill('0');
 
+		std::cout << "Container Key Bag:" << std::endl;
 		m_container_bag.dump(std::cout, nullptr, volume_uuid);
-
-		std::cout << "GetVolumeKey: looking for key type 3 for volume "
-			<< uuidstr(volume_uuid) << " in m_container_bag" << std::endl;
 	}
 
 	if (!m_container_bag.FindKey(volume_uuid, 3, recs_block))
 		return false;
 
-	if (g_debug > 0)
-		std::cout << " key found" << std::endl;
-
 	if (recs_block.data.size != sizeof(key_extent_t))
 		return false;
-
-	if (g_debug > 0)
-		std::cout << " data size matches that of key_extent_t" << std::endl;
 
 	const key_extent_t &recs_ext = *reinterpret_cast<const key_extent_t *>(recs_block.data.data);
 
 	Keybag recs_bag;
 
-	if (g_debug > 0)
-		std::cout << "Trying to load key bag from recs_block" << std::endl;
-
 	if (!LoadKeybag(recs_bag, 0x72656373, recs_ext.blk, recs_ext.bcnt, volume_uuid))
 		return false;
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Crypto)
 	{
-		std::cout << "Volume key bag loaded successfully. Dumping contents." << std::endl;
-
+		std::cout << "Volume Key Bag:" << std::endl;
 		recs_bag.dump(std::cout, &m_container_bag, volume_uuid);
 	}
 
@@ -704,7 +680,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 			break;
 		}
 
-		if (g_debug > 0)
+		if (g_debug & Dbg_Crypto)
 		{
 			std::cout << std::hex << std::setfill('0') << std::uppercase;
 			std::cout << "PW Key  : " << hexstr(dk, sizeof(dk)) << std::endl;
@@ -720,14 +696,10 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 
 	if (!rc)
 	{
-		if (g_debug > 0)
+		if (g_debug & Dbg_Crypto)
 			std::cout << "Password doesn't work for any key." << std::endl;
 		return false;
 	}
-
-	if (g_debug > 0)
-		std::cout << "GetVolumeKey: looking for key type 2 for volume "
-			<< uuidstr(volume_uuid) << " in m_container_bag" << std::endl;
 
 	if (!m_container_bag.FindKey(volume_uuid, 2, vek_header))
 		return false;
@@ -736,7 +708,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		return false;
 
 	/*
-	if (g_debug > 0)
+	if (g_debug & Dbg_Crypto)
 		dumpBagData(vek_data, "vek_data");
 	*/
 
@@ -778,7 +750,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		rc = false;
 	}
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Crypto)
 	{
 		std::cout << "VEK Wrpd: " << hexstr(vek_blob.wrapped_vek, 0x28) << std::endl;
 		std::cout << "VEK     : " << hexstr(vek, 0x20) << std::endl;
@@ -794,6 +766,8 @@ void KeyManager::dump(std::ostream &st)
 	size_t s;
 	key_data_t d;
 	apfs_uuid_t dummy_uuid;
+	std::ios::fmtflags fl = st.setf(st.hex | st.uppercase);
+	char ch = st.fill('0');
 
 	memset(dummy_uuid, 0, sizeof(dummy_uuid));
 
@@ -817,8 +791,11 @@ void KeyManager::dump(std::ostream &st)
 	}
 
 	st << std::endl;
-	st << "========================================================================================================================" << std::endl;
+	st << "===========================================================================================================================" << std::endl;
 	st << std::endl;
+
+	st.fill(ch);
+	st.setf(fl);
 }
 
 bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t blockcnt, const apfs_uuid_t& uuid)
@@ -827,7 +804,7 @@ bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t
 	size_t k;
 	const size_t blocksize = m_container.GetBlocksize();
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Crypto)
 		std::cout << "starting LoadKeybag" << std::endl;
 
 	data.resize(blockcnt * blocksize);
@@ -842,16 +819,23 @@ bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t
 			return false;
 	}
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Crypto)
 		std::cout << " all blocks verified" << std::endl;
 
+	/*
 	const APFS_BlockHeader &hdr = *reinterpret_cast<const APFS_BlockHeader *>(data.data());
 
-	if (g_debug > 0)
-		std::cout << " header has type " << std::hex << hdr.type << std::endl;
-
 	if (hdr.type != type)
+	{
+		if (g_debug & Dbg_Errors)
+		{
+			std::cout << "Keybag block types not matching: " << hdr.type << ", expected " << type << std::endl;
+			DumpHex(std::cout, data.data(), data.size());
+		}
+
 		return false;
+	}
+	*/
 
 	bag.Init(data.data() + sizeof(APFS_BlockHeader), data.size() - sizeof(APFS_BlockHeader)); // TODO: This only works with one block ...
 

@@ -26,3 +26,12 @@ typedef unsigned char apfs_uuid_t[16];
 extern int g_debug;
 // Lax mode - defined in ApfsContainer.cpp
 extern bool g_lax;
+
+enum DbgFlags
+{
+	Dbg_Errors = 1,
+	Dbg_Info = 2,
+	Dbg_Dir = 4,
+	Dbg_Cmpfs = 8,
+	Dbg_Crypto = 16
+};

@@ -67,7 +67,7 @@ bool DeviceLinux::Open(const char* name)
 		ioctl(m_device, BLKGETSIZE64, &m_size);
 	}
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << "Device " << name << " opened. Size is " << m_size << std::endl;
 
 	return m_device != -1;

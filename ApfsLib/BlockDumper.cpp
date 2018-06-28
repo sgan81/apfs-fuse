@@ -75,53 +75,43 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 
 	DumpNodeHeader(node, blk_nr);
 
-	switch (node->type & 0xCFFFFFFF)
+	switch (node->type)
 	{
-	case 0x00000002: // Directory Root
-	case 0x00000003: // Directory
-		DumpBTNode_0();
-		break;
-	case 0x0000000D: // APSB Block
-		DumpBlk_0_D();
-		break;
-
-	case 0x40000002: // Mapping Root
-	case 0x40000003: // Mapping
-		DumpBTNode_4();
-		break;
-	case 0x40000007: // Bitmap Block List
-		DumpBlk_4_7();
-		break;
-	case 0x4000000B: // Pointer to Header (?)
-		DumpBlk_4_B();
-		break;
-	case 0x4000000C: // Another Mapping
-		DumpBlk_4_C();
-		break;
-
-	case 0x80000001: // NXSB Block
+	case 0x0001: // NXSB Block
 		DumpBlk_8_1();
 		break;
-	case 0x80000002:
-	case 0x80000003:
-		DumpBTNode_8();
+	case 0x0002: // BTree Root
+	case 0x0003: // BTree Node
+		DumpBTNode_0();
 		break;
-	case 0x80000005:
+	case 0x0005:
 		DumpBlk_8_5();
 		break;
-	case 0x80000011:
+	case 0x0007: // Bitmap Block List
+		DumpBlk_4_7();
+		break;
+	case 0x000B: // Pointer to Header (?)
+		DumpBlk_4_B();
+		break;
+	case 0x000C: // Another Mapping
+		DumpBlk_4_C();
+		break;
+	case 0x000D: // APSB Block
+		DumpBlk_0_D();
+		break;
+	case 0x0011:
 		DumpBlk_8_11();
 		break;
 
 	default:
 		// assert(false);
-		std::cerr << "!!! UNKNOWN NODE TYPE " << hex << setw(8) << node->type << " in block " << setw(16) << blk_nr << " !!!" << endl;
+		std::cerr << "!!! UNKNOWN NODE TYPE " << hex << setw(4) << node->type << " in block " << setw(16) << blk_nr << " !!!" << endl;
 		DumpBlockHex();
 		break;
 	}
 
 	m_os << endl;
-	m_os << "========================================================================================================================" << endl;
+	m_os << "===========================================================================================================================" << endl;
 	m_os << endl;
 
 	m_block = nullptr;
@@ -129,14 +119,15 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 
 void BlockDumper::DumpNodeHeader(const APFS_BlockHeader *blk, uint64_t blk_nr)
 {
-	m_os << "[Block]          | Checksum         | Node ID          | Transaction ID   | Type     | Subtype  | Description" << endl;
-	m_os << "-----------------+------------------+------------------+------------------+----------+----------+-----------------------" << endl;
+	m_os << "[Block]          | Checksum         | Node ID          | Transaction ID   | Type | Flgs | Subtype  | Description" << endl;
+	m_os << "-----------------+------------------+------------------+------------------+------+------+----------+-----------------------" << endl;
 
 	m_os << setw(16) << blk_nr << " | ";
 	m_os << setw(16) << blk->checksum << " | ";
 	m_os << setw(16) << blk->nid << " | ";
 	m_os << setw(16) << blk->xid << " | ";
-	m_os << setw(8) << blk->type << " | ";
+	m_os << setw(4) << blk->type << " | ";
+	m_os << setw(4) << blk->flags << " | ";
 	m_os << setw(8) << blk->subtype << " | ";
 	m_os << GetNodeType(blk->type, blk->subtype) << endl;
 	m_os << endl;
@@ -161,7 +152,7 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 	DumpBTHeader();
 
 	base = bt->keys_offs + bt->keys_len + 0x38;
-	end = ((hdr->type & 0xFFFF) == 2) ? (m_blocksize - sizeof(APFS_BTFooter)) : m_blocksize;
+	end = (hdr->type == BlockType_BTRoot) ? (m_blocksize - sizeof(APFS_BTFooter)) : m_blocksize;
 
 #if 0
 	if (bt->unk_30 != 0x0000 && bt->unk_32 != 0xFFFF && bt->unk_32 != 0x0000)
@@ -182,6 +173,10 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 		if (keys_size == 0 || values_size == 0)
 		{
 			m_os << "!!! UNKNOWN FIXED KEY / VALUE SIZE !!!" << endl << endl;
+
+			if (hdr->type == BlockType_BTRoot)
+				DumpBTFooter();
+
 			return;
 		}
 
@@ -224,7 +219,7 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 
 	m_os << endl;
 
-	if ((hdr->type & 0xFFFF) == 2)
+	if (hdr->type == BlockType_BTRoot)
 		DumpBTFooter();
 }
 
@@ -331,7 +326,7 @@ void BlockDumper::DumpTableHeader(const APFS_TableHeader &tbl)
 	m_os << endl;
 }
 
-void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index)
+void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index)
 {
 	uint64_t key;
 	// uint16_t nlen;
@@ -487,7 +482,7 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 					m_os << " : " << '\'' << (value_data + 4) << '\'' << endl;
 				else if (!strcmp(attr_name, "com.apple.quarantine"))
 				{
-					// Laenge begrenzen ...
+					// Limit length ...
 					std::string str(reinterpret_cast<const char *>(value_data + 4), value_length - 4);
 					m_os << " : '" << str << '\'' << endl;
 				}
@@ -567,7 +562,6 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 	case 0x8:
 		assert(key_length == 16);
 		m_os << "Data " << key << " " << *reinterpret_cast<const uint64_t *>(key_data + 8) << " => ";
-		// key | offset : len | block | crypto_id
 
 		m_os << hex;
 
@@ -583,7 +577,7 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 			if (value_length == 0x18)
 			{
 				const APFS_Extent *ext = reinterpret_cast<const APFS_Extent *>(value_data);
-				m_os << ext->size << " " << ext->block << " " << ext->crypto_id << endl;
+				m_os << ext->size << " " << ext->block << " " << ext->xts_blkid << endl;
 			}
 			else
 			{
@@ -675,7 +669,7 @@ void BlockDumper::DumpBTEntry_0_E(const byte_t *key_data, size_t key_length, con
 	m_os << hex;
 }
 
-void BlockDumper::DumpBTEntry_4_B(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
+void BlockDumper::DumpBTEntry_B(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
 	(void)key_length;
 	(void)value_length;
@@ -706,7 +700,7 @@ void BlockDumper::DumpBTEntry_4_B(const byte_t * key_ptr, size_t key_length, con
 	}
 }
 
-void BlockDumper::DumpBTEntry_4_F(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
+void BlockDumper::DumpBTEntry_F(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
 	(void)key_length;
 	(void)value_length;
@@ -739,7 +733,7 @@ void BlockDumper::DumpBTEntry_4_F(const byte_t * key_ptr, size_t key_length, con
 	}
 }
 
-void BlockDumper::DumpBTEntry_4_10(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
+void BlockDumper::DumpBTEntry_10(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
 	(void)key_length;
 	(void)value_length;
@@ -800,7 +794,7 @@ void BlockDumper::DumpBTEntry_4_10(const byte_t * key_ptr, size_t key_length, co
 	m_os << endl;
 }
 
-void BlockDumper::DumpBTEntry_4_13(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
+void BlockDumper::DumpBTEntry_13(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
 	(void)key_length;
 	(void)value_length;
@@ -811,7 +805,7 @@ void BlockDumper::DumpBTEntry_4_13(const byte_t * key_ptr, size_t key_length, co
 	m_os << endl;
 }
 
-void BlockDumper::DumpBTEntry_8_9(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
+void BlockDumper::DumpBTEntry_9(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
 	(void)key_length;
 	(void)value_length;
@@ -1073,54 +1067,32 @@ void BlockDumper::DumpBTNode_0()
 
 	switch (hdr->subtype)
 	{
+	case 0x09:
+		DumpBTNode(&BlockDumper::DumpBTEntry_9, 0x10, 0x08);
+		break;
+
+	case 0x0B:
+		DumpBTNode(&BlockDumper::DumpBTEntry_B, 0x10, 0x10);
+		break;
+
 	case 0x0E:
-		DumpBTNode(&BlockDumper::DumpBTEntry_0_E);
+		DumpBTNode(&BlockDumper::DumpBTEntry_E);
 		break;
 
-	default:
-		DumpBTNode(&BlockDumper::DumpBTEntry_Unk);
-		break;
-	}
-
-	// DumpHex(m_block, m_blocksize, 0x20);
-}
-
-void BlockDumper::DumpBTNode_4()
-{
-	const APFS_BlockHeader * const hdr = reinterpret_cast<const APFS_BlockHeader *>(m_block);
-
-	switch (hdr->subtype)
-	{
-	case 0xB:
-		DumpBTNode(&BlockDumper::DumpBTEntry_4_B, 0x10, 0x10);
-		break;
-
-	case 0xF:
-		DumpBTNode(&BlockDumper::DumpBTEntry_4_F);
+	case 0x0F:
+		DumpBTNode(&BlockDumper::DumpBTEntry_F);
 		break;
 
 	case 0x10:
-		DumpBTNode(&BlockDumper::DumpBTEntry_4_10);
+		DumpBTNode(&BlockDumper::DumpBTEntry_10);
 		break;
 
 	case 0x13:
-		DumpBTNode(&BlockDumper::DumpBTEntry_4_13, 0x8, 0x10);
+		DumpBTNode(&BlockDumper::DumpBTEntry_13, 0x8, 0x10);
 		break;
 
-	default:
-		DumpBTNode(&BlockDumper::DumpBTEntry_Unk);
-		break;
-	}
-}
-
-void BlockDumper::DumpBTNode_8()
-{
-	const APFS_BlockHeader * const hdr = reinterpret_cast<const APFS_BlockHeader *>(m_block);
-
-	switch (hdr->subtype)
-	{
-	case 0x09:
-		DumpBTNode(&BlockDumper::DumpBTEntry_8_9, 0x10, 0x08);
+	case 0x1A:
+		DumpBTNode(&BlockDumper::DumpBTEntry_Unk, 8, 8);
 		break;
 
 	default:
@@ -1146,30 +1118,27 @@ void BlockDumper::DumpHex(const byte_t * data, size_t size, size_t line_size)
 	::DumpHex(m_os, data, size, line_size);
 }
 
-const char * BlockDumper::GetNodeType(uint32_t type, uint32_t subtype)
+const char * BlockDumper::GetNodeType(uint16_t type, uint32_t subtype)
 {
 	const char *typestr = "Unknown";
 
 	switch (type)
 	{
-	case 0x00000002:
-	case 0x00000003:
+	case 0x0001:
+		typestr = "Container Superblock (NXSB)";
+		break;
+	case 0x0002:
+	case 0x0003:
 		switch (subtype)
 		{
-		case 0x0000000E:
-			typestr = "Directory";
+		case 0x00000009:
+			typestr = "Purgatory B*-Tree (?)";
 			break;
-		}
-		break;
-	case 0x0000000D:
-		typestr = "Volume Superblock (APSB)";
-		break;
-	case 0x40000002:
-	case 0x40000003:
-		switch (subtype)
-		{
 		case 0x0000000B:
 			typestr = "Mapping Node-ID => Block-ID";
+			break;
+		case 0x0000000E:
+			typestr = "Directory";
 			break;
 		case 0x0000000F:
 			typestr = "Mapping Block-ID => Object-ID";
@@ -1182,31 +1151,22 @@ const char * BlockDumper::GetNodeType(uint32_t type, uint32_t subtype)
 			break;
 		}
 		break;
-	case 0x40000007:
-		typestr = "Bitmap Header (4/7)";
-		break;
-	case 0x4000000B:
-		typestr = "Some Pointer";
-		break;
-	case 0x4000000C:
-		typestr = "ID Mapping";
-		break;
-	case 0x80000001:
-		typestr = "Container Superblock (NXSB)";
-		break;
-	case 0x80000002:
-	case 0x80000003:
-		switch (subtype)
-		{
-		case 0x00000009:
-			typestr = "Deletable Blocks B*-Tree (?)";
-			break;
-		}
-		break;
-	case 0x80000005:
+	case 0x0005:
 		typestr = "Spaceman Header";
 		break;
-	case 0x80000011:
+	case 0x0007:
+		typestr = "Bitmap Header";
+		break;
+	case 0x000B:
+		typestr = "Some Pointer";
+		break;
+	case 0x000C:
+		typestr = "ID Mapping";
+		break;
+	case 0x000D:
+		typestr = "Volume Superblock (APSB)";
+		break;
+	case 0x0011:
 		typestr = "Unknown Header";
 		break;
 	}

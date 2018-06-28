@@ -19,7 +19,6 @@
 
 #include <cstring>
 #include <vector>
-#include <iomanip>
 #include <iostream>
 
 #include "Global.h"
@@ -64,7 +63,7 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 		return false;
 
 	if (!m_nodemap_dir.Init(m_sb.blockid_nodemap, m_sb.hdr.xid))
-		std::cerr << "WARNING: m_nodemap_dir init failed" << std::endl;
+		std::cerr << "WARNING: Volume node id mapper btree init failed." << std::endl;
 
 	if ((m_sb.flags_108 & 3) != 1)
 	{
@@ -73,7 +72,6 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 
 		std::cout << "Volume " << m_sb.vol_name << " is encrypted." << std::endl;
 
-		// Try self-service first
 		if (!m_container.GetVolumeKey(vek, m_sb.guid))
 		{
 			if (m_container.GetPasswordHint(str, m_sb.guid))
@@ -88,20 +86,19 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 				return false;
 			}
 		}
-		if (g_debug > 0)
-			std::cerr << "Setting the VEK and m_is_encrypted" << std::endl;
+
 		m_aes.SetKey(vek, vek + 0x10);
 		m_is_encrypted = true;
 	}
 
 	if (!m_bt_directory.Init(m_sb.nodeid_rootdir, m_sb.hdr.xid, &m_nodemap_dir))
-		std::cerr << "WARNING: m_bt_directory init failed" << std::endl;
+		std::cerr << "WARNING: Directory btree init failed" << std::endl;
 
 	if (!m_bt_blockmap.Init(m_sb.blockid_blockmap, m_sb.hdr.xid))
-		std::cerr << "WARNING: m_bt_blockmap init failed" << std::endl;
+		std::cerr << "WARNING: Block map btree init failed" << std::endl;
 
 	if (!m_bt_snapshots.Init(m_sb.blockid_4xBx10_map, m_sb.hdr.xid))
-		std::cerr << "WARNING: m_bt_snapshots init failed" << std::endl;
+		std::cerr << "WARNING: Snapshots btree init failed" << std::endl;
 
 	return true;
 }
@@ -128,7 +125,7 @@ void ApfsVolume::dump(BlockDumper& bd)
 	m_bt_snapshots.dump(bd);
 }
 
-bool ApfsVolume::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt, bool decrypt, uint64_t crypto_id)
+bool ApfsVolume::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt, bool decrypt, uint64_t xts_blkid)
 {
 	if (!m_container.ReadBlocks(data, blkid, blkcnt))
 		return false;
@@ -137,7 +134,7 @@ bool ApfsVolume::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt, bool
 		return true;
 
 	uint64_t cs_factor = m_container.GetBlocksize() / 0x200;
-	uint64_t uno = crypto_id * cs_factor;
+	uint64_t uno = xts_blkid * cs_factor;
 	size_t size = blkcnt * m_container.GetBlocksize();
 	size_t k;
 
