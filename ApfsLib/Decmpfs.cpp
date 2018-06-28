@@ -113,7 +113,14 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			if (decoded_bytes != hdr->size)
 			{
 				if (g_debug & Dbg_Errors)
+				{
 					std::cout << "DecompressFile: Expected " << hdr->size << " bytes in compressed stream, got " << decoded_bytes << std::endl;
+					std::cout << "Data:" << std::endl;
+					size_t dumpsize = 0x40;
+					if (dumpsize > compressed.size())
+						dumpsize = compressed.size();
+					DumpHex(std::cout, compressed.data(), dumpsize);
+				}
 				if (!g_lax)
 					return false;
 			}

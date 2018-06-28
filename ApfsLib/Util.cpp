@@ -259,7 +259,7 @@ uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensit
 	uint32_t hash;
 
 	Utf8toU32(u32_name, reinterpret_cast<const uint8_t *>(utf8str));
-	
+
 	// NormalizeFilename(u32_normalized, u32_name, case_insensitive); // TODO
 	u32_normalized = u32_name;
 
@@ -400,7 +400,7 @@ size_t DecompressZLib(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t 
 
 	inflateEnd(&strm);
 
-	return strm.avail_out;
+	return dst_size - strm.avail_out;
 }
 
 size_t DecompressADC(uint8_t * dst, size_t dst_size, const uint8_t * src, size_t src_size)
