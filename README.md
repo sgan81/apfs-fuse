@@ -58,7 +58,7 @@ After compilation, the binaries are located in `bin`.
 apfs-fuse <device> <mount-directory>
 ```
 Supported options:
-* `-d n`: If n > 0, enable debug output.
+* `-d n`: If n > 0, enable debug output (see below for details).
 * `-o opts`: Comma-separated list of mount options.
 * `-l`: Lax mode: when unexpected data is encountered, try to continue, even if this means
   data returning potentially incorrect data.
@@ -82,6 +82,15 @@ specified on the command line. The PRK can also be used as password.
 **NEW**: It is now possible to directly mount DMG files. The driver will automatically detect if a dmg
 has to be mounted and take appropriate action. If a dmg is encrypted, you will be asked for the password.
 Note that dmg support is currently a bit slow (especially when compressed), but it should work properly.
+
+The debug flags are now a combination of bits. So to enable specific output, you just add the numbers
+mentioned below together, and use the result as parameter for -d.
+
+* 1 Display more information about errors
+* 2 Display additional generic information
+* 4 Display information about directory-related operations
+* 8 Display information about on-the-fly compression
+* 16 Display information about cryptographic operations (caution, displays keys as well)
 
 ### Unmount a drive
 ```

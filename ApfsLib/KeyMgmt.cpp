@@ -617,7 +617,6 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		std::cout.setf(std::ios::hex | std::ios::uppercase);
 		std::cout.fill('0');
 
-		std::cout << "Container Key Bag:" << std::endl;
 		m_container_bag.dump(std::cout, nullptr, volume_uuid);
 	}
 
@@ -635,10 +634,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		return false;
 
 	if (g_debug & Dbg_Crypto)
-	{
-		std::cout << "Volume Key Bag:" << std::endl;
 		recs_bag.dump(std::cout, &m_container_bag, volume_uuid);
-	}
 
 	uint8_t dk[0x20];
 	uint8_t kek[0x20] = { 0 };
@@ -682,7 +678,6 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 
 		if (g_debug & Dbg_Crypto)
 		{
-			std::cout << std::hex << std::setfill('0') << std::uppercase;
 			std::cout << "PW Key  : " << hexstr(dk, sizeof(dk)) << std::endl;
 			std::cout << "KEK Wrpd: " << hexstr(kek_blob.wrapped_kek, sizeof(kek_blob.wrapped_kek)) << std::endl;
 			std::cout << "KEK     : " << hexstr(kek, 0x20) << std::endl;
@@ -707,14 +702,8 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	if (!VerifyBlob(vek_header.data, vek_data))
 		return false;
 
-	/*
-	if (g_debug & Dbg_Crypto)
-		dumpBagData(vek_data, "vek_data");
-	*/
-
 	if (!DecodeVEKBlob(vek_blob, vek_data))
 		return false;
-
 
 	memset(vek, 0, 0x20);
 
