@@ -124,80 +124,138 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			return false;
 		}
 
-		RsrcForkHeader rsrc_hdr;
-
-		memcpy(&rsrc_hdr, rsrc.data(), sizeof(rsrc_hdr));
-
-		if (rsrc_hdr.data_offset > rsrc.size())
+		if (hdr->algo == 4) // Zlib, rsrc
 		{
-			if (g_debug & Dbg_Errors)
-				std::cout << "Decmpfs: Invalid data offset in rsrc header." << std::endl;
-			return false;
-		}
+			RsrcForkHeader rsrc_hdr;
 
-		const uint8_t *cmpf_rsrc_base = rsrc.data() + rsrc_hdr.data_offset + sizeof(uint32_t);
-		const CmpfRsrc *cmpf_rsrc = reinterpret_cast<const CmpfRsrc *>(cmpf_rsrc_base);
+			memcpy(&rsrc_hdr, rsrc.data(), sizeof(rsrc_hdr));
 
-		decompressed.resize((hdr->size + 0xFFFF) & 0xFFFF0000);
-
-		size_t k;
-		size_t off = 0;
-
-		for (k = 0; k < cmpf_rsrc->entries; k++)
-		{
-			size_t src_offset = cmpf_rsrc->entry[k].off;
-			const uint8_t *src = cmpf_rsrc_base + src_offset;
-			size_t src_len = cmpf_rsrc->entry[k].size;
-			uint8_t *dst = decompressed.data() + 0x10000 * k;
-			size_t expected_len = hdr->size - (0x10000 * k);
-			if (expected_len > 0x10000)
-				expected_len = 0x10000;
-
-			if (src_len > 0x10001)
+			if (rsrc_hdr.data_offset > rsrc.size())
 			{
 				if (g_debug & Dbg_Errors)
-					std::cout << "Decmpfs: In rsrc, src_len too big (" << src_len << ")" << std::endl;
+					std::cout << "Decmpfs: Invalid data offset in rsrc header." << std::endl;
 				return false;
 			}
 
-			if (hdr->algo == 4) // Zlib
+			const uint8_t *cmpf_rsrc_base = rsrc.data() + rsrc_hdr.data_offset + sizeof(uint32_t);
+			const CmpfRsrc *cmpf_rsrc = reinterpret_cast<const CmpfRsrc *>(cmpf_rsrc_base);
+
+			decompressed.resize((hdr->size + 0xFFFF) & 0xFFFF0000);
+
+			size_t k;
+			size_t off = 0;
+
+			for (k = 0; k < cmpf_rsrc->entries; k++)
 			{
-				if (src[0] == 0x78)
-				{
-					decoded_bytes = DecompressZLib(dst, 0x10000, src, src_len);
-				}
-				else if ((src[0] & 0x0F) == 0x0F)
-				{
-					memcpy(dst, src + 1, src_len - 1);
-					decoded_bytes = src_len - 1;
-				}
-				else
+				size_t src_offset = cmpf_rsrc->entry[k].off;
+				const uint8_t *src = cmpf_rsrc_base + src_offset;
+				size_t src_len = cmpf_rsrc->entry[k].size;
+				uint8_t *dst = decompressed.data() + 0x10000 * k;
+				size_t expected_len = hdr->size - (0x10000 * k);
+				if (expected_len > 0x10000)
+					expected_len = 0x10000;
+
+				if (src_len > 0x10001)
 				{
 					if (g_debug & Dbg_Errors)
-						std::cout << "Decmpfs: Something wrong with zlib data." << std::endl;
-					decompressed.clear();
+						std::cout << "Decmpfs: In rsrc, src_len too big (" << src_len << ")" << std::endl;
+					return false;
+				}
+
+				if (hdr->algo == 4) // Zlib
+				{
+					if (src[0] == 0x78)
+					{
+						decoded_bytes = DecompressZLib(dst, 0x10000, src, src_len);
+					}
+					else if ((src[0] & 0x0F) == 0x0F)
+					{
+						memcpy(dst, src + 1, src_len - 1);
+						decoded_bytes = src_len - 1;
+					}
+					else
+					{
+						if (g_debug & Dbg_Errors)
+							std::cout << "Decmpfs: Something wrong with zlib data." << std::endl;
+						decompressed.clear();
+						return false;
+					}
+				}
+				else if (hdr->algo == 8) // LZVN
+				{
+					if (src[0] == 0x06)
+					{
+						memcpy(decompressed.data() + 0x10000 * k, src + 1, src_len - 1);
+						decoded_bytes = src_len - 1;
+					}
+					else
+					{
+						decoded_bytes = DecompressLZVN(dst, 0x10000, src, src_len);
+					}
+				}
+
+				if (expected_len != decoded_bytes)
+				{
+					if (g_debug & Dbg_Errors)
+						std::cout << "Decmpfs: Expected len != decompressed len: " << expected_len << " != " << decoded_bytes << std::endl;
 					return false;
 				}
 			}
-			else if (hdr->algo == 8) // LZVN
+		}
+		else if (hdr->algo == 8)
+		{
+			std::vector<uint8_t> rsrc;
+			size_t k;
+
+			bool rc = dir.GetAttribute(rsrc, ino, "com.apple.ResourceFork");
+
+			if (!rc)
 			{
+				decompressed.clear();
+				return false;
+			}
+
+			const uint32_t *off_list = reinterpret_cast<const uint32_t *>(rsrc.data());
+
+			decompressed.resize((hdr->size + 0xFFFF) & 0xFFFF0000);
+
+			for (k = 0; (k << 16) < decompressed.size(); k++)
+			{
+				size_t expected_len = hdr->size - (0x10000 * k);
+				if (expected_len > 0x10000)
+					expected_len = 0x10000;
+				const uint8_t *src = compressed.data() + off_list[k];
+				const uint32_t src_len = off_list[k + 1] - off_list[k];
+
+				if (src_len > 0x10001)
+				{
+					if (g_debug & Dbg_Errors)
+						std::cout << "Decmpfs: In rsrc, src_len too big (" << src_len << ")" << std::endl;
+					return false;
+				}
+
 				if (src[0] == 0x06)
 				{
-					memcpy(decompressed.data() + 0x10000 * k, src + 1, src_len - 1);
+					memcpy(decompressed.data() + (k << 16), src + 1, src_len - 1);
 					decoded_bytes = src_len - 1;
 				}
 				else
 				{
-					decoded_bytes = DecompressLZVN(dst, 0x10000, src, src_len);
+					decoded_bytes = DecompressLZVN(decompressed.data() + (k << 16), expected_len, src, src_len);
+				}
+
+				if (decoded_bytes != expected_len)
+				{
+					if (g_debug & Dbg_Errors)
+						std::cout << "Decmpfs: Expected length != decompressed length: " << expected_len << " != " << decoded_bytes << std::endl;
+
+					return false;
 				}
 			}
 
-			if (expected_len != decoded_bytes)
-			{
-				if (g_debug & Dbg_Errors)
-					std::cout << "Decmpfs: Expected len != decompressed len: " << expected_len << " != " << decoded_bytes << std::endl;
-				return false;
-			}
+			decompressed.resize(hdr->size);
+
+			return rc;
 		}
 
 		decompressed.resize(hdr->size);
