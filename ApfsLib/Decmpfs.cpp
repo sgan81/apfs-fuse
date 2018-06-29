@@ -113,6 +113,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 	if (IsDecompAlgoInRsrc(hdr->algo))
 	{
 		std::vector<uint8_t> rsrc;
+		size_t k;
 
 		bool rc = dir.GetAttribute(rsrc, ino, "com.apple.ResourceFork");
 
@@ -142,9 +143,6 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 
 			decompressed.resize((hdr->size + 0xFFFF) & 0xFFFF0000);
 
-			size_t k;
-			size_t off = 0;
-
 			for (k = 0; k < cmpf_rsrc->entries; k++)
 			{
 				size_t src_offset = cmpf_rsrc->entry[k].off;
@@ -162,36 +160,21 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 					return false;
 				}
 
-				if (hdr->algo == 4) // Zlib
+				if (src[0] == 0x78)
 				{
-					if (src[0] == 0x78)
-					{
-						decoded_bytes = DecompressZLib(dst, 0x10000, src, src_len);
-					}
-					else if ((src[0] & 0x0F) == 0x0F)
-					{
-						memcpy(dst, src + 1, src_len - 1);
-						decoded_bytes = src_len - 1;
-					}
-					else
-					{
-						if (g_debug & Dbg_Errors)
-							std::cout << "Decmpfs: Something wrong with zlib data." << std::endl;
-						decompressed.clear();
-						return false;
-					}
+					decoded_bytes = DecompressZLib(dst, 0x10000, src, src_len);
 				}
-				else if (hdr->algo == 8) // LZVN
+				else if ((src[0] & 0x0F) == 0x0F)
 				{
-					if (src[0] == 0x06)
-					{
-						memcpy(decompressed.data() + 0x10000 * k, src + 1, src_len - 1);
-						decoded_bytes = src_len - 1;
-					}
-					else
-					{
-						decoded_bytes = DecompressLZVN(dst, 0x10000, src, src_len);
-					}
+					memcpy(dst, src + 1, src_len - 1);
+					decoded_bytes = src_len - 1;
+				}
+				else
+				{
+					if (g_debug & Dbg_Errors)
+						std::cout << "Decmpfs: Something wrong with zlib data." << std::endl;
+					decompressed.clear();
+					return false;
 				}
 
 				if (expected_len != decoded_bytes)
@@ -204,17 +187,6 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		}
 		else if (hdr->algo == 8)
 		{
-			std::vector<uint8_t> rsrc;
-			size_t k;
-
-			bool rc = dir.GetAttribute(rsrc, ino, "com.apple.ResourceFork");
-
-			if (!rc)
-			{
-				decompressed.clear();
-				return false;
-			}
-
 			const uint32_t *off_list = reinterpret_cast<const uint32_t *>(rsrc.data());
 
 			decompressed.resize((hdr->size + 0xFFFF) & 0xFFFF0000);
@@ -224,8 +196,8 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 				size_t expected_len = hdr->size - (0x10000 * k);
 				if (expected_len > 0x10000)
 					expected_len = 0x10000;
-				const uint8_t *src = compressed.data() + off_list[k];
-				const uint32_t src_len = off_list[k + 1] - off_list[k];
+				const uint8_t *src = rsrc.data() + off_list[k];
+				size_t src_len = off_list[k + 1] - off_list[k];
 
 				if (src_len > 0x10001)
 				{
@@ -247,15 +219,11 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 				if (decoded_bytes != expected_len)
 				{
 					if (g_debug & Dbg_Errors)
-						std::cout << "Decmpfs: Expected length != decompressed length: " << expected_len << " != " << decoded_bytes << std::endl;
+						std::cout << "Decmpfs: Expected length != decompressed length: " << expected_len << " != " << decoded_bytes << " [k = " << k << "]" << std::endl;
 
 					return false;
 				}
 			}
-
-			decompressed.resize(hdr->size);
-
-			return rc;
 		}
 
 		decompressed.resize(hdr->size);
