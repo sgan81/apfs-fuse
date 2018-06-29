@@ -125,7 +125,7 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 					{
 						st.st_size = decmpfs->size;
 						// st.st_blocks = data.size() / 512;
-						if (g_debug > 0)
+						if (g_debug & Dbg_Cmpfs)
 							std::cout << "Compressed size " << decmpfs->size << " bytes." << std::endl;
 					}
 					else if (IsDecompAlgoInRsrc(decmpfs->algo))
@@ -219,12 +219,12 @@ static void apfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 	bool rc = false;
 	struct stat st;
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << "apfs_getattr: ino=" << ino << " => ";
 
 	rc = apfs_stat_internal(ino, st);
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << (rc ? "OK" : "FAIL") << std::endl;
 
 	if (rc)
@@ -240,12 +240,12 @@ static void apfs_getxattr_mac(fuse_req_t req, fuse_ino_t ino, const char *name, 
 	bool rc = false;
 	std::vector<uint8_t> data;
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << "apfs_getxattr: " << std::hex << ino << " " << name << " => ";
 
 	rc = dir.GetAttribute(data, ino, name);
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << (rc ? "OK" : "FAIL") << std::endl;
 
 	if (!rc)
@@ -266,12 +266,12 @@ static void apfs_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 	bool rc = false;
 	std::vector<uint8_t> data;
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << "apfs_getxattr: " << std::hex << ino << " " << name << " => ";
 
 	rc = dir.GetAttribute(data, ino, name);
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << (rc ? "OK" : "FAIL") << std::endl;
 
 	if (!rc)
@@ -295,14 +295,14 @@ static void apfs_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 
 	rc = dir.ListAttributes(names, ino);
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << "apfs_listxattr:" << std::endl;
 
 	if (rc)
 	{
 		for (size_t k = 0; k < names.size(); k++)
 		{
-			if (g_debug > 0)
+			if (g_debug & Dbg_Info)
 				std::cout << names[k] << std::endl;
 			reply.append(names[k]);
 			reply.push_back(0);
@@ -319,7 +319,7 @@ static void apfs_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 
 static void apfs_lookup(fuse_req_t req, fuse_ino_t ino, const char *name)
 {
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << "apfs_lookup: ino=" << ino << " name=" << name << " => ";
 
 	ApfsDir dir(*g_volume);
@@ -328,7 +328,7 @@ static void apfs_lookup(fuse_req_t req, fuse_ino_t ino, const char *name)
 
 	rc = dir.LookupName(res, ino, name);
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << (rc ? "OK" : "FAIL") << std::endl;
 
 	if (!rc)
@@ -345,7 +345,7 @@ static void apfs_lookup(fuse_req_t req, fuse_ino_t ino, const char *name)
 
 		rc = apfs_stat_internal(res.inode_id, e.attr);
 
-		if (g_debug > 0)
+		if (g_debug & Dbg_Info)
 			std::cout << "    apfs_stat_internal => " << (rc ? "OK" : "FAIL") << std::endl;
 
 		fuse_reply_entry(req, &e);
@@ -354,7 +354,7 @@ static void apfs_lookup(fuse_req_t req, fuse_ino_t ino, const char *name)
 
 static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << std::hex << "apfs_open: " << ino << std::endl;
 
 	bool rc;
@@ -390,7 +390,7 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 				return;
 			}
 
-			if (g_debug > 0)
+			if (g_debug & Dbg_Info)
 			{
 				std::cout << "Inode info: size=" << f->ino.sizes.size
 				          << ", size_on_disk=" << f->ino.sizes.size_on_disk << std::endl;
@@ -413,7 +413,7 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 
 static void apfs_opendir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << std::hex << "apfs_opendir: " << ino << std::endl;
 
 	Directory *dir = new Directory();
@@ -428,7 +428,7 @@ static void apfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, st
 	ApfsDir dir(*g_volume);
 	File *file = reinterpret_cast<File *>(fi->fh);
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << std::hex << "apfs_read: ino=" << ino << " size=" << size << " off=" << off << std::endl;
 
 	if (!file->IsCompressed())
@@ -487,7 +487,7 @@ static void apfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 	std::vector<char> &dirbuf = dirptr->dirbuf;
 	bool rc;
 
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << "apfs_readdir: " << std::hex << ino << std::endl;
 
 	if (dirbuf.size() == 0)
@@ -540,7 +540,7 @@ static void apfs_readlink(fuse_req_t req, fuse_ino_t ino)
 
 static void apfs_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << std::hex << "apfs_release " << ino << std::endl;
 
 	File *file = reinterpret_cast<File *>(fi->fh);
@@ -551,7 +551,7 @@ static void apfs_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
 
 static void apfs_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	if (g_debug > 0)
+	if (g_debug & Dbg_Info)
 		std::cout << std::hex << "apfs_releasedir " << ino << std::endl;
 
 	Directory *dir = reinterpret_cast<Directory *>(fi->fh);
@@ -714,7 +714,7 @@ int main(int argc, char *argv[])
 		rc = gpt.LoadAndVerify(*g_disk);
 		if (rc)
 		{
-			if (g_debug > 0)
+			if (g_debug & Dbg_Info)
 				std::cout << "Found valid GPT partition table. Looking for APFS partition." << std::endl;
 
 			if (partition_id == -1)
