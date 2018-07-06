@@ -34,11 +34,12 @@ The following libraries are needed (including the -dev/-devel packages):
 Development tools:
 * cmake
 * gcc-c++ (or clang++)
+* git (for cloning)
 
 Example for Linux:
 ```
 sudo apt update
-sudo apt install fuse libfuse-dev libicu-dev bzip2 libbz2-dev
+sudo apt install fuse libfuse-dev libicu-dev bzip2 libbz2-dev cmake gcc-c++ git
 ```
 Clone the repository:
 ```
