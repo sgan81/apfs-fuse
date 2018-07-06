@@ -35,6 +35,11 @@ Development tools:
 * cmake
 * gcc-c++ (or clang++)
 
+Example for Linux:
+```
+sudo apt update
+sudo apt install fuse libfuse-dev libicu-dev bzip2 libbz2-dev
+```
 Clone the repository:
 ```
 git clone https://github.com/sgan81/apfs-fuse.git
