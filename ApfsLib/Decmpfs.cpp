@@ -240,7 +240,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			}
 			else if (cdata[0] == 0xFF) // cdata[0] & 0x0F == 0x0F ?
 			{
-				assert(hdr->size = csize - 1);
+				assert(hdr->size == csize - 1);
 				decompressed.assign(cdata + 1, cdata + csize);
 				decoded_bytes = decompressed.size();
 			}
@@ -252,7 +252,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			// TODO: Test if lzvn decompresses correctly if data starts with 0x06 ...
 			if (cdata[0] == 0x06)
 			{
-				assert(hdr->size = csize - 1);
+				assert(hdr->size == csize - 1);
 				decompressed.assign(cdata + 1, cdata + csize);
 				decoded_bytes = decompressed.size();
 			}
