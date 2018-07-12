@@ -28,55 +28,26 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 #include "Crc32.h"
 #include "Aes.h"
 
-#include "DeviceImageDisk.h"
+#include "Device.h"
 
 #undef DMG_DEBUG
 
-class DeviceDMG : public DeviceImageDisk
+class DeviceImageDisk : public Device
 {
-	struct DmgSection
-	{
-		DmgSection();
-		~DmgSection();
-
-		uint32_t method;
-		uint32_t comment;
-		uint64_t disk_offset;
-		uint64_t disk_length;
-		uint64_t dmg_offset;
-		uint64_t dmg_length;
-		uint8_t *cache;
-	};
-
 public:
-	DeviceDMG();
-	~DeviceDMG();
+	DeviceImageDisk();
+	~DeviceImageDisk();
 
-	bool Open(const char *name) override;
-	void Close() override;
+	virtual void ReadRaw(void* data, size_t size, off_t off) = 0;
+	void ReadInternal(uint64_t off, void *data, size_t size);
 
-	bool Read(void *data, uint64_t offs, uint64_t len) override;
-	uint64_t GetSize() const override;
+	bool SetupEncryptionV2(std::ifstream& m_dmg);
 
-private:
-	bool ProcessHeaderXML(uint64_t off, uint64_t size);
-	// bool ProcessHeaderRsrc(uint64_t off, uint64_t size);
-
-	void ProcessMish(const uint8_t *data, size_t size);
-
-	void ReadRaw(void* data, size_t size, off_t off) override;
-
-	std::ifstream m_dmg;
-	uint64_t m_size;
-
-	bool m_is_raw;
-
+protected:
 	AES m_aes;
-	Crc32 m_crc;
-
-	std::vector<DmgSection> m_sections;
-
-#ifdef DMG_DEBUG
-	std::ofstream m_dbg;
-#endif
+	bool m_is_encrypted;
+	uint64_t m_crypt_offset;
+	uint64_t m_crypt_size;
+	uint32_t m_crypt_blocksize;
+	uint8_t m_hmac_key[0x14];
 };

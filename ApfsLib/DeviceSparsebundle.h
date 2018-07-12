@@ -32,51 +32,29 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 
 #undef DMG_DEBUG
 
-class DeviceDMG : public DeviceImageDisk
+class DeviceSparsebundle : public DeviceImageDisk
 {
-	struct DmgSection
-	{
-		DmgSection();
-		~DmgSection();
-
-		uint32_t method;
-		uint32_t comment;
-		uint64_t disk_offset;
-		uint64_t disk_length;
-		uint64_t dmg_offset;
-		uint64_t dmg_length;
-		uint8_t *cache;
-	};
-
 public:
-	DeviceDMG();
-	~DeviceDMG();
+	DeviceSparsebundle();
+	~DeviceSparsebundle();
 
-	bool Open(const char *name) override;
-	void Close() override;
+	virtual bool Open(const char *name);
+	virtual void Close();
 
-	bool Read(void *data, uint64_t offs, uint64_t len) override;
-	uint64_t GetSize() const override;
+	virtual void ReadRaw(void* data, size_t size, off_t off);
+
+	virtual bool Read(void *data, uint64_t offs, uint64_t len);
+	uint64_t GetSize() const;
 
 private:
-	bool ProcessHeaderXML(uint64_t off, uint64_t size);
-	// bool ProcessHeaderRsrc(uint64_t off, uint64_t size);
+    char* m_path;
+	char* m_band_path;
+	char* m_band_path_band_number_start;
 
-	void ProcessMish(const uint8_t *data, size_t size);
+    size_t m_band_size;
+    size_t m_blocksize;
+    off_t m_size;
+    off_t m_opened_file_band_number;
+    int m_opened_file_fd;
 
-	void ReadRaw(void* data, size_t size, off_t off) override;
-
-	std::ifstream m_dmg;
-	uint64_t m_size;
-
-	bool m_is_raw;
-
-	AES m_aes;
-	Crc32 m_crc;
-
-	std::vector<DmgSection> m_sections;
-
-#ifdef DMG_DEBUG
-	std::ofstream m_dbg;
-#endif
 };

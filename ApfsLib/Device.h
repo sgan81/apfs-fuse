@@ -20,6 +20,29 @@
 #pragma once
 
 #include <cstdint>
+#include <exception>
+
+#include <stdio.h> // for asprintf
+#include <stdarg.h> // for va_list
+#include <stdlib.h> // for free
+
+class DeviceException : public std::exception
+{
+public:
+	DeviceException(const char* format, ...)
+	{
+		va_list ap;
+		va_start(ap, format);
+		vasprintf(&m_reason, format, ap);
+		va_end(ap);
+	}
+	virtual ~DeviceException() { free(m_reason); }
+
+	const char *what() const noexcept override { return m_reason; }
+
+private:
+	char *m_reason;
+};
 
 class Device
 {

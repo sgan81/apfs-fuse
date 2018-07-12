@@ -26,6 +26,8 @@
 #include "DeviceLinux.h"
 #include "DeviceMac.h"
 #include "DeviceDMG.h"
+#include "DeviceSparsebundle.h"
+#include "DeviceDMG.h"
 
 #undef DISABLE_DMG
 
@@ -41,7 +43,7 @@ Device * Device::OpenDevice(const char * name)
 {
 	Device *dev = nullptr;
 #ifndef DISABLE_DMG
-	DeviceDMG *dmg = nullptr;
+	DeviceImageDisk *dmg = nullptr;
 #endif
 	bool rc;
 
@@ -63,8 +65,16 @@ Device * Device::OpenDevice(const char * name)
 #endif
 #else
 #ifndef DISABLE_DMG
-	if (strncmp(name, "/dev/", 5))
-		dmg = new DeviceDMG();
+	if (strncmp(name, "/dev/", 5)) {
+		if (strstr(name, ".sparsebundle") != name+strlen(name)-strlen(".sparsebundle"))
+			dmg = new DeviceDMG();
+	}
+#endif
+#ifndef DISABLE_SPARSEBUNDLE
+	if (strncmp(name, "/dev/", 5) != 0) {
+		if (strstr(name, ".sparsebundle") == name+strlen(name)-strlen(".sparsebundle"))
+			dmg = new DeviceSparsebundle();
+	}
 #endif
 #endif
 #ifndef DISABLE_DMG
