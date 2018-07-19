@@ -33,7 +33,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #ifdef __linux__
-#include <attr/xattr.h>
+#include <sys/xattr.h>
 #endif
 
 #include <ApfsLib/ApfsContainer.h>
@@ -249,7 +249,7 @@ static void apfs_getxattr_mac(fuse_req_t req, fuse_ino_t ino, const char *name, 
 		std::cout << (rc ? "OK" : "FAIL") << std::endl;
 
 	if (!rc)
-		fuse_reply_err(req, ENOATTR);
+		fuse_reply_err(req, ENODATA);
 	else
 	{
 		if (size == 0)
@@ -275,7 +275,7 @@ static void apfs_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 		std::cout << (rc ? "OK" : "FAIL") << std::endl;
 
 	if (!rc)
-		fuse_reply_err(req, ENOATTR);
+		fuse_reply_err(req, ENODATA);
 	else
 	{
 		if (size == 0)
