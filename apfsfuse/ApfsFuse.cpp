@@ -184,8 +184,8 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 		st.st_mtimespec.tv_nsec = rec.ino.mtime % div_nsec;
 		st.st_ctimespec.tv_sec = rec.ino.ctime / div_nsec;
 		st.st_ctimespec.tv_nsec = rec.ino.ctime % div_nsec;
-		st.st_atimespec.tv_sec = rec.ino.ctime / div_nsec;
-		st.st_atimespec.tv_nsec = rec.ino.ctime % div_nsec;
+		st.st_atimespec.tv_sec = rec.ino.atime / div_nsec;
+		st.st_atimespec.tv_nsec = rec.ino.atime % div_nsec;
 #endif
 		return true;
 	}
