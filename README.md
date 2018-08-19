@@ -34,7 +34,13 @@ The following libraries are needed (including the -dev/-devel packages):
 Development tools:
 * cmake
 * gcc-c++ (or clang++)
+* git (for cloning)
 
+Example for Linux:
+```
+sudo apt update
+sudo apt install fuse libfuse-dev libicu-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev
+```
 Clone the repository:
 ```
 git clone https://github.com/sgan81/apfs-fuse.git
