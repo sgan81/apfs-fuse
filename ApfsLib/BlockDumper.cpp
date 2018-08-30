@@ -1,4 +1,4 @@
-﻿/*
+/*
 	This file is part of apfs-fuse, a read-only implementation of APFS
 	(Apple File System) for FUSE.
 	Copyright (C) 2017 Simon Gander
@@ -18,6 +18,7 @@
 */
 
 #include "BlockDumper.h"
+#include "Decmpfs.h"
 #include "Util.h"
 
 #include <ctime>
@@ -51,7 +52,7 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 
 	m_os << hex << uppercase << setfill('0');
 
-	const APFS_BlockHeader * const node = reinterpret_cast<const APFS_BlockHeader *>(m_block);
+	const APFS_ObjHeader * const node = reinterpret_cast<const APFS_ObjHeader *>(m_block);
 	// const APFS_BTHeader * const bt = reinterpret_cast<const APFS_BTHeader *>(m_block + 0x28);
 
 	if (IsEmptyBlock(m_block, m_blocksize))
@@ -63,8 +64,12 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 
 	if (!VerifyBlock(m_block, m_blocksize))
 	{
+		/*
 		m_os << setw(16) << blk_nr << " !!! CHECKSUM ERROR !!!" << endl;
 		m_block = nullptr;
+		*/
+		m_os << setw(16) << blk_nr << ":" << endl;
+		DumpBlockHex();
 		return;
 	}
 
@@ -75,37 +80,41 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 
 	DumpNodeHeader(node, blk_nr);
 
-	switch (node->type)
+	switch (node->o_type & 0xFFFFFFF)
 	{
 	case 0x0001: // NXSB Block
-		DumpBlk_8_1();
+		DumpBlk_NXSB();
 		break;
 	case 0x0002: // BTree Root
 	case 0x0003: // BTree Node
 		DumpBTNode_0();
 		break;
 	case 0x0005:
-		DumpBlk_8_5();
+		DumpBlk_SM();
 		break;
 	case 0x0007: // Bitmap Block List
-		DumpBlk_4_7();
+		DumpBlk_CIB();
 		break;
 	case 0x000B: // Pointer to Header (?)
-		DumpBlk_4_B();
+		DumpBlk_OM();
 		break;
 	case 0x000C: // Another Mapping
-		DumpBlk_4_C();
+		DumpBlk_CPM();
 		break;
 	case 0x000D: // APSB Block
-		DumpBlk_0_D();
+		DumpBlk_APSB();
 		break;
 	case 0x0011:
-		DumpBlk_8_11();
+		DumpBlk_NR();
+		break;
+	case 0x12:
+		DumpBlk_NRL();
 		break;
 
 	default:
 		// assert(false);
-		std::cerr << "!!! UNKNOWN NODE TYPE " << hex << setw(4) << node->type << " in block " << setw(16) << blk_nr << " !!!" << endl;
+		std::cerr << "!!! UNKNOWN NODE TYPE " << hex << setw(8) << node->o_type << " in block " << setw(16) << blk_nr << " !!!" << endl;
+		m_os << "!!! UNKNOWN NODE TYPE !!!" << endl;
 		DumpBlockHex();
 		break;
 	}
@@ -117,26 +126,25 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 	m_block = nullptr;
 }
 
-void BlockDumper::DumpNodeHeader(const APFS_BlockHeader *blk, uint64_t blk_nr)
+void BlockDumper::DumpNodeHeader(const APFS_ObjHeader *blk, uint64_t blk_nr)
 {
-	m_os << "[Block]          | Checksum         | Node ID          | Transaction ID   | Type | Flgs | Subtype  | Description" << endl;
-	m_os << "-----------------+------------------+------------------+------------------+------+------+----------+-----------------------" << endl;
+	m_os << "[paddr]          | cksum            | oid              | xid              | type     | subtype  | description" << endl;
+	m_os << "-----------------+------------------+------------------+------------------+----------+----------+-----------------------" << endl;
 
 	m_os << setw(16) << blk_nr << " | ";
-	m_os << setw(16) << blk->checksum << " | ";
-	m_os << setw(16) << blk->nid << " | ";
-	m_os << setw(16) << blk->xid << " | ";
-	m_os << setw(4) << blk->type << " | ";
-	m_os << setw(4) << blk->flags << " | ";
-	m_os << setw(8) << blk->subtype << " | ";
-	m_os << GetNodeType(blk->type, blk->subtype) << endl;
+	m_os << setw(16) << blk->o_cksum << " | ";
+	m_os << setw(16) << blk->o_oid << " | ";
+	m_os << setw(16) << blk->o_xid << " | ";
+	m_os << setw(8) << blk->o_type << " | ";
+	m_os << setw(8) << blk->o_subtype << " | ";
+	m_os << GetNodeType(blk->o_type, blk->o_subtype) << endl;
 	m_os << endl;
 }
 
 
 void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_size)
 {
-	const APFS_BlockHeader * const hdr = reinterpret_cast<const APFS_BlockHeader *>(m_block);
+	const APFS_ObjHeader * const hdr = reinterpret_cast<const APFS_ObjHeader *>(m_block);
 	const APFS_BTHeader * const bt = reinterpret_cast<const APFS_BTHeader *>(m_block + 0x20);
 	const bool is_index = bt->level > 0;
 
@@ -151,8 +159,8 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 
 	DumpBTHeader();
 
-	base = bt->keys_offs + bt->keys_len + 0x38;
-	end = (hdr->type == BlockType_BTRoot) ? (m_blocksize - sizeof(APFS_BTFooter)) : m_blocksize;
+	base = bt->table_space_offset + bt->table_space_length + 0x38;
+	end = (APFS_OBJ_TYPE(hdr->o_type) == BlockType_BTRoot) ? (m_blocksize - sizeof(APFS_BTFooter)) : m_blocksize;
 
 #if 0
 	if (bt->unk_30 != 0x0000 && bt->unk_32 != 0xFFFF && bt->unk_32 != 0x0000)
@@ -174,15 +182,15 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 		{
 			m_os << "!!! UNKNOWN FIXED KEY / VALUE SIZE !!!" << endl << endl;
 
-			if (hdr->type == BlockType_BTRoot)
+			if (APFS_OBJ_TYPE(hdr->o_type) == BlockType_BTRoot)
 				DumpBTFooter();
 
 			return;
 		}
 
-		const APFS_BTEntryFixed * const entry = reinterpret_cast<const APFS_BTEntryFixed *>(m_block + (bt->keys_offs + 0x38));
+		const APFS_BTEntryFixed * const entry = reinterpret_cast<const APFS_BTEntryFixed *>(m_block + (bt->table_space_offset + 0x38));
 
-		for (k = 0; k < bt->entries_cnt; k++)
+		for (k = 0; k < bt->key_count; k++)
 		{
 			assert(entry[k].key_offs != 0xFFFF);
 
@@ -199,9 +207,9 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 	}
 	else
 	{
-		const APFS_BTEntry * const entry = reinterpret_cast<const APFS_BTEntry *>(m_block + (bt->keys_offs + 0x38));
+		const APFS_BTEntry * const entry = reinterpret_cast<const APFS_BTEntry *>(m_block + (bt->table_space_offset + 0x38));
 
-		for (k = 0; k < bt->entries_cnt; k++)
+		for (k = 0; k < bt->key_count; k++)
 		{
 			assert(entry[k].key_offs != 0xFFFF);
 
@@ -219,7 +227,7 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 
 	m_os << endl;
 
-	if (hdr->type == BlockType_BTRoot)
+	if (APFS_OBJ_TYPE(hdr->o_type) == BlockType_BTRoot)
 		DumpBTFooter();
 }
 
@@ -227,26 +235,26 @@ void BlockDumper::DumpBTHeader(bool dump_offsets)
 {
 	const APFS_BTHeader *bt = reinterpret_cast<const APFS_BTHeader *>(m_block + 0x20);
 
-	m_os << "Flgs | Levl | Entries  | Keys Area   | Free Area   | ? Area      | ? Area" << endl;
+	m_os << "Flgs | Levl | Key Cnt  | Table Area  | Free Area   | Key Free L  | Val Free L" << endl;
 	m_os << "-----+------+----------+-------------+-------------+-------------+------------" << endl;
 
 	m_os << setw(4) << bt->flags << " | ";
 	m_os << setw(4) << bt->level << " | ";
-	m_os << setw(8) << bt->entries_cnt << " | ";
-	m_os << setw(4) << bt->keys_offs << " L " << setw(4) << bt->keys_len << " | ";
-	m_os << setw(4) << bt->free_offs << " L " << setw(4) << bt->free_len << " | ";
-	m_os << setw(4) << bt->unk_30 << " L " << setw(4) << bt->unk_32 << " | ";
-	m_os << setw(4) << bt->unk_34 << " L " << setw(4) << bt->unk_36 << endl;
+	m_os << setw(8) << bt->key_count << " | ";
+	m_os << setw(4) << bt->table_space_offset << " L " << setw(4) << bt->table_space_length << " | ";
+	m_os << setw(4) << bt->free_space_offset << " L " << setw(4) << bt->free_space_length << " | ";
+	m_os << setw(4) << bt->key_free_list_space_offset << " L " << setw(4) << bt->key_free_list_space_length << " | ";
+	m_os << setw(4) << bt->val_free_list_space_offset << " L " << setw(4) << bt->val_free_list_space_length << endl;
 	m_os << endl;
 
 	if (dump_offsets)
 	{
-		m_os << "Index:  " << setw(4) << bt->keys_offs << " L " << setw(4) << bt->keys_len;
-		m_os << " [" << setw(4) << (0x38 + bt->keys_offs) << " - " << setw(4) << (0x38 + bt->keys_offs + bt->keys_len) << "]" << endl;
-		m_os << "Free:   " << setw(4) << bt->free_offs << " L " << setw(4) << bt->free_len;
-		m_os << " [" << setw(4) << (0x38 + bt->keys_offs + bt->keys_len + bt->free_offs) << " - " << setw(4) << (0x38 + bt->keys_offs + bt->keys_len + bt->free_offs + bt->free_len) << "]" << endl;
-		m_os << "Unk1:   " << setw(4) << bt->unk_30 << " L " << setw(4) << bt->unk_32 << endl;
-		m_os << "Unk2:   " << setw(4) << bt->unk_34 << " L " << setw(4) << bt->unk_36 << endl;
+		m_os << "Index:  " << setw(4) << bt->table_space_offset << " L " << setw(4) << bt->table_space_length;
+		m_os << " [" << setw(4) << (0x38 + bt->table_space_offset) << " - " << setw(4) << (0x38 + bt->table_space_offset + bt->table_space_length) << "]" << endl;
+		m_os << "Free:   " << setw(4) << bt->free_space_offset << " L " << setw(4) << bt->free_space_length;
+		m_os << " [" << setw(4) << (0x38 + bt->table_space_offset + bt->table_space_length + bt->free_space_offset) << " - " << setw(4) << (0x38 + bt->table_space_offset + bt->table_space_length + bt->free_space_offset + bt->free_space_length) << "]" << endl;
+		m_os << "K Free: " << setw(4) << bt->key_free_list_space_offset << " L " << setw(4) << bt->key_free_list_space_length << endl;
+		m_os << "V Free: " << setw(4) << bt->val_free_list_space_offset << " L " << setw(4) << bt->val_free_list_space_length << endl;
 		m_os << endl;
 
 		size_t cnt;
@@ -256,9 +264,9 @@ void BlockDumper::DumpBTHeader(bool dump_offsets)
 		{
 			const APFS_BTEntryFixed *e = reinterpret_cast<const APFS_BTEntryFixed *>(m_block + 0x38);
 
-			cnt = bt->keys_len / 4;
+			cnt = bt->table_space_length / 4;
 
-			for (k = 0; k < bt->entries_cnt; k++)
+			for (k = 0; k < bt->key_count; k++)
 				m_os << setw(2) << k << " : " << setw(4) << e[k].key_offs << " => " << setw(4) << e[k].value_offs << endl;
 			m_os << "-----------------" << endl;
 			for (; k < cnt; k++)
@@ -273,9 +281,9 @@ void BlockDumper::DumpBTHeader(bool dump_offsets)
 		{
 			const APFS_BTEntry *e = reinterpret_cast<const APFS_BTEntry *>(m_block + 0x38);
 
-			cnt = bt->keys_len / 8;
+			cnt = bt->table_space_length / 8;
 
-			for (k = 0; k < bt->entries_cnt; k++)
+			for (k = 0; k < bt->key_count; k++)
 			{
 				m_os << setw(2) << k << " : ";
 				m_os << setw(4) << e[k].key_offs << " L " << setw(4) << e[k].key_len << " => ";
@@ -302,14 +310,14 @@ void BlockDumper::DumpBTFooter()
 	const APFS_BTFooter * const tail = reinterpret_cast<const APFS_BTFooter *>(m_block + 0xFD8);
 
 	m_os << endl;
-	m_os << "Unk-FD8  | Unk-FE0  | MinKeySz | MinValSz | MaxKeySz | MaxValSz | Entries          | Nodes" << endl;
+	m_os << "Unk-FD8  | Nodesize | Key Size | Val Size | Key Max  | Val Max  | Key Count        | Node Count " << endl;
 	m_os << "---------+----------+----------+----------+----------+----------+------------------+-----------------" << endl;
 	m_os << setw(8) << tail->unk_FD8 << " | ";
-	m_os << setw(8) << tail->unk_FDC << " | ";
-	m_os << setw(8) << tail->min_key_size << " | ";
-	m_os << setw(8) << tail->min_val_size << " | ";
-	m_os << setw(8) << tail->max_key_size << " | ";
-	m_os << setw(8) << tail->max_val_size << " | ";
+	m_os << setw(8) << tail->nodesize << " | ";
+	m_os << setw(8) << tail->key_size << " | ";
+	m_os << setw(8) << tail->val_size << " | ";
+	m_os << setw(8) << tail->key_max_size << " | ";
+	m_os << setw(8) << tail->val_max_size << " | ";
 	m_os << setw(16) << tail->entries_cnt << " | ";
 	m_os << setw(16) << tail->nodes_cnt << endl;
 }
@@ -326,7 +334,7 @@ void BlockDumper::DumpTableHeader(const APFS_TableHeader &tbl)
 	m_os << endl;
 }
 
-void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index)
+void BlockDumper::DumpBTEntry_APFS_Root(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index)
 {
 	uint64_t key;
 	// uint16_t nlen;
@@ -353,9 +361,11 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 
 	switch (type)
 	{
+	// 1 = SnapMetadata
+	// 2 = PhysExtent
 	case 0x3:
 		assert(key_length == 8);
-		m_os << "File " << key << " => ";
+		m_os << "3/Inode " << key << " => ";
 
 		if (index)
 		{
@@ -364,16 +374,16 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 		}
 		else
 		{
-			assert(value_length >= sizeof(APFS_Inode));
+			assert(value_length >= sizeof(APFS_Inode_Val));
 
 			// m_os << "[" << setw(4) << value_length << "] ";
 
-			if (value_length >= sizeof(APFS_Inode))
+			if (value_length >= sizeof(APFS_Inode_Val))
 			{
-				const APFS_Inode *obj = reinterpret_cast<const APFS_Inode *>(value_data);
+				const APFS_Inode_Val *obj = reinterpret_cast<const APFS_Inode_Val *>(value_data);
 
 				m_os << obj->parent_id << " ";
-				m_os << obj->object_id << " ";
+				m_os << obj->private_id << " ";
 #if 0
 				m_os << obj->birthtime << " ";
 				m_os << obj->mtime << " ";
@@ -382,57 +392,19 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 #else
 				m_os << "[TS] ";
 #endif
-				m_os << obj->unk_30 << " " << obj->refcnt << " ";
-				m_os << obj->unk_40 << " " << obj->flags << " " << obj->uid << " " << obj->gid << " ";
+				m_os << obj->internal_flags << " ";
+				m_os << obj->nchildren << " ";
+				m_os << obj->default_protection_class << " ";
+				m_os << obj->gen_count << " ";
+				m_os << obj->bsd_flags << " ";
+				m_os << obj->uid << " ";
+				m_os << obj->gid << " ";
 				m_os << oct << obj->mode << hex << " ";
-				m_os << obj->unk_58 << " " << obj->entries_cnt << " " << obj->entries_len << " : ";
+				m_os << obj->pad1 << " ";
+				m_os << obj->uncompressed_size;
 
-				const APFS_InodeEntry *entry = reinterpret_cast<const APFS_InodeEntry *>(value_data + 0x60);
-				uint16_t entry_base = 0x60 + (obj->entries_cnt * sizeof(APFS_InodeEntry));
-				uint16_t k;
-
-				for (k = 0; k < obj->entries_cnt; k++)
-				{
-					m_os << setw(4) << entry[k].type << " ";
-					m_os << setw(4) << entry[k].len << " : ";
-
-					// DumpHex(value_data + entry_base, entry[k].len, entry[k].len);
-
-				}
-
-				for (k = 0; k < obj->entries_cnt; k++)
-				{
-					switch (entry[k].type)
-					{
-					case 0x0204:
-						m_os << '\'' << (value_data + entry_base) << '\'';
-						break;
-
-					case 0x2008:
-					{
-						const APFS_Inode_Sizes *ft = reinterpret_cast<const APFS_Inode_Sizes *>(value_data + entry_base);
-						m_os << ft->size << " " << ft->size_on_disk << " " << ft->unk_10 << " " << ft->size_2 << " " << ft->unk_20 << " ";
-
-						if (ft->size != ft->size_2)
-							m_os << "[???] ";
-
-						break;
-					}
-
-					case 0x280D:
-						m_os << *reinterpret_cast<const uint64_t *>(value_data + entry_base);
-						break;
-
-					default:
-						m_os << "[!!!] ";
-						DumpHex(value_data + entry_base, entry[k].len, entry[k].len);
-					}
-
-					entry_base += ((entry[k].len + 7) & 0xFFF8);
-
-					if (k < (obj->entries_cnt - 1))
-						m_os << " : ";
-				}
+				if (value_length > sizeof(APFS_Inode_Val))
+					Dump_XF(value_data + sizeof(APFS_Inode_Val), value_length - sizeof(APFS_Inode_Val));
 
 				m_os << endl;
 			}
@@ -447,7 +419,7 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 
 	case 0x4:
 		assert(key_length >= 10);
-		m_os << "Attr " << key << " ";
+		m_os << "4/Xattr " << key << " ";
 		// nlen = *reinterpret_cast<const uint16_t *>(key_data + 8);
 		m_os << '\'' << (key_data + 10) << '\'';
 
@@ -458,7 +430,7 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 		}
 		else
 		{
-			const APFS_Attribute *attr = reinterpret_cast<const APFS_Attribute *>(value_data);
+			const APFS_Xattr_Val *attr = reinterpret_cast<const APFS_Xattr_Val *>(value_data);
 
 			assert(attr->size + 4 == value_length);
 
@@ -466,10 +438,10 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 
 			if ((attr->type & 1) && attr->size == 0x30)
 			{
-				const APFS_AttributeLink *attrlnk = reinterpret_cast<const APFS_AttributeLink *>(value_data + 4);
+				const APFS_Xattr_External *attrlnk = reinterpret_cast<const APFS_Xattr_External *>(value_data + 4);
 
-				m_os << " : " << attrlnk->object_id << " " << attrlnk->size << " " << attrlnk->size_on_disk << " ";
-				m_os << attrlnk->unk[0] << " " << attrlnk->unk[1] << " " << attrlnk->unk[2] << endl;
+				m_os << " : " << attrlnk->obj_id << " " << attrlnk->stream.size << " " << attrlnk->stream.alloced_size << " ";
+				m_os << attrlnk->stream.default_crypto_id << " " << attrlnk->stream.unk_18 << " " << attrlnk->stream.unk_20 << endl;
 			}
 			else
 			{
@@ -486,12 +458,29 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 					std::string str(reinterpret_cast<const char *>(value_data + 4), value_length - 4);
 					m_os << " : '" << str << '\'' << endl;
 				}
-#ifndef DUMP_COMPRESSED
 				else if (!strcmp(attr_name, "com.apple.decmpfs"))
 				{
-					m_os << endl;
-					// Don't dump compressed data ...
+					if (value_length >= 20)
+					{
+						const CompressionHeader *cmpf = reinterpret_cast<const CompressionHeader *>(value_data + 4);
+						if (cmpf->signature == 0x636D7066)
+							m_os << " : 'cmpf' " << cmpf->algo << ' ' << cmpf->size;
+						else
+							m_os << " : [Compression Header Invalid]";
+#ifdef DUMP_COMPRESSED
+						if (value_length > 20)
+						{
+							m_os << endl;
+							DumpHex(value_data + 20, value_length - 20);
+						}
+#else
+						if (value_length > 20)
+							m_os << " ...";
+						m_os << endl;
+#endif
+					}
 				}
+#ifndef DUMP_COMPRESSED
 				else if (!strncmp(attr_name, "com.apple.metadata:", 19))
 				{
 					m_os << endl;
@@ -510,7 +499,7 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 
 	case 0x5:
 		assert(key_length == 0x10);
-		m_os << "HLnk " << key << " ";
+		m_os << "5/SiblingLink " << key << " ";
 		m_os << *reinterpret_cast<const uint64_t *>(key_data + 8) << " => ";
 
 		if (index)
@@ -520,23 +509,17 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 		}
 		else
 		{
-			struct Val_50
-			{
-				uint64_t id;
-				uint16_t namelen;
-			};
+			const APFS_Sibling_Val * const v = reinterpret_cast<const APFS_Sibling_Val *>(value_data);
 
-			const Val_50 * const v = reinterpret_cast<const Val_50 *>(value_data);
-
-			m_os << v->id << " ";
-			m_os << (value_data + 0xA);
+			m_os << v->parent_id << " ";
+			m_os << "'" << v->name << "'";
 			m_os << endl;
 		}
 		break;
 
 	case 0x6:
 		assert(key_length == 8);
-		m_os << "RefC " << key << " => ";
+		m_os << "6/DstreamID " << key << " => ";
 		if (index)
 		{
 			assert(value_length == 8);
@@ -554,14 +537,28 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 		break;
 
 	case 0x7:
+	{
 		assert(key_length == 8);
-		m_os << "Unk7 " << key << " => ";
-		DumpHex(value_data, value_length, value_length);
+		const APFS_Crypto_Val *c = reinterpret_cast<const APFS_Crypto_Val *>(value_data);
+
+		m_os << "7/CryptoState " << key << " => ";
+		m_os << c->refcnt << " : ";
+		m_os << c->state.major_version << " ";
+		m_os << c->state.minor_version << " ";
+		m_os << c->state.cpflags << " ";
+		m_os << c->state.persistent_class << " ";
+		m_os << c->state.key_os_version << " ";
+		m_os << c->state.key_revision << " ";
+		m_os << c->state.key_len << endl;
+
+		if (value_length > sizeof(APFS_Crypto_Val))
+			DumpHex(value_data + sizeof(APFS_Crypto_Val), value_length - sizeof(APFS_Crypto_Val));
+	}
 		break;
 
 	case 0x8:
 		assert(key_length == 16);
-		m_os << "Data " << key << " " << *reinterpret_cast<const uint64_t *>(key_data + 8) << " => ";
+		m_os << "8/FileExtent " << key << " " << *reinterpret_cast<const uint64_t *>(key_data + 8) << " => ";
 
 		m_os << hex;
 
@@ -576,8 +573,12 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 
 			if (value_length == 0x18)
 			{
-				const APFS_Extent *ext = reinterpret_cast<const APFS_Extent *>(value_data);
-				m_os << ext->size << " " << ext->block << " " << ext->xts_blkid << endl;
+				const APFS_FileExtent_Val *ext = reinterpret_cast<const APFS_FileExtent_Val *>(value_data);
+				uint16_t flags = ext->flags_length >> 56;
+				uint64_t length = ext->flags_length & 0xFFFFFFFFFFFFFFULL;
+				if (flags != 0)
+					m_os << flags << "/";
+				m_os << length << " " << ext->phys_block_num << " " << ext->crypto_id << endl;
 			}
 			else
 			{
@@ -592,7 +593,7 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 
 		// DumpHex(key_data, key_length, key_length);
 
-		m_os << "Name " << key << " ";
+		m_os << "9/DirRecord " << key << " ";
 
 		/*
 		nlen = *reinterpret_cast<const uint16_t *>(key_data + 8);
@@ -607,7 +608,7 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 			m_os << setw(8) << hash_stored << " ";
 
 #if 1 // Hash verify
-			uint32_t hash_calc = HashFilename(reinterpret_cast<const char *>(key_data + 12), hash_stored & 0x3FF, (m_text_flags & 0x09) == 0x01);
+			uint32_t hash_calc = HashFilename(reinterpret_cast<const char *>(key_data + 12), hash_stored & 0x3FF, (m_text_flags & APFS_APSB_CaseInsensitive) != 0);
 			m_os << "[" << setw(8) << hash_calc << "] ";
 
 			if (hash_calc != hash_stored)
@@ -633,28 +634,25 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 		}
 		else
 		{
-			if (value_length == 0x12)
-			{
-				const APFS_Name *ptr = reinterpret_cast<const APFS_Name *>(value_data);
-				m_os << ptr->id << " [" << tstamp(ptr->timestamp) << "] " << ptr->unk << endl;
-			}
-			else if (value_length == 0x22)
-			{
-				const APFS_Name *ptr = reinterpret_cast<const APFS_Name *>(value_data);
-				const APFS_Name_SLink *sptr = reinterpret_cast<const APFS_Name_SLink *>(value_data + 0x12);
-				m_os << ptr->id << " [" << tstamp(ptr->timestamp) << "] " << ptr->unk << " [???] ";
-				m_os << sptr->unk_12 << " " << sptr->unk_14 << " " << (int)sptr->unk_16 << " " << (int)sptr->unk_17 << " " << sptr->unk_18 << " " << sptr->obj_id << endl;
-			}
-			else
-			{
-				DumpHex(value_data, value_length);
-			}
+			const APFS_DRec_Val *ptr = reinterpret_cast<const APFS_DRec_Val *>(value_data);
+			m_os << ptr->file_id << " [" << tstamp(ptr->date_added) << "] " << ptr->flags;
+
+			if (value_length > sizeof(APFS_DRec_Val))
+				Dump_XF(value_data + sizeof(APFS_DRec_Val), value_length - sizeof(APFS_DRec_Val));
+
+			m_os << endl;
 		}
 
+#if 0
+		DumpHex(key_data + 12, key_length - 12);
+#endif
+
 		break;
+	// TODO: A = DirSize
+	// B = SnapName
 
 	case 0xC:
-		m_os << "HLk2 " << key << " => " << *reinterpret_cast<const uint64_t *>(value_data) << endl;
+		m_os << "C/SiblingMap " << key << " => " << *reinterpret_cast<const uint64_t *>(value_data) << endl;
 		break;
 
 	default:
@@ -666,74 +664,87 @@ void BlockDumper::DumpBTEntry_E(const byte_t *key_data, size_t key_length, const
 		break;
 	}
 
+#if 0
+	DumpHex(key_data, key_length);
+	DumpHex(value_data, value_length);
+#endif
+
 	m_os << hex;
 }
 
-void BlockDumper::DumpBTEntry_B(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
+void BlockDumper::DumpBTEntry_OMap(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
 	(void)key_length;
 	(void)value_length;
 
-	const APFS_Key_B_NodeID_Map *ekey = reinterpret_cast<const APFS_Key_B_NodeID_Map *>(key_ptr);
+	const APFS_OMap_Key *ekey = reinterpret_cast<const APFS_OMap_Key *>(key_ptr);
 
-	m_os << setw(16) << ekey->nid << " | ";
-	m_os << setw(16) << ekey->xid << " => ";
+	m_os << ekey->ok_oid << " ";
+	m_os << ekey->ok_xid << " => ";
 
 	if (index)
 	{
-		m_os << setw(16) << *reinterpret_cast<const uint64_t *>(val_ptr) << endl;
+		m_os << *reinterpret_cast<const uint64_t *>(val_ptr) << endl;
 	}
 	else
 	{
 		if (!val_ptr)
 		{
-			m_os << "-------- | -------- | ----------------" << endl;
+			m_os << "(NULL)" << endl;
 		}
 		else
 		{
-			const APFS_Value_B_NodeID_Map *val = reinterpret_cast<const APFS_Value_B_NodeID_Map *>(val_ptr);
+			const APFS_OMap_Val *val = reinterpret_cast<const APFS_OMap_Val *>(val_ptr);
 
-			m_os << setw(8) << val->flags << " | ";
-			m_os << setw(8) << val->size << " | ";
-			m_os << setw(16) << val->bid << endl;
+			m_os << val->ov_flags << " ";
+			m_os << val->ov_size << " ";
+			m_os << val->ov_paddr << endl;
 		}
 	}
 }
 
-void BlockDumper::DumpBTEntry_F(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
+void BlockDumper::DumpBTEntry_APFS_ExtentRef(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
 	(void)key_length;
 	(void)value_length;
 
 	assert(key_length == 8);
 	uint64_t key = *reinterpret_cast<const uint64_t *>(key_ptr);
+	uint16_t type = (key >> 60) & 0xF;
 
-	m_os << hex << setw(16) << key << " => ";
+	key &= 0xFFFFFFFFFFFFFFFULL;
+
+	m_os << hex << type << "/" << key << " => ";
 
 	if (index)
 	{
 		assert(value_length == 8);
-		m_os << setw(16) << *reinterpret_cast<const uint64_t *>(val_ptr) << endl;
+		m_os << *reinterpret_cast<const uint64_t *>(val_ptr) << endl;
 	}
 	else
 	{
 		if (!val_ptr)
 		{
-			m_os << "---------------- | ---------------- | --------" << endl;
+			m_os << "(NULL)" << endl;
 		}
 		else
 		{
-			assert(value_length == sizeof(APFS_Value_F));
-			const APFS_Value_F *val = reinterpret_cast<const APFS_Value_F *>(val_ptr);
+			assert(value_length == sizeof(APFS_ExtentRef_Val));
+			const APFS_ExtentRef_Val *val = reinterpret_cast<const APFS_ExtentRef_Val *>(val_ptr);
+			uint64_t len;
+			uint16_t flags;
 
-			m_os << setw(16) << val->block_cnt << " | ";
-			m_os << setw(16) << val->oid << " | ";
-			m_os << setw(8) << val->unk_10 << endl;
+			flags = (val->len >> 56) & 0xFF;
+			len = val->len & 0xFFFFFFFFFFFFFFULL;
+
+			m_os << flags << "/" << len << " ";
+			m_os << val->owning_obj_id << " ";
+			m_os << val->refcnt << endl;
 		}
 	}
 }
 
-void BlockDumper::DumpBTEntry_10(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
+void BlockDumper::DumpBTEntry_APFS_SnapMeta(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
 	(void)key_length;
 	(void)value_length;
@@ -769,16 +780,16 @@ void BlockDumper::DumpBTEntry_10(const byte_t * key_ptr, size_t key_length, cons
 			{
 			case 0x1:
 			{
-				const APFS_Value_10_1_Snapshot *val = reinterpret_cast<const APFS_Value_10_1_Snapshot *>(val_ptr);
-				m_os << setw(16) << val->bid_bomap << " ";
-				m_os << setw(16) << val->bid_apsb << " ";
+				const APFS_SnapMetadata_Val *val = reinterpret_cast<const APFS_SnapMetadata_Val *>(val_ptr);
+				m_os << setw(16) << val->extentref_tree_oid << " ";
+				m_os << setw(16) << val->sblock_oid << " ";
 				// m_os << setw(16) << val->tstamp_10 << " ";
 				// m_os << setw(16) << val->tstamp_18 << " ";
-				m_os << "[" << tstamp(val->tstamp_10) << "] ";
-				m_os << "[" << tstamp(val->tstamp_18) << "] ";
-				m_os << setw(16) << val->unk_20 << " ";
-				m_os << setw(8) << val->type_28 << " ";
-				m_os << setw(8) << val->unk_2C << " ";
+				m_os << "[" << tstamp(val->change_time) << "] ";
+				m_os << "[" << tstamp(val->create_time) << "] ";
+				m_os << setw(16) << val->inum << " ";
+				m_os << setw(8) << val->extentref_tree_type << " ";
+				m_os << setw(8) << val->flags << " ";
 				m_os << (val_ptr + 0x32);
 				break;
 			}
@@ -805,7 +816,7 @@ void BlockDumper::DumpBTEntry_13(const byte_t * key_ptr, size_t key_length, cons
 	m_os << endl;
 }
 
-void BlockDumper::DumpBTEntry_9(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
+void BlockDumper::DumpBTEntry_FreeList(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
 {
 	(void)key_length;
 	(void)value_length;
@@ -816,13 +827,13 @@ void BlockDumper::DumpBTEntry_9(const byte_t * key_ptr, size_t key_length, const
 	assert(key_length == 0x10);
 	assert(value_length == 0x08);
 
-	m_os << setw(16) << key->xid << " | ";
-	m_os << setw(16) << key->bid << " => ";
+	m_os << key->xid << " ";
+	m_os << key->bid << " => ";
 
 	if (!val_ptr)
-		m_os << "----------------" << endl;
+		m_os << "1/NULL" << endl;
 	else
-		m_os << setw(16) << *reinterpret_cast<const uint64_t *>(val_ptr) << endl;
+		m_os << *reinterpret_cast<const uint64_t *>(val_ptr) << endl;
 }
 
 void BlockDumper::DumpBTEntry_Unk(const byte_t * key_ptr, size_t key_length, const byte_t * val_ptr, size_t value_length, bool index)
@@ -836,60 +847,141 @@ void BlockDumper::DumpBTEntry_Unk(const byte_t * key_ptr, size_t key_length, con
 	m_os << std::endl;
 }
 
-void BlockDumper::DumpBlk_0_D()
+void BlockDumper::Dump_XF(const byte_t * xf_data, size_t xf_size)
+{
+	const APFS_XF_Header *h = reinterpret_cast<const APFS_XF_Header *>(xf_data);
+	const APFS_XF_Entry *e = reinterpret_cast<const APFS_XF_Entry *>(xf_data + sizeof(APFS_XF_Header));
+	uint16_t entry_base = h->xf_num_exts * sizeof(APFS_XF_Entry) + sizeof(APFS_XF_Header);
+	uint16_t k;
+	const byte_t *data;
+
+	if (xf_size < 4)
+	{
+		m_os << " [!!!XF size too small!!!]" << endl;
+		return;
+	}
+
+	m_os << " XF: " << h->xf_num_exts << " " << h->xf_used_data << " : ";
+
+	for (k = 0; k < h->xf_num_exts; k++)
+	{
+		m_os << setw(2) << static_cast<int>(e[k].xf_type) << " ";
+		m_os << setw(2) << static_cast<int>(e[k].xf_flags) << " ";
+		m_os << setw(4) << e[k].xf_length << " : ";
+	}
+
+	for (k = 0; k < h->xf_num_exts; k++)
+	{
+		data = xf_data + entry_base;
+
+		switch (e[k].xf_type)
+		{
+		case DREC_EXT_TYPE_SIBLING_ID:
+			m_os << "[SIB_ID] " << *reinterpret_cast<const uint64_t *>(data);
+			break;
+
+		case INO_EXT_TYPE_DOCUMENT_ID:
+			m_os << "[DOC_ID] " << *reinterpret_cast<const uint32_t *>(data);
+			break;
+
+		case INO_EXT_TYPE_NAME:
+			m_os << "[NAME] '" << data << "'";
+			break;
+
+		case INO_EXT_TYPE_DSTREAM:
+		{
+			const APFS_DStream *ft = reinterpret_cast<const APFS_DStream *>(data);
+			m_os << "[DSTREAM] ";
+			m_os << ft->size << " ";
+			m_os << ft->alloced_size << " ";
+			m_os << ft->default_crypto_id << " ";
+			m_os << ft->unk_18 << " ";
+			m_os << ft->unk_20;
+			break;
+		}
+
+		case INO_EXT_TYPE_DIR_STATS_KEY:
+			m_os << "[DIR_STATS] " << *reinterpret_cast<const uint64_t *>(data);
+			break;
+
+		case INO_EXT_TYPE_FS_UUID:
+			m_os << "[FS_UUID] " << uuidstr(*reinterpret_cast<const apfs_uuid_t *>(data));
+			break;
+
+		case INO_EXT_TYPE_SPARSE_BYTES:
+			m_os << "[SPARSE] " << *reinterpret_cast<const uint64_t *>(data);
+			break;
+
+		default:
+			m_os << "[!!!UNKNOWN!!!] ";
+			DumpHex(data, e[k].xf_length, e[k].xf_length);
+		}
+
+		entry_base += ((e[k].xf_length + 7) & 0xFFF8);
+
+		if (k < (h->xf_num_exts - 1))
+			m_os << " : ";
+	}
+}
+
+void BlockDumper::DumpBlk_APSB()
 {
 	const APFS_Superblock_APSB * const sb = reinterpret_cast<const APFS_Superblock_APSB *>(m_block);
 	int k;
 
 	m_os << hex;
-	m_os << "Signature        : " << setw(8) << sb->signature << endl;
-	m_os << "Unknown 0x24     : " << setw(8) << sb->unk_24 << endl;
-	m_os << "Features 0x28    : " << setw(16) << sb->features_28 << endl;
-	m_os << "Features 0x30    : " << setw(16) << sb->features_30 << endl;
-	m_os << "Features 0x38    : " << setw(16) << sb->features_38 << endl;
-	m_os << "Unknown 0x40     : " << setw(16) << sb->unk_40 << endl;
-	m_os << "Blocks Reserved  : " << setw(16) << sb->blocks_reserved << endl;
-	m_os << "Blocks Maximum   : " << setw(16) << sb->blocks_quota << endl;
-	m_os << "Unknown 0x58     : " << setw(16) << sb->unk_58 << endl;
+	m_os << "magic            : " << setw(8) << sb->apfs_magic << endl;
+	m_os << "fs_index         : " << setw(8) << sb->apfs_fs_index << endl;
+	m_os << "features         : " << setw(16) << sb->apfs_features << endl;
+	m_os << "ro_compat_feat   : " << setw(16) << sb->apfs_readonly_compatible_features << endl;
+	m_os << "incompat_feat    : " << setw(16) << sb->apfs_incompatible_features << endl;
+	m_os << "unmount_time     : " << setw(16) << sb->apfs_unmount_time << endl;
+	m_os << "reserve_blk_cnt  : " << setw(16) << sb->apfs_reserve_block_count << endl;
+	m_os << "quota_blk_cnt    : " << setw(16) << sb->apfs_quota_block_count << endl;
+	m_os << "fs_alloc_cnt     : " << setw(16) << sb->apfs_fs_alloc_count << endl;
 	m_os << "Unknown 0x60     : " << setw(16) << sb->unk_60 << endl;
 	m_os << "Unknown 0x68     : " << setw(8) << sb->unk_68 << endl;
 	m_os << "Unknown 0x6C     : " << setw(8) << sb->unk_6C << endl;
 	m_os << "Unknown 0x70     : " << setw(8) << sb->unk_70 << endl;
-	m_os << "Unknown 0x74     : " << setw(8) << sb->unk_74 << endl;
-	m_os << "Unknown 0x78     : " << setw(8) << sb->unk_78 << endl;
-	m_os << "Unknown 0x7C     : " << setw(8) << sb->unk_7C << endl;
-	m_os << "Block-ID NodeMap : " << setw(16) << sb->blockid_nodemap << endl;
-	m_os << "Node-ID Root Dir : " << setw(16) << sb->nodeid_rootdir << endl;
-	m_os << "Block-ID BlkMap  : " << setw(16) << sb->blockid_blockmap << endl;
-	m_os << "Block-ID 4/10    : " << setw(16) << sb->blockid_4xBx10_map << endl;
-	m_os << "Unknown 0xA0     : " << setw(16) << sb->unk_A0 << endl;
+	m_os << "root_tree_type   : " << setw(8) << sb->apfs_root_tree_type << endl;
+	m_os << "extentref_tree_t : " << setw(8) << sb->apfs_extentref_tree_type << endl;
+	m_os << "snap_meta_tree_t : " << setw(8) << sb->apfs_snap_meta_tree_type << endl;
+	m_os << "omap_oid         : " << setw(16) << sb->apfs_omap_oid << endl;
+	m_os << "root_tree_oid    : " << setw(16) << sb->apfs_root_tree_oid << endl;
+	m_os << "extentref_tree_o : " << setw(16) << sb->apfs_extentref_tree_oid << endl;
+	m_os << "snap_meta_tree_o : " << setw(16) << sb->apfs_snap_meta_tree_oid << endl;
+	m_os << "revert_to_xid    : " << setw(16) << sb->apfs_revert_to_xid << endl;
 	m_os << "Unknown 0xA8     : " << setw(16) << sb->unk_A8 << endl;
-	m_os << "Unknown 0xB0     : " << setw(16) << sb->unk_B0 << endl;
-	m_os << "Unknown 0xB8     : " << setw(16) << sb->unk_B8 << endl;
-	m_os << "Unknown 0xC0     : " << setw(16) << sb->unk_C0 << endl;
-	m_os << "Unknown 0xC8     : " << setw(16) << sb->unk_C8 << endl;
-	m_os << "Unknown 0xD0     : " << setw(16) << sb->unk_D0 << endl;
-	m_os << "Unknown 0xD8     : " << setw(16) << sb->unk_D8 << endl;
-	m_os << "Unknown 0xE0     : " << setw(16) << sb->unk_E0 << endl;
-	m_os << "Unknown 0xE8     : " << setw(16) << sb->unk_E8 << endl;
-	m_os << "GUID             : " << uuidstr(sb->guid) << endl;
-	m_os << "Timestamp 0x100  : " << tstamp(sb->timestamp_100) << endl;
-	m_os << "Version   0x108  : " << setw(16) << sb->flags_108 << endl;
-	for (k = 0; k < 9; k++)
+	m_os << "next_obj_id      : " << setw(16) << sb->apfs_next_obj_id << endl;
+	m_os << "num_files        : " << setw(16) << sb->apfs_num_files << endl;
+	m_os << "num_directories  : " << setw(16) << sb->apfs_num_directories << endl;
+	m_os << "num_symlinks     : " << setw(16) << sb->apfs_num_symlinks << endl;
+	m_os << "num_other_fsobjs : " << setw(16) << sb->apfs_num_other_fsobjects << endl;
+	m_os << "num_snapshots    : " << setw(16) << sb->apfs_num_snapshots << endl;
+	m_os << "total_blocks_alc : " << setw(16) << sb->apfs_total_blocks_alloced << endl;
+	m_os << "total_blocks_frd : " << setw(16) << sb->apfs_total_blocks_freed << endl;
+	m_os << "vol_uuid         : " << uuidstr(sb->apfs_vol_uuid) << endl;
+	m_os << "last_mod_time    : " << tstamp(sb->apfs_last_mod_time) << endl;
+	m_os << "fs_flags         : " << setw(16) << sb->apfs_fs_flags << endl;
+	m_os << "formatted_by id  : " << sb->apfs_formatted_by.id << endl;
+	m_os << "    timestamp    : " << tstamp(sb->apfs_formatted_by.timestamp) << endl;
+	m_os << "    last_xid     : " << sb->apfs_formatted_by.last_xid << endl;
+	for (k = 0; k < 8; k++)
 	{
-		m_os << "Accessor Info    : " << sb->access_info[k].accessor << endl;
-		m_os << "Timestamp        : " << tstamp(sb->access_info[k].timestamp) << endl;
-		m_os << "Version          : " << setw(16) << sb->access_info[k].xid << endl;
+		m_os << "modified_by id   : " << sb->apfs_modified_by[k].id << endl;
+		m_os << "    timestamp    : " << tstamp(sb->apfs_modified_by[k].timestamp) << endl;
+		m_os << "    last_xid     : " << setw(16) << sb->apfs_modified_by[k].last_xid << endl;
 	}
-	m_os << "Volume Name      : " << sb->vol_name << endl;
-	m_os << "Unknown 0x3C0    : " << setw(16) << sb->unk_3C0 << endl;
+	m_os << "volname          : " << sb->apfs_volname << endl;
+	m_os << "next_doc_id      : " << setw(8) << sb->apfs_next_doc_id << endl;
+	m_os << "Unknown 0x3C4    : " << setw(8) << sb->unk_3C4 << endl;
 	m_os << "Unknown 0x3C8    : " << setw(16) << sb->unk_3C8 << endl;
 
 	m_os << endl;
 	DumpBlockHex();
 }
 
-void BlockDumper::DumpBlk_4_7()
+void BlockDumper::DumpBlk_CIB()
 {
 	const APFS_Block_4_7_Bitmaps * const blk = reinterpret_cast<const APFS_Block_4_7_Bitmaps *>(m_block);
 
@@ -897,7 +989,7 @@ void BlockDumper::DumpBlk_4_7()
 
 	DumpTableHeader(blk->tbl);
 
-	m_os << "Version          | Offset           | Bits Tot | Bits Avl | Block" << endl;
+	m_os << "Xid              | Offset           | Bits Tot | Bits Avl | Block" << endl;
 	m_os << "-----------------+------------------+----------+----------+-----------------" << endl;
 
 	for (k = 0; k < blk->tbl.entries_cnt; k++)
@@ -910,7 +1002,7 @@ void BlockDumper::DumpBlk_4_7()
 	}
 }
 
-void BlockDumper::DumpBlk_4_B()
+void BlockDumper::DumpBlk_OM()
 {
 	const APFS_Block_4_B_BTreeRootPtr * const blk = reinterpret_cast<const APFS_Block_4_B_BTreeRootPtr *>(m_block);
 
@@ -931,7 +1023,7 @@ void BlockDumper::DumpBlk_4_B()
 	}
 }
 
-void BlockDumper::DumpBlk_4_C()
+void BlockDumper::DumpBlk_CPM()
 {
 	const APFS_Block_4_C * const blk = reinterpret_cast<const APFS_Block_4_C *>(m_block);
 
@@ -953,138 +1045,197 @@ void BlockDumper::DumpBlk_4_C()
 	}
 }
 
-void BlockDumper::DumpBlk_8_1()
+void BlockDumper::DumpBlk_NXSB()
 {
-	const APFS_Superblock_NXSB * const sb = reinterpret_cast<const APFS_Superblock_NXSB *>(m_block);
+	const APFS_NX_Superblock * const sb = reinterpret_cast<const APFS_NX_Superblock *>(m_block);
 
 	m_os << hex;
-	m_os << "Signature        : " << setw(8) << sb->signature << endl;
-	m_os << "Block Size       : " << setw(8) << sb->block_size << endl;
-	m_os << "Block Count      : " << setw(16) << sb->block_count << endl;
-	m_os << "Unknown 0x30     : " << setw(16) << sb->unk_30 << endl;
-	m_os << "Unknown 0x38     : " << setw(16) << sb->unk_38 << endl;
-	m_os << "Unknown 0x40     : " << setw(16) << sb->unk_40 << endl;
-	m_os << "GUID             : " << setw(16) << uuidstr(sb->container_guid) << endl;
-	m_os << "Next Node ID     : " << setw(16) << sb->next_nid << endl;
-	m_os << "Next XID         : " << setw(16) << sb->next_xid << endl;
-	m_os << "Size of SB Area  : " << setw(8) << sb->sb_area_cnt << endl;
-	m_os << "Size of SM Area  : " << setw(8) << sb->spaceman_area_cnt << endl;
-	m_os << "Block-ID SB Area : " << setw(16) << sb->bid_sb_area_start << endl;
-	m_os << "Block-ID SM Area : " << setw(16) << sb->bid_spaceman_area_start << endl;
-	m_os << "Next NXSB        : " << setw(8) << sb->next_sb << endl;
-	m_os << "Next SpMgr       : " << setw(8) << sb->next_spaceman << endl;
-	m_os << "Curr SB Start    : " << setw(8) << sb->current_sb_start << endl;
-	m_os << "Curr SB Len      : " << setw(8) << sb->current_sb_len << endl;
-	m_os << "Curr SM Start    : " << setw(8) << sb->current_spaceman_start << endl;
-	m_os << "Curr SM Len      : " << setw(8) << sb->current_spaceman_len << endl;
-	m_os << "Node-ID SM Hdr   : " << setw(16) << sb->nid_spaceman << endl;
-	m_os << "Block-ID NodeMap : " << setw(16) << sb->bid_nodemap << endl;
-	m_os << "Node-ID 8-11 Hdr : " << setw(16) << sb->nid_8x11 << endl;
+	m_os << "magic            : " << setw(8) << sb->nx_magic << endl;
+	m_os << "block_size       : " << setw(8) << sb->nx_block_size << endl;
+	m_os << "block_count      : " << setw(16) << sb->nx_block_count << endl;
+	m_os << "features         : " << setw(16) << sb->nx_features << endl;
+	m_os << "ro_compat_feat's : " << setw(16) << sb->nx_read_only_compatible_features << endl;
+	m_os << "incompat_feat's  : " << setw(16) << sb->nx_incompatible_features << endl;
+	m_os << "uuid             : " << setw(16) << uuidstr(sb->nx_uuid) << endl;
+	m_os << "next_oid         : " << setw(16) << sb->nx_next_oid << endl;
+	m_os << "next_xid         : " << setw(16) << sb->nx_next_xid << endl;
+	m_os << "xp_desc_blocks   : " << setw(8) << sb->nx_xp_desc_blocks << endl;
+	m_os << "xp_data_blocks   : " << setw(8) << sb->nx_xp_data_blocks << endl;
+	m_os << "xp_desc_base     : " << setw(16) << sb->nx_xp_desc_base << endl;
+	m_os << "xp_data_base     : " << setw(16) << sb->nx_xp_data_base << endl;
+	m_os << "xp_desc_next     : " << setw(8) << sb->nx_xp_desc_next << endl;
+	m_os << "xp_data_next     : " << setw(8) << sb->nx_xp_data_next << endl;
+	m_os << "xp_desc_index    : " << setw(8) << sb->nx_xp_desc_index << endl;
+	m_os << "xp_desc_len      : " << setw(8) << sb->nx_xp_desc_len << endl;
+	m_os << "xp_data_index    : " << setw(8) << sb->nx_xp_data_index << endl;
+	m_os << "xp_data_len      : " << setw(8) << sb->nx_xp_data_len << endl;
+	m_os << "spaceman_oid     : " << setw(16) << sb->nx_spaceman_oid << endl;
+	m_os << "omap_oid         : " << setw(16) << sb->nx_omap_oid << endl;
+	m_os << "reaper_oid       : " << setw(16) << sb->nx_reaper_oid << endl;
 	m_os << "Unknown 0xB0     : " << setw(8) << sb->unk_B0 << endl;
-	m_os << "Unknown 0xB4     : " << setw(8) << sb->unk_B4 << endl;
+	m_os << "max_file_systems : " << setw(8) << sb->nx_max_file_systems << endl;
 
-	for (size_t k = 0; (k < 100) && (sb->nid_apsb[k] != 0); k++)
-		m_os << "Node-ID APSB " << setw(2) << k << "  : " << setw(16) << sb->nid_apsb[k] << endl;
+	for (size_t k = 0; (k < 100) && (sb->nx_fs_oid[k] != 0); k++)
+		m_os << "fs_oid       " << setw(2) << k << "  : " << setw(16) << sb->nx_fs_oid[k] << endl;
 
 	m_os << endl;
 
-	m_os << "Block-ID Keybag  : " << setw(16) << sb->keybag_blk_start << endl;
-	m_os << "Block-Cnt Keybag : " << setw(16) << sb->keybag_blk_count << endl;
+	m_os << "keybag_base      : " << setw(16) << sb->nx_keybag_base << endl;
+	m_os << "keybag_blocks    : " << setw(16) << sb->nx_keybag_blocks << endl;
 
 	m_os << endl;
 
 	DumpBlockHex();
 }
 
-void BlockDumper::DumpBlk_8_5()
+void BlockDumper::DumpBlk_SM()
 {
+	size_t k;
 	const APFS_Block_8_5_Spaceman *b = reinterpret_cast<const APFS_Block_8_5_Spaceman *>(m_block);
 
 	m_os << hex;
-	m_os << "0020             : " << setw(8) << b->unk_20 << endl;
-	m_os << "0024             : " << setw(8) << b->unk_24 << endl;
-	m_os << "0028             : " << setw(8) << b->unk_28 << endl;
-	m_os << "002C             : " << setw(8) << b->unk_2C << endl;
-	m_os << "0030 Blk Tot     : " << setw(16) << b->blocks_total << endl;
-	m_os << "0038             : " << setw(16) << b->unk_38 << endl;
-	m_os << "0040             : " << setw(16) << b->unk_40 << endl;
-	m_os << "0048 Blk Free    : " << setw(16) << b->blocks_free << endl;
-	m_os << "0050             : " << setw(16) << b->unk_50 << endl;
+	m_os << "block_size       : " << setw(8) << b->block_size << endl;
+	m_os << "blocks_per_chunk : " << setw(8) << b->blocks_per_chunk << endl;
+	m_os << "chunks_per_cib   : " << setw(8) << b->chunks_per_cib << endl;
+	m_os << "cibs_per_cab     : " << setw(8) << b->cibs_per_cab << endl;
+	m_os << "block_count      : " << setw(16) << b->block_count << endl;
+	m_os << "chunk_count      : " << setw(16) << b->chunk_count << endl;
+	m_os << "cib_count        : " << setw(8) << b->cib_count << endl;
+	m_os << "cab_count        : " << setw(8) << b->cab_count << endl;
+	m_os << "free_count       : " << setw(16) << b->free_count << endl;
+	m_os << "0050             : " << setw(16) << b->cib_arr_offs << endl;
 	m_os << "0058             : " << setw(16) << b->unk_58 << endl;
-	m_os << "0060             : " << setw(16) << b->unk_60 << endl;
-	m_os << "0068             : " << setw(16) << b->unk_68 << endl;
-	m_os << "0070             : " << setw(16) << b->unk_70 << endl;
-	m_os << "0078             : " << setw(16) << b->unk_78 << endl;
-	m_os << "0080             : " << setw(16) << b->unk_80 << endl;
+	m_os << "tier2_block_count: " << setw(16) << b->tier2_block_count << endl;
+	m_os << "tier2_chunk_count: " << setw(16) << b->tier2_chunk_count << endl;
+	m_os << "tier2_cib_count  : " << setw(8) << b->tier2_cib_count << endl;
+	m_os << "tier2_cab_count  : " << setw(8) << b->tier2_cab_count << endl;
+	m_os << "tier2_free_count : " << setw(16) << b->tier2_free_count << endl;
+	m_os << "0080             : " << setw(16) << b->tier2_cib_arr_offs << endl;
 	m_os << "0088             : " << setw(16) << b->unk_88 << endl;
 	m_os << "0090             : " << setw(8) << b->unk_90 << endl;
 	m_os << "0094             : " << setw(8) << b->unk_94 << endl;
-	m_os << "0098 BCnt VolBmp : " << setw(16) << b->blockcnt_bitmaps_98 << endl;
-	m_os << "00A0             : " << setw(8) << b->unk_A0 << endl;
-	m_os << "00A4 BCnt MgrBmp : " << setw(8) << b->blockcnt_bitmaps_A4 << endl;
-	m_os << "00A8 BID MgrBmp  : " << setw(16) << b->blockid_begin_bitmaps_A8 << endl;
-	m_os << "00B0 BID VolBmp  : " << setw(16) << b->blockid_bitmaps_B0 << endl;
+	m_os << "ip_block_count   : " << setw(16) << b->ip_block_count << endl;
+	m_os << "ip_bm_block_count: " << setw(8) << b->ip_bm_block_count << endl;
+	m_os << "ip_bitmap_block_c: " << setw(8) << b->ip_bitmap_block_count << endl;
+	m_os << "ip_bm_base_addr  : " << setw(16) << b->ip_bm_base_address << endl;
+	m_os << "ip_base_addr     : " << setw(16) << b->ip_base_address << endl;
 	m_os << "00B8             : " << setw(16) << b->unk_B8 << endl;
-	// m_os << "Spaceman" << endl;
 	m_os << "00C0             : " << setw(16) << b->unk_C0 << endl;
-	m_os << "00C8             : " << setw(16) << b->unk_C8 << endl;
-	m_os << "00D0 NID Obs 1   : " << setw(16) << b->nodeid_obsolete_1 << endl;
+	m_os << "free_queue_count : " << setw(16) << b->free_queue_count_1 << endl;
+	m_os << "free_queue_tree_1: " << setw(16) << b->free_queue_tree_1 << endl;
 	m_os << "00D8             : " << setw(16) << b->unk_D8 << endl;
 	m_os << "00E0             : " << setw(16) << b->unk_E0 << endl;
 	m_os << "00E8             : " << setw(16) << b->unk_E8 << endl;
-	m_os << "00F0             : " << setw(16) << b->unk_F0 << endl;
-	m_os << "00F8 NID Obs 2   : " << setw(16) << b->nodeid_obsolete_2 << endl;
+	m_os << "free_queue_count : " << setw(16) << b->free_queue_count_2 << endl;
+	m_os << "free_queue_tree_2: " << setw(16) << b->free_queue_tree_2 << endl;
 	m_os << "0100             : " << setw(16) << b->unk_100 << endl;
 	m_os << "0108             : " << setw(16) << b->unk_108 << endl;
 	m_os << "0110             : " << setw(16) << b->unk_110 << endl;
-	m_os << "0118             : " << setw(16) << b->unk_118 << endl;
-	m_os << "0120             : " << setw(16) << b->unk_120 << endl;
+	m_os << "free_queue_count : " << setw(16) << b->free_queue_count_3 << endl;
+	m_os << "free_queue_tree_3: " << setw(16) << b->free_queue_tree_3 << endl;
 	m_os << "0128             : " << setw(16) << b->unk_128 << endl;
 	m_os << "0130             : " << setw(16) << b->unk_130 << endl;
 	m_os << "0138             : " << setw(16) << b->unk_138 << endl;
-	m_os << "0140             : " << setw(16) << b->unk_140 << endl;
-	m_os << "0142             : " << setw(16) << b->unk_142 << endl;
-	m_os << "0144             : " << setw(16) << b->unk_144 << endl;
-	m_os << "0148             : " << setw(16) << b->unk_148 << endl;
-	m_os << "014C             : " << setw(16) << b->unk_14C << endl;
+	m_os << "bmp_next_arr_free: " << setw(4) << b->bitmap_next_array_free << endl;
+	m_os << "0142             : " << setw(4) << b->unk_142 << endl;
+	m_os << "0144             : " << setw(8) << b->unk_144 << endl;
+	m_os << "0148             : " << setw(8) << b->unk_148 << endl;
+	m_os << "014C             : " << setw(8) << b->unk_14C << endl;
 	m_os << "0150             : " << setw(16) << b->unk_150 << endl;
 	m_os << "0158             : " << setw(16) << b->unk_158 << endl;
-	for (size_t k = 0; k < 10; k++)
+	for (k = 0; k < 0x10; k++)
 		m_os << setw(4) << (0x160 + 2 * k) << "             : " << setw(4) << b->unk_160[k] << endl;
 	m_os << "0180 BID BmpHdr  : " << setw(16) << b->blockid_vol_bitmap_hdr << endl;
+	m_os << "..." << endl;
+	m_os << "09D8 Some XID    : " << setw(16) << b->some_xid_9D8 << endl;
+	m_os << "09E0             : " << setw(16) << b->unk_9E0 << endl;
+	for (k = 0; k < 0x10; k++)
+		m_os << setw(4) << (0x9E8 + 2 * k) << "             : " << setw(4) << b->unk_9E8[k] << endl;
+	for (k = 0; k < 0xBF && b->bid_bmp_hdr_list[k] != 0; k++)
+		m_os << setw(4) << (0xA08 + 8 * k) << "cib_oid      : " << setw(16) << b->bid_bmp_hdr_list[k] << endl;
 
 	DumpBlockHex();
 }
 
-void BlockDumper::DumpBlk_8_11()
+void BlockDumper::DumpBlk_NR()
 {
+	const APFS_NX_Reaper *nr = reinterpret_cast<const APFS_NX_Reaper *>(m_block);
+
+	m_os << hex;
+	m_os << "unk 20 : " << setw(16) << nr->unk_20 << endl;
+	m_os << "unk 28 : " << setw(16) << nr->unk_28 << endl;
+	m_os << "unk 30 : " << setw(16) << nr->unk_30 << endl;
+	m_os << "unk 38 : " << setw(16) << nr->unk_38 << endl;
+	m_os << "unk 40 : " << setw(8) << nr->unk_40 << endl;
+	m_os << "unk 44 : " << setw(8) << nr->unk_44 << endl;
+	m_os << "unk 48 : " << setw(8) << nr->unk_48 << endl;
+	m_os << "unk 4C : " << setw(8) << nr->unk_4C << endl;
+	m_os << "unk 50 : " << setw(16) << nr->unk_50 << endl;
+	m_os << "unk 58 : " << setw(16) << nr->unk_58 << endl;
+	m_os << "unk 60 : " << setw(16) << nr->unk_60 << endl;
+	m_os << "unk 68 : " << setw(8) << nr->unk_68 << endl;
+	m_os << "unk 6C : " << setw(8) << nr->unk_6C << endl;
+
+	m_os << endl;
+	DumpBlockHex();
+}
+
+void BlockDumper::DumpBlk_NRL()
+{
+	const APFS_NX_ReapList *nrl = reinterpret_cast<const APFS_NX_ReapList *>(m_block);
+	uint32_t k;
+	
+	m_os << hex;
+	m_os << "unk 20      : " << setw(8) << nrl->unk_20 << endl;
+	m_os << "unk 24      : " << setw(8) << nrl->unk_24 << endl;
+	m_os << "unk 28      : " << setw(8) << nrl->unk_28 << endl;
+	m_os << "max rec cnt : " << setw(8) << nrl->max_record_count << endl;
+	m_os << "record cnt  : " << setw(8) << nrl->record_count << endl;
+	m_os << "first idx   : " << setw(8) << nrl->first_index << endl;
+	m_os << "last idx    : " << setw(8) << nrl->last_index << endl;
+	m_os << "free idx    : " << setw(8) << nrl->free_index << endl;
+	m_os << endl;
+	m_os << "fwlink   | unk      | type     | blksize  | oid              | paddr            | xid" << endl;
+	m_os << "---------+----------+----------+----------+------------------+------------------+-----------------" << endl;
+	for (k = 0; k < nrl->max_record_count; k++)
+	{
+		m_os << setw(8) << nrl->nrle[k].fwlink << " | ";
+		m_os << setw(8) << nrl->nrle[k].unk_04 << " | ";
+		m_os << setw(8) << nrl->nrle[k].type << " | ";
+		m_os << setw(8) << nrl->nrle[k].blksize << " | ";
+		m_os << setw(16) << nrl->nrle[k].oid << " | ";
+		m_os << setw(16) << nrl->nrle[k].paddr << " | ";
+		m_os << setw(16) << nrl->nrle[k].xid << endl;
+	}
+
+	m_os << endl;
 	DumpBlockHex();
 }
 
 void BlockDumper::DumpBTNode_0()
 {
-	const APFS_BlockHeader * const hdr = reinterpret_cast<const APFS_BlockHeader *>(m_block);
+	const APFS_ObjHeader * const hdr = reinterpret_cast<const APFS_ObjHeader *>(m_block);
 
-	switch (hdr->subtype)
+	switch (hdr->o_subtype)
 	{
 	case 0x09:
-		DumpBTNode(&BlockDumper::DumpBTEntry_9, 0x10, 0x08);
+		DumpBTNode(&BlockDumper::DumpBTEntry_FreeList, 0x10, 0x08);
 		break;
 
 	case 0x0B:
-		DumpBTNode(&BlockDumper::DumpBTEntry_B, 0x10, 0x10);
+		DumpBTNode(&BlockDumper::DumpBTEntry_OMap, 0x10, 0x10);
 		break;
 
 	case 0x0E:
-		DumpBTNode(&BlockDumper::DumpBTEntry_E);
+		DumpBTNode(&BlockDumper::DumpBTEntry_APFS_Root);
 		break;
 
 	case 0x0F:
-		DumpBTNode(&BlockDumper::DumpBTEntry_F);
+		DumpBTNode(&BlockDumper::DumpBTEntry_APFS_ExtentRef);
 		break;
 
 	case 0x10:
-		DumpBTNode(&BlockDumper::DumpBTEntry_10);
+		DumpBTNode(&BlockDumper::DumpBTEntry_APFS_SnapMeta);
 		break;
 
 	case 0x13:
@@ -1118,14 +1269,14 @@ void BlockDumper::DumpHex(const byte_t * data, size_t size, size_t line_size)
 	::DumpHex(m_os, data, size, line_size);
 }
 
-const char * BlockDumper::GetNodeType(uint16_t type, uint32_t subtype)
+const char * BlockDumper::GetNodeType(uint32_t type, uint32_t subtype)
 {
 	const char *typestr = "Unknown";
 
-	switch (type)
+	switch (type & 0xFFFFFFF)
 	{
 	case 0x0001:
-		typestr = "Container Superblock (NXSB)";
+		typestr = "nx / Container Superblock (NXSB)";
 		break;
 	case 0x0002:
 	case 0x0003:
@@ -1135,39 +1286,57 @@ const char * BlockDumper::GetNodeType(uint16_t type, uint32_t subtype)
 			typestr = "Purgatory B*-Tree (?)";
 			break;
 		case 0x0000000B:
-			typestr = "Mapping Node-ID => Block-ID";
+			typestr = "btn / om / Mapping Node-ID => Block-ID";
 			break;
 		case 0x0000000E:
-			typestr = "Directory";
+			typestr = "btn / apfs_root / Directory";
 			break;
 		case 0x0000000F:
-			typestr = "Mapping Block-ID => Object-ID";
+			typestr = "btn / apfs_extentref / Mapping Block-ID => Object-ID";
 			break;
 		case 0x00000010:
-			typestr = "Snapshot-Info";
+			typestr = "btn / apfs_snap_meta / Snapshot Metadata";
 			break;
 		case 0x00000013:
-			typestr = "Unknown B*-Tree";
+			typestr = "oms / (?)";
 			break;
 		}
 		break;
+	case 0x4:
+		typestr = "mt / MTree (?)";
+		break;
 	case 0x0005:
-		typestr = "Spaceman Header";
+		typestr = "sm / Spaceman Header";
+		break;
+	case 0x6:
+		typestr = "cab / Chunk Alloc? Block (?)";
 		break;
 	case 0x0007:
-		typestr = "Bitmap Header";
+		typestr = "cib / Chunk Info Block";
+		break;
+	case 0x0008:
+		typestr = "sm_ip / Spaceman IP (?)";
 		break;
 	case 0x000B:
-		typestr = "Some Pointer";
+		typestr = "om / (?)";
 		break;
 	case 0x000C:
-		typestr = "ID Mapping";
+		typestr = "cpm / Checkpoint Map (?)";
 		break;
 	case 0x000D:
-		typestr = "Volume Superblock (APSB)";
+		typestr = "apfs / Volume Superblock (APSB)";
 		break;
 	case 0x0011:
-		typestr = "Unknown Header";
+		typestr = "nr / (?)";
+		break;
+	case 0x12:
+		typestr = "nrl / (?)";
+		break;
+	case 0x16:
+		typestr = "wbc / (?)";
+		break;
+	case 0x17:
+		typestr = "wbcl / (?)";
 		break;
 	}
 

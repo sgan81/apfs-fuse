@@ -811,22 +811,20 @@ bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t
 	if (g_debug & Dbg_Crypto)
 		std::cout << " all blocks verified" << std::endl;
 
-	/*
-	const APFS_BlockHeader &hdr = *reinterpret_cast<const APFS_BlockHeader *>(data.data());
+	const APFS_ObjHeader &hdr = *reinterpret_cast<const APFS_ObjHeader *>(data.data());
 
-	if (hdr.type != type)
+	if (hdr.o_type != type)
 	{
 		if (g_debug & Dbg_Errors)
 		{
-			std::cout << "Keybag block types not matching: " << hdr.type << ", expected " << type << std::endl;
+			std::cout << "Keybag block types not matching: " << hdr.o_type << ", expected " << type << std::endl;
 			DumpHex(std::cout, data.data(), data.size());
 		}
 
 		return false;
 	}
-	*/
 
-	bag.Init(data.data() + sizeof(APFS_BlockHeader), data.size() - sizeof(APFS_BlockHeader)); // TODO: This only works with one block ...
+	bag.Init(data.data() + sizeof(APFS_ObjHeader), data.size() - sizeof(APFS_ObjHeader)); // TODO: This only works with one block ...
 
 	return true;
 }

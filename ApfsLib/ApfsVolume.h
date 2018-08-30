@@ -37,12 +37,12 @@ public:
 
 	bool Init(uint64_t blkid_volhdr);
 
-	const char *name() const { return m_sb.vol_name; }
+	const char *name() const { return m_sb.apfs_volname; }
 
 	void dump(BlockDumper &bd);
 
 	BTree &getDirectory() { return m_bt_directory; }
-	uint32_t getTextFormat() const { return m_sb.features_38 & 0x9; }
+	uint32_t getTextFormat() const { return m_sb.apfs_incompatible_features & 0x9; }
 
 	ApfsContainer &getContainer() const { return m_container; }
 

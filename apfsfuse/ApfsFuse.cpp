@@ -32,9 +32,6 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
-#ifdef __linux__
-#include <sys/xattr.h>
-#endif
 
 #include <ApfsLib/ApfsContainer.h>
 #include <ApfsLib/ApfsVolume.h>
@@ -70,7 +67,7 @@ struct File
 	File() {}
 	~File() {}
 
-	bool IsCompressed() const { return (ino.ino.flags & 0x20) != 0; }
+	bool IsCompressed() const { return (ino.ino.bsd_flags & 0x20) != 0; }
 
 	ApfsDir::Inode ino;
 	std::vector<uint8_t> decomp_data;
@@ -113,7 +110,7 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 
 		if (S_ISREG(st.st_mode))
 		{
-			if (rec.ino.flags & 0x20) // Compressed
+			if (rec.ino.bsd_flags & 0x20) // Compressed
 			{
 				std::vector<uint8_t> data;
 				rc = dir.GetAttribute(data, ino, "com.apple.decmpfs");
@@ -162,7 +159,7 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 		}
 		else if (S_ISDIR(st.st_mode))
 		{
-			st.st_size = rec.ino.refcnt;
+			st.st_size = rec.ino.nchildren;
 		}
 
 #ifdef __linux__
@@ -186,6 +183,8 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 		st.st_ctimespec.tv_nsec = rec.ino.ctime % div_nsec;
 		st.st_atimespec.tv_sec = rec.ino.atime / div_nsec;
 		st.st_atimespec.tv_nsec = rec.ino.atime % div_nsec;
+		
+		// ? st.st_gen = rec.ino.gen_count;
 #endif
 		return true;
 	}
@@ -393,7 +392,7 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 			if (g_debug & Dbg_Info)
 			{
 				std::cout << "Inode info: size=" << f->ino.sizes.size
-				          << ", size_on_disk=" << f->ino.sizes.size_on_disk << std::endl;
+				          << ", alloced_size=" << f->ino.sizes.alloced_size << std::endl;
 			}
 			rc = DecompressFile(dir, ino, f->decomp_data, attr);
 			// In strict mode, do not return uncompressed data.
@@ -437,7 +436,7 @@ static void apfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, st
 		std::vector<char> buf(size, 0);
 
 		// rc =
-		dir.ReadFile(buf.data(), file->ino.ino.object_id, off, size);
+		dir.ReadFile(buf.data(), file->ino.ino.private_id, off, size);
 
 		// std::cerr << "apfs_read: fuse_reply_buf(req, " << reinterpret_cast<uint64_t>(buf.data()) << ", " << size << ")" << std::endl;
 

@@ -30,19 +30,19 @@ static int CompareNodeMapKey(const void *skey, size_t skey_len, const void *ekey
 	(void)skey_len;
 	(void)ekey_len;
 
-	assert(skey_len == sizeof(APFS_Key_B_NodeID_Map));
-	assert(ekey_len == sizeof(APFS_Key_B_NodeID_Map));
+	assert(skey_len == sizeof(APFS_OMap_Key));
+	assert(ekey_len == sizeof(APFS_OMap_Key));
 
-	const APFS_Key_B_NodeID_Map *skey_map = reinterpret_cast<const APFS_Key_B_NodeID_Map *>(skey);
-	const APFS_Key_B_NodeID_Map *ekey_map = reinterpret_cast<const APFS_Key_B_NodeID_Map *>(ekey);
+	const APFS_OMap_Key *skey_map = reinterpret_cast<const APFS_OMap_Key *>(skey);
+	const APFS_OMap_Key *ekey_map = reinterpret_cast<const APFS_OMap_Key *>(ekey);
 
-	if (ekey_map->nid < skey_map->nid)
+	if (ekey_map->ok_oid < skey_map->ok_oid)
 		return -1;
-	if (ekey_map->nid > skey_map->nid)
+	if (ekey_map->ok_oid > skey_map->ok_oid)
 		return 1;
-	if (ekey_map->xid < skey_map->xid)
+	if (ekey_map->ok_xid < skey_map->ok_xid)
 		return -1;
-	if (ekey_map->xid > skey_map->xid)
+	if (ekey_map->ok_xid > skey_map->ok_xid)
 		return 1;
 	return 0;
 }
@@ -71,9 +71,9 @@ bool ApfsNodeMapperBTree::Init(uint64_t bid_root, uint64_t xid)
 
 	memcpy(&m_root_ptr, blk.data(), sizeof(APFS_Block_4_B_BTreeRootPtr));
 
-	if (m_root_ptr.hdr.type != BlockType_BTreeRootPtr)
+	if (APFS_OBJ_TYPE(m_root_ptr.hdr.o_type) != BlockType_BTreeRootPtr)
 	{
-		std::cerr << "ERROR: Wrong header type 0x" << std::hex << m_root_ptr.hdr.type << std::endl;
+		std::cerr << "ERROR: Wrong header type 0x" << std::hex << m_root_ptr.hdr.o_type << std::endl;
 		return false;
 	}
 
@@ -82,15 +82,15 @@ bool ApfsNodeMapperBTree::Init(uint64_t bid_root, uint64_t xid)
 
 bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t xid)
 {
-	APFS_Key_B_NodeID_Map key;
+	APFS_OMap_Key key;
 
-	const APFS_Key_B_NodeID_Map *res_key = nullptr;
-	const APFS_Value_B_NodeID_Map *res_val = nullptr;
+	const APFS_OMap_Key *res_key = nullptr;
+	const APFS_OMap_Val *res_val = nullptr;
 
 	BTreeEntry res;
 
-	key.nid = nid;
-	key.xid = xid;
+	key.ok_oid = nid;
+	key.ok_xid = xid;
 
 	// std::cout << std::hex << "GetBlockID: nodeid = " << nodeid << ", version = " << version << " => blockid = ";
 
@@ -101,12 +101,12 @@ bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t x
 		return false;
 	}
 
-	assert(res.val_len == sizeof(APFS_Value_B_NodeID_Map));
+	assert(res.val_len == sizeof(APFS_OMap_Val));
 
-	res_key = reinterpret_cast<const APFS_Key_B_NodeID_Map *>(res.key);
-	res_val = reinterpret_cast<const APFS_Value_B_NodeID_Map *>(res.val);
+	res_key = reinterpret_cast<const APFS_OMap_Key *>(res.key);
+	res_val = reinterpret_cast<const APFS_OMap_Val *>(res.val);
 
-	if (key.nid != res_key->nid)
+	if (key.ok_oid != res_key->ok_oid)
 	{
 		// std::cout << "NOT FOUND" << std::endl;
 		std::cerr << std::hex << "nid " << nid << " xid " << xid << " NOT FOUND!!!" << std::endl;
@@ -115,9 +115,9 @@ bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t x
 
 	// std::cout << val->blockid << std::endl;
 
-	info.flags = res_val->flags;
-	info.size = res_val->size;
-	info.bid = res_val->bid;
+	info.flags = res_val->ov_flags;
+	info.size = res_val->ov_size;
+	info.bid = res_val->ov_paddr;
 
 	return true;
 }

@@ -55,21 +55,21 @@ bool ApfsContainer::Init()
 	if (!m_disk.Read(blk.data(), m_part_start, 0x1000))
 		return false;
 
-	memcpy(&m_sb, blk.data(), sizeof(APFS_Superblock_NXSB));
+	memcpy(&m_sb, blk.data(), sizeof(APFS_NX_Superblock));
 
-	if (m_sb.signature != 0x4253584E)
+	if (m_sb.nx_magic != 0x4253584E)
 		return false;
 
-	if (m_sb.block_size != 0x1000)
+	if (m_sb.nx_block_size != 0x1000)
 	{
-		blk.resize(m_sb.block_size);
+		blk.resize(m_sb.nx_block_size);
 		m_disk.Read(blk.data(), m_part_start, blk.size());
 	}
 
 	if (!VerifyBlock(blk.data(), blk.size()))
 		return false;
 
-	memcpy(&m_sb, blk.data(), sizeof(APFS_Superblock_NXSB));
+	memcpy(&m_sb, blk.data(), sizeof(APFS_NX_Superblock));
 
 #if 1 // Scan container for most recent superblock (might fix segfaults)
 	uint64_t max_xid = 0;
@@ -77,41 +77,41 @@ bool ApfsContainer::Init()
 	uint64_t bid;
 	std::vector<byte_t> tmp;
 
-	tmp.resize(m_sb.block_size);
+	tmp.resize(m_sb.nx_block_size);
 
-	for (bid = m_sb.bid_sb_area_start; bid < (m_sb.bid_sb_area_start + m_sb.sb_area_cnt); bid++)
+	for (bid = m_sb.nx_xp_desc_base; bid < (m_sb.nx_xp_desc_base + m_sb.nx_xp_desc_blocks); bid++)
 	{
-		m_disk.Read(tmp.data(), m_part_start + bid * m_sb.block_size, m_sb.block_size);
+		m_disk.Read(tmp.data(), m_part_start + bid * m_sb.nx_block_size, m_sb.nx_block_size);
 		if (!VerifyBlock(tmp.data(), tmp.size()))
 			continue;
 
-		const APFS_Superblock_NXSB *sb = reinterpret_cast<const APFS_Superblock_NXSB *>(tmp.data());
-		if (sb->hdr.type != BlockType_NXSB)
+		const APFS_NX_Superblock *sb = reinterpret_cast<const APFS_NX_Superblock *>(tmp.data());
+		if (APFS_OBJ_TYPE(sb->hdr.o_type) != BlockType_NXSB)
 			continue;
 
-		if (sb->hdr.xid > max_xid)
+		if (sb->hdr.o_xid > max_xid)
 		{
-			max_xid = sb->hdr.xid;
+			max_xid = sb->hdr.o_xid;
 			max_bid = bid;
 		}
 	}
 
-	if (max_xid > m_sb.hdr.xid)
+	if (max_xid > m_sb.hdr.o_xid)
 	{
 		if (g_debug & Dbg_Errors)
-			std::cout << "Found more recent xid " << max_xid << " than superblock 0 contained (" << m_sb.hdr.xid << ")." << std::endl;
+			std::cout << "Found more recent xid " << max_xid << " than superblock 0 contained (" << m_sb.hdr.o_xid << ")." << std::endl;
 
-		m_disk.Read(tmp.data(), m_part_start + max_bid * m_sb.block_size, m_sb.block_size);
-		memcpy(&m_sb, tmp.data(), sizeof(APFS_Superblock_NXSB));
+		m_disk.Read(tmp.data(), m_part_start + max_bid * m_sb.nx_block_size, m_sb.nx_block_size);
+		memcpy(&m_sb, tmp.data(), sizeof(APFS_NX_Superblock));
 	}
 #endif
 
-	if (!m_nodemap_vol.Init(m_sb.bid_nodemap, m_sb.hdr.xid))
+	if (!m_nodemap_vol.Init(m_sb.nx_omap_oid, m_sb.hdr.o_xid))
 		return false;
 
-	if ((m_sb.keybag_blk_start != 0) && (m_sb.keybag_blk_count != 0))
+	if ((m_sb.nx_keybag_base != 0) && (m_sb.nx_keybag_blocks != 0))
 	{
-		if (!m_keymgr.Init(m_sb.keybag_blk_start, m_sb.keybag_blk_count, m_sb.container_guid))
+		if (!m_keymgr.Init(m_sb.nx_keybag_base, m_sb.nx_keybag_blocks, m_sb.nx_uuid))
 		{
 			std::cerr << "Initialization of KeyManager failed." << std::endl;
 			return false;
@@ -133,12 +133,12 @@ ApfsVolume *ApfsContainer::GetVolume(int index, const std::string &passphrase)
 
 	m_passphrase = passphrase;
 
-	nodeid = m_sb.nid_apsb[index];
+	nodeid = m_sb.nx_fs_oid[index];
 
 	if (nodeid == 0)
 		return nullptr;
 
-	if (!m_nodemap_vol.GetBlockID(ni, nodeid, m_sb.hdr.xid))
+	if (!m_nodemap_vol.GetBlockID(ni, nodeid, m_sb.hdr.o_xid))
 		return nullptr;
 
 	// std::cout << std::hex << "Loading Volume " << index << ", nodeid = " << nodeid << ", version = " << m_sb.hdr.version << ", blkid = " << blkid << std::endl;
@@ -164,7 +164,7 @@ int ApfsContainer::GetVolumeCnt() const
 
 	for (k = 0; k < 100; k++)
 	{
-		if (m_sb.nid_apsb[k] == 0)
+		if (m_sb.nx_fs_oid[k] == 0)
 			break;
 	}
 
@@ -176,11 +176,11 @@ bool ApfsContainer::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt) c
 	uint64_t offs;
 	uint64_t size;
 
-	if ((blkid + blkcnt) > m_sb.block_count)
+	if ((blkid + blkcnt) > m_sb.nx_block_count)
 		return false;
 
-	offs = m_sb.block_size * blkid + m_part_start;
-	size = m_sb.block_size * blkcnt;
+	offs = m_sb.nx_block_size * blkid + m_part_start;
+	size = m_sb.nx_block_size * blkcnt;
 
 	return m_disk.Read(data, offs, size);
 }
@@ -190,7 +190,7 @@ bool ApfsContainer::ReadAndVerifyHeaderBlock(byte_t * data, uint64_t blkid) cons
 	if (!ReadBlocks(data, blkid))
 		return false;
 
-	if (!VerifyBlock(data, m_sb.block_size))
+	if (!VerifyBlock(data, m_sb.nx_block_size))
 		return false;
 
 	return true;
@@ -254,13 +254,13 @@ void ApfsContainer::dump(BlockDumper& bd)
 #endif
 
 #if 1
-	for (blkid = m_sb.bid_sb_area_start + m_sb.current_sb_start; blkid < (m_sb.bid_sb_area_start + m_sb.current_sb_start + m_sb.current_sb_len); blkid++)
+	for (blkid = m_sb.nx_xp_desc_base + m_sb.nx_xp_desc_index; blkid < (m_sb.nx_xp_desc_base + m_sb.nx_xp_desc_index + m_sb.nx_xp_desc_len); blkid++)
 	{
 		ReadAndVerifyHeaderBlock(blk.data(), blkid);
 		bd.DumpNode(blk.data(), blkid);
 	}
 
-	for (blkid = m_sb.bid_spaceman_area_start + m_sb.current_spaceman_start; blkid < (m_sb.bid_spaceman_area_start + m_sb.current_spaceman_start + m_sb.current_spaceman_len); blkid++)
+	for (blkid = m_sb.nx_xp_data_base + m_sb.nx_xp_data_index; blkid < (m_sb.nx_xp_data_base + m_sb.nx_xp_data_index + m_sb.nx_xp_data_len); blkid++)
 	{
 		ReadAndVerifyHeaderBlock(blk.data(), blkid);
 		bd.DumpNode(blk.data(), blkid);

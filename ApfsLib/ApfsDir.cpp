@@ -34,7 +34,8 @@
 template<size_t L>
 void strcpy_s(char (&dst)[L], const char *src)
 {
-	strncpy(dst, src, L);
+	strncpy(dst, src, L - 1);
+	dst[L - 1] = 0;
 }
 #endif
 
@@ -91,7 +92,7 @@ bool ApfsDir::GetInode(ApfsDir::Inode& res, uint64_t inode)
 	uint64_t key;
 	bool rc;
 
-	key = inode | KeyType_Object;
+	key = inode | KeyType_Inode;
 
 	rc = m_bt.Lookup(bte, &key, sizeof(uint64_t), CompareStdDirKey, this, true);
 
@@ -99,8 +100,9 @@ bool ApfsDir::GetInode(ApfsDir::Inode& res, uint64_t inode)
 		return false;
 
 	const uint8_t *idata = reinterpret_cast<const uint8_t *>(bte.val);
-	const APFS_Inode *obj = reinterpret_cast<const APFS_Inode *>(bte.val);
-	const APFS_InodeEntry *ie = reinterpret_cast<const APFS_InodeEntry *>(idata + sizeof(APFS_Inode));
+	const APFS_Inode_Val *obj = reinterpret_cast<const APFS_Inode_Val *>(bte.val);
+	const APFS_XF_Header *xf_hdr = reinterpret_cast<const APFS_XF_Header *>(idata + sizeof(APFS_Inode_Val));
+	const APFS_XF_Entry *xf = reinterpret_cast<const APFS_XF_Entry *>(idata + sizeof(APFS_Inode_Val) + sizeof(APFS_XF_Header));
 
 	res.id = inode;
 	res.ino = *obj;
@@ -108,32 +110,37 @@ bool ApfsDir::GetInode(ApfsDir::Inode& res, uint64_t inode)
 	memset(&res.sizes, 0, sizeof(res.sizes));
 	res.unk_param = 0;
 
-	uint16_t entry_base = sizeof(APFS_Inode) + (obj->entries_cnt * sizeof(APFS_InodeEntry));
+	uint16_t entry_base = sizeof(APFS_Inode_Val) + sizeof(APFS_XF_Header) + (xf_hdr->xf_num_exts * sizeof(APFS_XF_Entry));
 	uint16_t k;
 
 
-	for (k = 0; k < obj->entries_cnt; k++)
+	for (k = 0; k < xf_hdr->xf_num_exts; k++)
 	{
-		switch (ie[k].type)
+		switch (xf[k].xf_type)
 		{
-		case 0x0204:
+		case INO_EXT_TYPE_NAME:
 			res.name = reinterpret_cast<const char *>(idata + entry_base);
 			break;
 
-		case 0x2008:
-			res.sizes = *reinterpret_cast<const APFS_Inode_Sizes *>(idata + entry_base);
+		case INO_EXT_TYPE_DSTREAM:
+			res.sizes = *reinterpret_cast<const APFS_DStream *>(idata + entry_base);
 			break;
 
-		case 0x280D:
+		case INO_EXT_TYPE_SPARSE_BYTES:
 			res.unk_param = *reinterpret_cast<const uint64_t *>(idata + entry_base);
 			break;
 
 		default:
-			std::cerr << std::hex << "WARNING!!!: Unknown Inode Attribute " << std::setw(4) << ie[k].type << " at inode " << inode << std::endl;
+			std::cerr << std::hex << "WARNING!!!: Unknown Inode XF : ";
+			std::cerr << std::setw(2) << static_cast<unsigned>(xf[k].xf_type) << ' ';
+			std::cerr << std::setw(2) << static_cast<unsigned>(xf[k].xf_flags) << ' ';
+			std::cerr << std::setw(4) << xf[k].xf_length;
+			std::cerr << " : at inode " << inode << std::endl;
+			DumpHex(std::cerr, idata + entry_base, xf[k].xf_length, 8);
 			break;
 		}
 
-		entry_base += ((ie[k].len + 7) & 0xFFF8);
+		entry_base += ((xf[k].xf_length + 7) & 0xFFF8);
 	}
 
 	return true;
@@ -146,16 +153,16 @@ bool ApfsDir::ListDirectory(std::vector<Name> &dir, uint64_t inode)
 	bool rc;
 	uint64_t skey;
 
-	const APFS_Name *vdata;
+	const APFS_DRec_Val *vdata;
 	const uint8_t *kdata;
 
-	skey = inode | KeyType_Name;
+	skey = inode | KeyType_DirRecord;
 
 	dir.clear();
 
 	if (m_txt_fmt & 9)
 	{
-		APFS_Key_Name key;
+		APFS_DRec_Key key;
 		key.parent_id = skey;
 		key.hash = 0;
 		key.name[0] = 0;
@@ -164,7 +171,7 @@ bool ApfsDir::ListDirectory(std::vector<Name> &dir, uint64_t inode)
 	}
 	else
 	{
-		APFS_Key_Name_Old key;
+		APFS_DRec_Key_Old key;
 		key.parent_id = skey;
 		key.name_len = 0;
 		key.name[0] = 0;
@@ -211,10 +218,10 @@ bool ApfsDir::ListDirectory(std::vector<Name> &dir, uint64_t inode)
 
 		// assert(res.val_len == sizeof(APFS_Name));
 
-		vdata = reinterpret_cast<const APFS_Name *>(res.val);
+		vdata = reinterpret_cast<const APFS_DRec_Val *>(res.val);
 
-		e.inode_id = vdata->id;
-		e.timestamp = vdata->timestamp;
+		e.inode_id = vdata->file_id;
+		e.timestamp = vdata->date_added;
 
 		dir.push_back(e);
 
@@ -234,24 +241,30 @@ bool ApfsDir::LookupName(ApfsDir::Name& res, uint64_t parent_id, const char* nam
 
 	if (m_txt_fmt & 9)
 	{
-		APFS_Key_Name key;
-		key.parent_id = parent_id | KeyType_Name;
+		APFS_DRec_Key key;
+		key.parent_id = parent_id | KeyType_DirRecord;
 		key.hash = HashFilename(name, strlen(name) + 1, (m_txt_fmt & 0x09) == 0x01);
 		strcpy_s(key.name, name);
-		// printf("Lookup key: key=%016lX hash=%08X name=%s\n", key.parent_id, key.hash, key.name);
-
+		if (g_debug & Dbg_Dir)
+		{
+			std::cout << "Lookup key: key=" << key.parent_id << " hash=" << key.hash << " name='" << key.name << "'" << std::endl;
+			dump_utf8(std::cout, key.name);
+		}
 		res.hash = key.hash;
 
 		rc = m_bt.Lookup(e, &key, 12 + (key.hash & 0x3FF), CompareStdDirKey, this, true);
 	}
 	else
 	{
-		APFS_Key_Name_Old key;
-		key.parent_id = parent_id | KeyType_Name;
+		APFS_DRec_Key_Old key;
+		key.parent_id = parent_id | KeyType_DirRecord;
 		key.name_len = strlen(name) + 1;
 		strcpy_s(key.name, name);
-		// printf("Lookup old key: key=%016lX nlen=%04X name=%s\n", key.parent_id, key.name_len, key.name);
-
+		if (g_debug & Dbg_Dir)
+		{
+			std::cout << "Lookup old key: key=" << key.parent_id << " name_len=" << key.name_len << " name='" << key.name << "'" << std::endl;
+			dump_utf8(std::cout, key.name);
+		}
 		res.hash = 0;
 
 		rc = m_bt.Lookup(e, &key, 10 + key.name_len, CompareStdDirKey, this, true);
@@ -260,10 +273,10 @@ bool ApfsDir::LookupName(ApfsDir::Name& res, uint64_t parent_id, const char* nam
 	if (!rc)
 		return false;
 
-	const APFS_Name *v = reinterpret_cast<const APFS_Name *>(e.val);
+	const APFS_DRec_Val *v = reinterpret_cast<const APFS_DRec_Val *>(e.val);
 
-	res.inode_id = v->id;
-	res.timestamp = v->timestamp;
+	res.inode_id = v->file_id;
+	res.timestamp = v->date_added;
 	// v->unk ?
 	return true;
 }
@@ -271,9 +284,9 @@ bool ApfsDir::LookupName(ApfsDir::Name& res, uint64_t parent_id, const char* nam
 bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 {
 	BTreeEntry e;
-	APFS_Key_Extent key;
-	const APFS_Key_Extent *ext_key = nullptr;
-	const APFS_Extent *ext_val = nullptr;
+	APFS_FileExtent_Key key;
+	const APFS_FileExtent_Key *ext_key = nullptr;
+	const APFS_FileExtent_Val *ext_val = nullptr;
 	bool rc;
 
 	assert((offs & 0xFFF) == 0);
@@ -286,8 +299,8 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 
 	while (size > 0)
 	{
-		key.inode = inode | KeyType_Extent;
-		key.offset = offs;
+		key.obj_id = inode | KeyType_FileExtent;
+		key.logical_addr = offs;
 
 		if (g_debug & Dbg_Dir)
 			std::cout << "ReadFile(inode=" << inode << ",offs=" << offs << ",size=" << size << ")" << std::endl;
@@ -297,31 +310,31 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 		if (!rc)
 			return false;
 
-		ext_key = reinterpret_cast<const APFS_Key_Extent *>(e.key);
-		ext_val = reinterpret_cast<const APFS_Extent *>(e.val);
+		ext_key = reinterpret_cast<const APFS_FileExtent_Key *>(e.key);
+		ext_val = reinterpret_cast<const APFS_FileExtent_Val *>(e.val);
 
 		if (g_debug & Dbg_Dir)
 		{
-			std::cout << "Key: inode=" << ext_key->inode << ", offset=" << ext_key->offset << std::endl;
-			std::cout << "Value: size=" << ext_val->size << ", block=" << ext_val->block << ", xts_iv=" << ext_val->xts_blkid << std::endl;
+			std::cout << "Key: inode=" << ext_key->obj_id << ", offset=" << ext_key->logical_addr << std::endl;
+			std::cout << "Value: size=" << ext_val->flags_length << ", block=" << ext_val->phys_block_num << ", xts_iv=" << ext_val->crypto_id << std::endl;
 		}
 
-		if (ext_key->inode != key.inode)
+		if (ext_key->obj_id != key.obj_id)
 			return false;
 
 		// TODO: 12 is dependent on block size ...
-		idx = (offs - ext_key->offset) >> 12;
+		idx = (offs - ext_key->logical_addr) >> 12;
 		// ext_val->size has a mysterious upper byte set. At least sometimes.
 		// Let us clear it.
-		uint64_t extent_size = ext_val->size & 0x00FFFFFFFFFFFFFFULL;
+		uint64_t extent_size = ext_val->flags_length & 0x00FFFFFFFFFFFFFFULL;
 
 		cur_size = size;
 		if (((idx << 12) + cur_size) > extent_size)
 			cur_size = extent_size - (idx << 12);
 		if (cur_size == 0)
 			break;
-		if (ext_val->block != 0)
-			m_vol.ReadBlocks(bdata, ext_val->block + idx, cur_size >> 12, true, ext_val->xts_blkid + idx);
+		if (ext_val->phys_block_num != 0)
+			m_vol.ReadBlocks(bdata, ext_val->phys_block_num + idx, cur_size >> 12, true, ext_val->crypto_id + idx);
 		else
 			memset(bdata, 0, cur_size);
 		bdata += cur_size;
@@ -335,13 +348,13 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 
 bool ApfsDir::ListAttributes(std::vector<std::string>& names, uint64_t inode)
 {
-	APFS_Key_Attribute skey;
-	const APFS_Key_Attribute *ekey;
+	APFS_Xattr_Key skey;
+	const APFS_Xattr_Key *ekey;
 	BTreeIterator it;
 	BTreeEntry res;
 	bool rc;
 
-	skey.inode_key = inode | KeyType_Attribute;
+	skey.inode_key = inode | KeyType_Xattr;
 	skey.name_len = 0;
 	skey.name[0] = 0;
 
@@ -355,7 +368,7 @@ bool ApfsDir::ListAttributes(std::vector<std::string>& names, uint64_t inode)
 		if (!rc)
 			break;
 
-		ekey = reinterpret_cast<const APFS_Key_Attribute *>(res.key);
+		ekey = reinterpret_cast<const APFS_Xattr_Key *>(res.key);
 
 		if (ekey->inode_key != skey.inode_key)
 			break;
@@ -370,15 +383,15 @@ bool ApfsDir::ListAttributes(std::vector<std::string>& names, uint64_t inode)
 
 bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const char* name)
 {
-	APFS_Key_Attribute skey;
-	const APFS_Attribute *attr;
-	const APFS_AttributeLink *alnk = nullptr;
+	APFS_Xattr_Key skey;
+	const APFS_Xattr_Val *attr;
+	const APFS_Xattr_External *alnk = nullptr;
 
 	const uint8_t *adata;
 	BTreeEntry res;
 	bool rc;
 
-	skey.inode_key = inode | KeyType_Attribute;
+	skey.inode_key = inode | KeyType_Xattr;
 	skey.name_len = strlen(name) + 1;
 	strcpy_s(skey.name, name);
 
@@ -386,8 +399,8 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 	if (!rc)
 		return false;
 
-	attr = reinterpret_cast<const APFS_Attribute *>(res.val);
-	adata = reinterpret_cast<const uint8_t *>(res.val) + sizeof(APFS_Attribute);
+	attr = reinterpret_cast<const APFS_Xattr_Val *>(res.val);
+	adata = reinterpret_cast<const uint8_t *>(res.val) + sizeof(APFS_Xattr_Val);
 
 	if (g_debug & Dbg_Dir)
 		std::cout << "GetAttribute: type=" << attr->type << std::endl;
@@ -396,36 +409,36 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 	{
 		// Attribute contents are stored in a file
 		assert(attr->size == 0x30);
-		alnk = reinterpret_cast<const APFS_AttributeLink *>(adata);
+		alnk = reinterpret_cast<const APFS_Xattr_External *>(adata);
 		if (g_debug & Dbg_Dir)
 		{
-			std::cout << "Attr is link: size = " << alnk->size << ", size on disk = " << alnk->size_on_disk << std::endl;
+			std::cout << "Attr is link: size = " << alnk->stream.size << ", size on disk = " << alnk->stream.alloced_size << std::endl;
 		}
 
 		if (g_debug & Dbg_Dir)
 		{
 			std::cout << "Attribute is link:" << std::endl;
-			std::cout << "  obj id  : " << alnk->object_id << std::endl;
-			std::cout << "  size    : " << alnk->size << std::endl;
-			std::cout << "  on disk : " << alnk->size_on_disk << std::endl;
-			std::cout << "  unk@18  : " << alnk->unk[0] << std::endl;
-			std::cout << "  unk@20  : " << alnk->unk[1] << std::endl;
-			std::cout << "  unk@28  : " << alnk->unk[2] << std::endl;
+			std::cout << "  obj_id       : " << alnk->obj_id << std::endl;
+			std::cout << "  size         : " << alnk->stream.size << std::endl;
+			std::cout << "  alloced_size : " << alnk->stream.alloced_size << std::endl;
+			std::cout << "  default_crypto_id : " << alnk->stream.default_crypto_id << std::endl;
+			std::cout << "  unk@20  : " << alnk->stream.unk_18 << std::endl;
+			std::cout << "  unk@28  : " << alnk->stream.unk_20 << std::endl;
 
 			Inode inode_info;
 			bool rc;
 
-			rc = GetInode(inode_info, alnk->object_id);
+			rc = GetInode(inode_info, alnk->obj_id);
 
 			if (rc)
-				std::cout << "Inode: size = " << inode_info.sizes.size << " size on disk = " << inode_info.sizes.size_on_disk << std::endl;
+				std::cout << "Inode: size = " << inode_info.sizes.size << " size on disk = " << inode_info.sizes.alloced_size << std::endl;
 			else
 				std::cout << "No inode found for this attribute." << std::endl;
 		}
 
-		data.resize(alnk->size_on_disk);
-		ReadFile(data.data(), alnk->object_id, 0, data.size()); // Read must be multiple of 4K ...
-		data.resize(alnk->size);
+		data.resize(alnk->stream.alloced_size);
+		ReadFile(data.data(), alnk->obj_id, 0, data.size()); // Read must be multiple of 4K ...
+		data.resize(alnk->stream.size);
 
 		if (g_debug & Dbg_Dir)
 		{
@@ -472,17 +485,20 @@ int ApfsDir::CompareStdDirKey(const void *skey, size_t skey_len, const void *eke
 	{
 		switch ((ks & 0xF) << 60)
 		{
-		case KeyType_Name:
+		case KeyType_DirRecord:
 			if (dir->m_txt_fmt & 9)
 			{
-				const APFS_Key_Name *s = reinterpret_cast<const APFS_Key_Name *>(skey);
-				const APFS_Key_Name *e = reinterpret_cast<const APFS_Key_Name *>(ekey);
+				const APFS_DRec_Key *s = reinterpret_cast<const APFS_DRec_Key *>(skey);
+				const APFS_DRec_Key *e = reinterpret_cast<const APFS_DRec_Key *>(ekey);
 
 				if ((e->hash & 0xFFFFFC00) < (s->hash & 0xFFFFFC00))
 					return -1;
 				if ((e->hash & 0xFFFFFC00) > (s->hash & 0xFFFFFC00))
 					return 1;
 
+#if 1
+				return StrCmpUtf8NormalizedFolded(e->name, s->name, (dir->m_txt_fmt & APFS_APSB_CaseInsensitive) != 0);
+#else
 				// TODO: This is not case insensitive ...
 				for (size_t k = 0; k < (e->hash & 0x3FF); k++)
 				{
@@ -491,11 +507,12 @@ int ApfsDir::CompareStdDirKey(const void *skey, size_t skey_len, const void *eke
 					if (e->name[k] > s->name[k])
 						return 1;
 				}
+#endif
 			}
 			else
 			{
-				const APFS_Key_Name_Old *s = reinterpret_cast<const APFS_Key_Name_Old *>(skey);
-				const APFS_Key_Name_Old *e = reinterpret_cast<const APFS_Key_Name_Old *>(ekey);
+				const APFS_DRec_Key_Old *s = reinterpret_cast<const APFS_DRec_Key_Old *>(skey);
+				const APFS_DRec_Key_Old *e = reinterpret_cast<const APFS_DRec_Key_Old *>(ekey);
 
 				size_t cnt = std::min(e->name_len, s->name_len);
 
@@ -513,24 +530,24 @@ int ApfsDir::CompareStdDirKey(const void *skey, size_t skey_len, const void *eke
 					return 1;
 			}
 			break;
-		case KeyType_Extent:
+		case KeyType_FileExtent:
 		{
-			const APFS_Key_Extent *s = reinterpret_cast<const APFS_Key_Extent *>(skey);
-			const APFS_Key_Extent *e = reinterpret_cast<const APFS_Key_Extent *>(ekey);
+			const APFS_FileExtent_Key *s = reinterpret_cast<const APFS_FileExtent_Key *>(skey);
+			const APFS_FileExtent_Key *e = reinterpret_cast<const APFS_FileExtent_Key *>(ekey);
 
-			assert(skey_len == sizeof(APFS_Key_Extent));
-			assert(ekey_len == sizeof(APFS_Key_Extent));
+			assert(skey_len == sizeof(APFS_FileExtent_Key));
+			assert(ekey_len == sizeof(APFS_FileExtent_Key));
 
-			if (e->offset < s->offset)
+			if (e->logical_addr < s->logical_addr)
 				return -1;
-			if (e->offset > s->offset)
+			if (e->logical_addr > s->logical_addr)
 				return 1;
 		}
 			break;
-		case KeyType_Attribute:
+		case KeyType_Xattr:
 		{
-			const APFS_Key_Attribute *s = reinterpret_cast<const APFS_Key_Attribute *>(skey);
-			const APFS_Key_Attribute *e = reinterpret_cast<const APFS_Key_Attribute *>(ekey);
+			const APFS_Xattr_Key *s = reinterpret_cast<const APFS_Xattr_Key *>(skey);
+			const APFS_Xattr_Key *e = reinterpret_cast<const APFS_Xattr_Key *>(ekey);
 
 			size_t cnt = std::max(e->name_len, s->name_len);
 

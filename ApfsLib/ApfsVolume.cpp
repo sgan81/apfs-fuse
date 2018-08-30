@@ -59,28 +59,28 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 
 	memcpy(&m_sb, blk.data(), sizeof(m_sb));
 
-	if (m_sb.signature != 0x42535041)
+	if (m_sb.apfs_magic != 0x42535041)
 		return false;
 
-	if (!m_nodemap_dir.Init(m_sb.blockid_nodemap, m_sb.hdr.xid))
+	if (!m_nodemap_dir.Init(m_sb.apfs_omap_oid, m_sb.hdr.o_xid))
 		std::cerr << "WARNING: Volume node id mapper btree init failed." << std::endl;
 
-	if ((m_sb.flags_108 & 3) != 1)
+	if ((m_sb.apfs_fs_flags & 3) != 1)
 	{
 		uint8_t vek[0x20];
 		std::string str;
 
-		std::cout << "Volume " << m_sb.vol_name << " is encrypted." << std::endl;
+		std::cout << "Volume " << m_sb.apfs_volname << " is encrypted." << std::endl;
 
-		if (!m_container.GetVolumeKey(vek, m_sb.guid))
+		if (!m_container.GetVolumeKey(vek, m_sb.apfs_vol_uuid))
 		{
-			if (m_container.GetPasswordHint(str, m_sb.guid))
+			if (m_container.GetPasswordHint(str, m_sb.apfs_vol_uuid))
 				std::cout << "Hint: " << str << std::endl;
 
 			std::cout << "Enter Password: ";
 			GetPassword(str);
 
-			if (!m_container.GetVolumeKey(vek, m_sb.guid, str.c_str()))
+			if (!m_container.GetVolumeKey(vek, m_sb.apfs_vol_uuid, str.c_str()))
 			{
 				std::cout << "Wrong password!" << std::endl;
 				return false;
@@ -91,13 +91,13 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 		m_is_encrypted = true;
 	}
 
-	if (!m_bt_directory.Init(m_sb.nodeid_rootdir, m_sb.hdr.xid, &m_nodemap_dir))
+	if (!m_bt_directory.Init(m_sb.apfs_root_tree_oid, m_sb.hdr.o_xid, &m_nodemap_dir))
 		std::cerr << "WARNING: Directory btree init failed" << std::endl;
 
-	if (!m_bt_blockmap.Init(m_sb.blockid_blockmap, m_sb.hdr.xid))
+	if (!m_bt_blockmap.Init(m_sb.apfs_extentref_tree_oid, m_sb.hdr.o_xid))
 		std::cerr << "WARNING: Block map btree init failed" << std::endl;
 
-	if (!m_bt_snapshots.Init(m_sb.blockid_4xBx10_map, m_sb.hdr.xid))
+	if (!m_bt_snapshots.Init(m_sb.apfs_snap_meta_tree_oid, m_sb.hdr.o_xid))
 		std::cerr << "WARNING: Snapshots btree init failed" << std::endl;
 
 	return true;
@@ -115,7 +115,7 @@ void ApfsVolume::dump(BlockDumper& bd)
 	if (!VerifyBlock(blk.data(), blk.size()))
 		return;
 
-	bd.SetTextFlags(m_sb.features_38 & 0xFF);
+	bd.SetTextFlags(m_sb.apfs_incompatible_features & 0xFF);
 
 	bd.DumpNode(blk.data(), m_blockid_sb);
 

@@ -53,4 +53,6 @@ add_library(ApfsLib
 	TripleDes.cpp
 	TripleDes.h
 	Util.cpp
-	Util.h)
+	Util.h
+	Unicode.cpp
+	Unicode.h)

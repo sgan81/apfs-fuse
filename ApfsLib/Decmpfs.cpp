@@ -84,7 +84,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 	const CompressionHeader *hdr = reinterpret_cast<const CompressionHeader *>(compressed.data());
 	const uint8_t *cdata = compressed.data() + sizeof(CompressionHeader);
 	size_t csize = compressed.size() - sizeof(CompressionHeader);
-	size_t decoded_bytes;
+	size_t decoded_bytes = 0;
 
 #if 1 // Disable to get compressed data
 	if (g_debug & Dbg_Cmpfs)

@@ -37,9 +37,9 @@ public:
 
 		uint64_t id;
 
-		APFS_Inode ino;
+		APFS_Inode_Val ino;
 		std::string name;
-		APFS_Inode_Sizes sizes;
+		APFS_DStream sizes;
 		uint64_t unk_param;
 	};
 

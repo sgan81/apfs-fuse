@@ -45,7 +45,7 @@ public:
 	bool ReadBlocks(byte_t *data, uint64_t blkid, uint64_t blkcnt = 1) const;
 	bool ReadAndVerifyHeaderBlock(byte_t *data, uint64_t blkid) const;
 
-	uint32_t GetBlocksize() const { return m_sb.block_size; }
+	uint32_t GetBlocksize() const { return m_sb.nx_block_size; }
 
 	bool GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password = nullptr);
 	bool GetPasswordHint(std::string &hint, const apfs_uuid_t &vol_uuid);
@@ -59,7 +59,7 @@ private:
 
 	std::string m_passphrase;
 
-	APFS_Superblock_NXSB m_sb;
+	APFS_NX_Superblock m_sb;
 
 	APFS_Block_8_5_Spaceman m_spaceman_hdr;
 	// Block_8_11 ?

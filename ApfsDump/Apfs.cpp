@@ -55,14 +55,14 @@ void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 
 	uint64_t bid;
 	uint8_t block[BLOCKSIZE];
-	const APFS_BlockHeader * const blk = reinterpret_cast<const APFS_BlockHeader *>(block);
-	const APFS_TableHeader * const tbl = reinterpret_cast<const APFS_TableHeader *>(block + sizeof(APFS_BlockHeader));
+	const APFS_ObjHeader * const blk = reinterpret_cast<const APFS_ObjHeader *>(block);
+	const APFS_TableHeader * const tbl = reinterpret_cast<const APFS_TableHeader *>(block + sizeof(APFS_ObjHeader));
 	bool last_was_used = false;
 
 	os << hex << uppercase << setfill('0');
 
-	os << "[Block]  | Node ID  | Version  | Type | Flgs | Subtype  | Page | Levl | Entries  | Description" << endl;
-	os << "---------+----------+----------+------+------+----------+------+------+----------+---------------------------------" << endl;
+	os << "[Block]  | oid      | xid      | type     | subtype  | Page | Levl | Entries  | Description" << endl;
+	os << "---------+----------+----------+----------+----------+------+------+----------+---------------------------------" << endl;
 
 	for (bid = 0; bid < bcnt && !g_abort; bid++)
 	{
@@ -71,7 +71,7 @@ void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 		if (IsEmptyBlock(block, BLOCKSIZE))
 		{
 			if (last_was_used)
-				os << "---------+----------+----------+------+------+----------+------+------+----------+ Empty" << endl;
+				os << "---------+----------+----------+----------+----------+------+------+----------+ Empty" << endl;
 			last_was_used = false;
 			continue;
 		}
@@ -79,15 +79,15 @@ void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 		if (VerifyBlock(block, BLOCKSIZE))
 		{
 			os << setw(8) << bid << " | ";
-			os << setw(8) << blk->nid << " | ";
-			os << setw(8) << blk->xid << " | ";
-			os << setw(4) << blk->type << " | ";
-			os << setw(8) << blk->subtype << " | ";
+			os << setw(8) << blk->o_oid << " | ";
+			os << setw(8) << blk->o_xid << " | ";
+			os << setw(8) << blk->o_type << " | ";
+			os << setw(8) << blk->o_subtype << " | ";
 			os << setw(4) << tbl->page << " | ";
 			os << setw(4) << tbl->level << " | ";
 			os << setw(8) << tbl->entries_cnt << " | ";
-			os << BlockDumper::GetNodeType(blk->type, blk->subtype);
-			if (blk->type == 2)
+			os << BlockDumper::GetNodeType(blk->o_type, blk->o_subtype);
+			if (APFS_OBJ_TYPE(blk->o_type) == 2)
 				os << " [Root]";
 			os << endl;
 			last_was_used = true;
@@ -133,6 +133,101 @@ void ScanBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt
 	}
 }
 
+void DumpSpaceman(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
+{
+	uint8_t sb[BLOCKSIZE];
+	uint8_t data[BLOCKSIZE];
+	BlockDumper bd(os, BLOCKSIZE);
+	const APFS_ObjHeader *bhdr;
+	const APFS_Block_8_5_Spaceman *sm;
+	const APFS_NX_Superblock *nxsb;
+	uint64_t bid;
+	uint64_t cnt;
+	uint64_t smbmp_bid = 0;
+	uint64_t smbmp_cnt = 0;
+	uint64_t volbmp_bid = 0;
+	uint64_t volbmp_cnt = 0;
+
+	(void)bcnt;
+
+	if (!dev.Read(sb, bid_start * BLOCKSIZE, BLOCKSIZE))
+		return;
+
+	if (!VerifyBlock(sb, BLOCKSIZE))
+		return;
+
+	nxsb = reinterpret_cast<const APFS_NX_Superblock *>(sb);
+	if (nxsb->hdr.o_type != 0x80000001)
+		return;
+
+	if (nxsb->nx_magic != 0x4253584E)
+		return;
+
+	bd.DumpNode(sb, 0);
+
+	os << std::endl;
+	os << "Dumping Superblock Area" << std::endl;
+	os << std::endl;
+
+	bid = nxsb->nx_xp_desc_base;
+	cnt = nxsb->nx_xp_desc_blocks;
+
+	while (cnt > 0)
+	{
+		dev.Read(data, (bid_start + bid) * BLOCKSIZE, BLOCKSIZE);
+		bd.DumpNode(data, bid);
+		cnt--;
+		bid++;
+	}
+
+	os << std::endl;
+	os << "Dumping Spaceman Area" << std::endl;
+	os << std::endl;
+
+	bid = nxsb->nx_xp_data_base;
+	cnt = nxsb->nx_xp_data_blocks;
+
+	while (cnt > 0)
+	{
+		dev.Read(data, (bid_start + bid) * BLOCKSIZE, BLOCKSIZE);
+		bd.DumpNode(data, bid);
+		cnt--;
+		bid++;
+
+		bhdr = reinterpret_cast<const APFS_ObjHeader *>(data);
+		if (bhdr->o_type == 0x80000005)
+		{
+			sm = reinterpret_cast<const APFS_Block_8_5_Spaceman *>(data);
+			smbmp_bid = sm->ip_bm_base_address;
+			smbmp_cnt = sm->ip_bitmap_block_count;
+			volbmp_bid = sm->ip_base_address;
+			volbmp_cnt = sm->ip_block_count;
+		}
+	}
+
+	bid = smbmp_bid;
+	cnt = smbmp_cnt;
+
+	while (cnt > 0)
+	{
+		dev.Read(data, (bid_start + bid) * BLOCKSIZE, BLOCKSIZE);
+		bd.DumpNode(data, bid);
+		cnt--;
+		bid++;
+	}
+
+	bid = volbmp_bid;
+	cnt = volbmp_cnt;
+
+	while (cnt > 0)
+	{
+		dev.Read(data, (bid_start + bid) * BLOCKSIZE, BLOCKSIZE);
+		bd.DumpNode(data, bid);
+		cnt--;
+		bid++;
+	}
+}
+
 static void ctrl_c_handler(int sig)
 {
 	(void)sig;
@@ -173,6 +268,7 @@ int main(int argc, const char *argv[])
 			int partid = pmap.FindFirstAPFSPartition();
 			if (partid >= 0)
 			{
+				std::cout << "Dumping EFI partition" << std::endl;
 				pmap.GetPartitionOffsetAndSize(partid, bid_start, bcnt);
 				bid_start /= BLOCKSIZE;
 				bcnt /= BLOCKSIZE;
@@ -207,6 +303,7 @@ int main(int argc, const char *argv[])
 		return 3;
 	}
 
+	// DumpSpaceman(os, *dev, bid_start, bcnt);
 	ScanBlocks(os, *dev, bid_start, bcnt);
 
 	dev->Close();

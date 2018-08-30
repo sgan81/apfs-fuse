@@ -40,36 +40,39 @@ public:
 private:
 	typedef void(BlockDumper::*DumpFunc)(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
 
-	void DumpNodeHeader(const APFS_BlockHeader *blk, uint64_t blk_nr);
+	void DumpNodeHeader(const APFS_ObjHeader *blk, uint64_t blk_nr);
 	void DumpBTNode(DumpFunc func, uint16_t key_size = 0, uint16_t value_size = 0);
 	void DumpBTHeader(bool dump_offsets = false);
 	void DumpBTFooter();
 	void DumpTableHeader(const APFS_TableHeader &tbl);
 
-	void DumpBlk_0_D();
-	void DumpBlk_4_7();
-	void DumpBlk_4_B();
-	void DumpBlk_4_C();
-	void DumpBlk_8_1();
-	void DumpBlk_8_5();
-	void DumpBlk_8_11();
+	void DumpBlk_APSB();
+	void DumpBlk_CIB();
+	void DumpBlk_OM();
+	void DumpBlk_CPM();
+	void DumpBlk_NXSB();
+	void DumpBlk_SM();
+	void DumpBlk_NR();
+	void DumpBlk_NRL();
 
 	void DumpBTNode_0();
 
-	void DumpBTEntry_E(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_B(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_F(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_10(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_APFS_Root(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_OMap(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_APFS_ExtentRef(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_APFS_SnapMeta(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
 	void DumpBTEntry_13(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_9(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_FreeList(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
 
 	void DumpBTEntry_Unk(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+
+	void Dump_XF(const byte_t *xf_data, size_t xf_size);
 
 	void DumpBlockHex();
 	void DumpHex(const byte_t *data, size_t size, size_t line_size = 16);
 
 public:
-	static const char * GetNodeType(uint16_t type, uint32_t subtype);
+	static const char * GetNodeType(uint32_t type, uint32_t subtype);
 
 private:
 	static std::string tstamp(uint64_t apfs_time);

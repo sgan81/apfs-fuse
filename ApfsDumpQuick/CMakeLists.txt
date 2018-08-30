@@ -1,7 +1,2 @@
 add_executable(apfs-dump-quick ApfsDumpQuick.cpp)
-if(APPLE)
 target_link_libraries(apfs-dump-quick ApfsLib z bz2 lzfse)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -framework CoreFoundation")
-else()
-target_link_libraries(apfs-dump-quick ApfsLib icuuc z bz2 lzfse)
-endif()

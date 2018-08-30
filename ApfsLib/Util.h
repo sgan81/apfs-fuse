@@ -32,12 +32,21 @@ bool IsZero(const byte_t *data, size_t size);
 bool IsEmptyBlock(const void *data, size_t blksize);
 void DumpHex(std::ostream &os, const byte_t *data, size_t size, size_t line_size = 16);
 void DumpBuffer(const uint8_t *data, size_t len, const char *label);
+
 std::string uuidstr(const apfs_uuid_t &uuid);
-uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensitive);
-bool GetPassword(std::string &pw);
-bool Utf8toU32(std::vector<char32_t>& u32_str, const uint8_t * str);
+void dump_utf8(std::ostream &st, const char *str);
+void dump_utf32(std::ostream &st, const char32_t *str, size_t size);
+
+uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_fold);
+
+int StrCmpUtf8NormalizedFolded(const char *s1, const char *s2, bool case_fold);
+
+bool Utf8toUtf32(std::vector<char32_t> &str32, const char * str);
+
 size_t DecompressZLib(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 size_t DecompressADC(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 size_t DecompressLZVN(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 size_t DecompressBZ2(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 size_t DecompressLZFSE(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
+
+bool GetPassword(std::string &pw);

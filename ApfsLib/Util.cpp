@@ -17,14 +17,7 @@
 	along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifdef __linux__
-#include <unicode/utypes.h>
-#include <unicode/normalizer2.h>
-#elif defined(__APPLE__)
-#include <CoreFoundation/CFString.h>
-#else
-// TODO
-#endif
+#include "Unicode.h"
 
 #include <cassert>
 
@@ -181,99 +174,195 @@ std::string uuidstr(const apfs_uuid_t &uuid)
 	return st.str();
 }
 
-#ifdef __linux__
-
-uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensitive)
+void dump_utf8(std::ostream &st, const char* str)
 {
-	icu::StringPiece utf8(utf8str);
-	icu::UnicodeString str = icu::UnicodeString::fromUTF8(utf8);
-	icu::UnicodeString normalized;
-	UErrorCode err = U_ZERO_ERROR;
-	std::vector<UChar32> hashdata;
-	uint32_t hash;
+	size_t ptr = 0;
+	uint8_t ch;
+	char32_t uch;
+	int cnt;
 
-	const icu::Normalizer2 *norm = icu::Normalizer2::getNFDInstance(err);
+	st << std::hex << std::uppercase;
 
-	// Case folding must be done before normalization, otherwise some names are not hashed correctly.
-	if (case_insensitive)
-		str.foldCase();
+	while (str[ptr] != 0)
+	{
+		ch = str[ptr++];
 
-	normalized = norm->normalize(str, err);
+		if (ch < 0x80) {
+			uch = ch;
+			cnt = 0;
+		} else if (ch < 0xC0) {
+			break;
+		} else if (ch < 0xE0) {
+			uch = ch & 0x1F;
+			cnt = 1;
+		} else if (ch < 0xF0) {
+			uch = ch & 0x0F;
+			cnt = 2;
+		} else if (ch < 0xF8) {
+			uch = ch & 0x07;
+			cnt = 3;
+		} else
+			break;
 
-	hashdata.resize(normalized.countChar32() + 1);
+		for (; cnt > 0; --cnt)
+		{
+			ch = str[ptr++];
+			if ((ch & 0xC0) == 0x80)
+				uch = (uch << 6) | (ch & 0x3F);
+			else
+				break;
+		}
 
-	normalized.toUTF32(hashdata.data(), hashdata.size(), err);
+		st << uch << ' ';
+	}
 
-	hashdata.pop_back();
-
-
-	g_crc.SetCRC(0xFFFFFFFF);
-	g_crc.Calc(reinterpret_cast<const byte_t *>(hashdata.data()), hashdata.size() * sizeof(UChar32));
-	hash = g_crc.GetCRC();
-
-	hash = ((hash & 0x3FFFFF) << 10) | (name_len & 0x3FF);
-
-	return hash;
+	st << str << std::endl;
 }
 
-#elif defined(__APPLE__)
-
-uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensitive)
+void dump_utf32(std::ostream &st, const char32_t *str, size_t size)
 {
-	char normalized[5120];
-	uint32_t hash;
-	std::vector<char32_t> normalized_u32;
+	size_t k;
 
-	CFStringRef str = CFStringCreateWithCString(kCFAllocatorDefault, utf8str, kCFStringEncodingUTF8);
-	CFMutableStringRef mstr = CFStringCreateMutableCopy(NULL, 0, str);
+	st << std::hex << std::uppercase;
 
-	// TODO: Is the locale correct? Is it used at all?
-	if (case_insensitive)
-		CFStringFold(mstr, kCFCompareCaseInsensitive, NULL);
-
-	CFStringNormalize(mstr, kCFStringNormalizationFormD);
-
-	CFStringGetCString(mstr, normalized, sizeof(normalized) - 1, kCFStringEncodingUTF8);
-
-	CFRelease(mstr);
-	CFRelease(str);
-
-	normalized_u32.reserve(name_len + 16);
-	Utf8toU32(normalized_u32, reinterpret_cast<const uint8_t *>(normalized));
-
-	g_crc.SetCRC(0xFFFFFFFF);
-	g_crc.Calc(reinterpret_cast<const byte_t *>(normalized_u32.data()), normalized_u32.size() * sizeof(char32_t));
-	hash = g_crc.GetCRC();
-
-	hash = ((hash & 0x3FFFFF) << 10) | (name_len & 0x3FF);
-
-	return hash;
+	for (k = 0; k < size; k++)
+		st << str[k] << ' ';
+	for (k = 0; k < size; k++)
+		if (str[k] >= 0x20 && str[k] < 0x7F)
+			st << static_cast<char>(str[k]);
+		else
+			st << '.';
+	st << std::endl;
 }
 
-#else
-
-uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_insensitive)
+uint32_t HashFilename(const char* utf8str, uint16_t name_len, bool case_fold)
 {
-	std::vector<char32_t> u32_name;
-	std::vector<char32_t> u32_normalized;
+	std::vector<char32_t> utf32;
+	std::vector<char32_t> utf32_nfd;
 	uint32_t hash;
 
-	Utf8toU32(u32_name, reinterpret_cast<const uint8_t *>(utf8str));
+	Utf8toUtf32(utf32, utf8str);
 
-	// NormalizeFilename(u32_normalized, u32_name, case_insensitive); // TODO
-	u32_normalized = u32_name;
+	NormalizeFoldString(utf32_nfd, utf32, case_fold);
 
-	g_crc.SetCRC(0xFFFFFFFF);
-	g_crc.Calc(reinterpret_cast<const byte_t *>(u32_normalized.data()), u32_normalized.size() * sizeof(char32_t));
-
-	hash = g_crc.GetCRC();
-
-	hash = ((hash & 0x3FFFFF) << 10) | (name_len & 0x3FF);
-
-	return hash;
-}
-
+#if 0
+	if (g_debug & Dbg_Dir)
+	{
+		dump_utf32(utf32.data(), utf32.size());
+		dump_utf32(utf32_nfd.data(), utf32_nfd.size());
+	}
 #endif
+
+	g_crc.SetCRC(0xFFFFFFFF);
+	g_crc.Calc(reinterpret_cast<const byte_t *>(utf32_nfd.data()), utf32_nfd.size() * sizeof(char32_t));
+
+	hash = g_crc.GetCRC();
+
+	hash = ((hash & 0x3FFFFF) << 10) | (name_len & 0x3FF);
+
+	return hash;
+}
+
+int StrCmpUtf8NormalizedFolded(const char* s1, const char* s2, bool case_fold)
+{
+	std::vector<char32_t> s1_u32;
+	std::vector<char32_t> s2_u32;
+	std::vector<char32_t> s1_u32_nfd;
+	std::vector<char32_t> s2_u32_nfd;
+	size_t k;
+
+	Utf8toUtf32(s1_u32, s1);
+	Utf8toUtf32(s2_u32, s2);
+
+	NormalizeFoldString(s1_u32_nfd, s1_u32, case_fold);
+	NormalizeFoldString(s2_u32_nfd, s2_u32, case_fold);
+
+	s1_u32_nfd.push_back(0);
+	s2_u32_nfd.push_back(0);
+
+	k = 0;
+	while (true)
+	{
+		if (s1_u32_nfd[k] < s2_u32_nfd[k])
+			return -1;
+		if (s1_u32_nfd[k] > s2_u32_nfd[k])
+			return 1;
+		if (s1_u32_nfd[k] == 0 || s2_u32_nfd[k] == 0)
+			break;
+		++k;
+	}
+
+	return 0;
+}
+
+bool Utf8toUtf32(std::vector<char32_t> &str32, const char* str)
+{
+	size_t ip = 0;
+	int cnt = 0;
+
+	char32_t ch;
+	uint8_t c;
+
+	bool ok = true;
+
+	while (str[ip] != 0)
+	{
+		c = str[ip++];
+
+		if (c < 0x80)
+		{
+			ch = c;
+			cnt = 0;
+		}
+		else if (c < 0xC0)
+		{
+			ok = false;
+			break;
+		}
+		else if (c < 0xE0)
+		{
+			ch = c & 0x1F;
+			cnt = 1;
+		}
+		else if (c < 0xF0)
+		{
+			ch = c & 0x0F;
+			cnt = 2;
+		}
+		else if (c < 0xF8)
+		{
+			ch = c & 0x07;
+			cnt = 3;
+		}
+		else
+		{
+			ok = false;
+			break;
+		}
+
+		for (; cnt > 0; --cnt)
+		{
+			c = str[ip++];
+			if ((c & 0xC0) == 0x80)
+				ch = (ch << 6) | (c & 0x3F);
+			else
+			{
+				ok = false;
+				break;
+			}
+		}
+
+		if (!ok)
+			break;
+
+		str32.push_back(ch);
+
+		if (ch == 0)
+			break;
+	}
+
+	return ok;
+}
 
 bool GetPassword(std::string &pw)
 {
@@ -304,67 +393,6 @@ bool GetPassword(std::string &pw)
 
 	return true;
 #endif
-}
-
-bool Utf8toU32(std::vector<char32_t>& u32_str, const uint8_t * str)
-{
-	size_t ip = 0;
-	uint32_t ch;
-	int cnt = 0;
-	uint8_t c;
-	bool ok = true;
-
-	while (str[ip] != 0)
-	{
-		c = str[ip++];
-
-		if (cnt == 0)
-		{
-			if ((c & 0x80) == 0)
-				ch = c;
-			else if ((c & 0xE0) == 0xC0)
-			{
-				ch = c & 0x1F;
-				cnt = 1;
-			}
-			else if ((c & 0xF0) == 0xE0)
-			{
-				ch = c & 0x0F;
-				cnt = 2;
-			}
-			else if ((c & 0xF8) == 0xF0)
-			{
-				ch = c & 0x07;
-				cnt = 3;
-			}
-			else
-			{
-				ok = false;
-				break;
-			}
-		}
-		else
-		{
-			if ((c & 0xC0) == 0x80)
-			{
-				ch = (ch << 6) | (c & 0x3F);
-				--cnt;
-			}
-			else
-			{
-				ok = false;
-				break;
-			}
-		}
-
-		if (cnt == 0)
-		{
-			u32_str.push_back(ch);
-			ch = 0;
-		}
-	}
-
-	return ok;
 }
 
 size_t DecompressZLib(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size)

@@ -76,18 +76,18 @@ BTreeNode::BTreeNode(BTree &tree, const uint8_t *block, size_t blocksize, uint64
 	m_bid(bid)
 {
 	m_block.assign(block, block + blocksize);
-	m_hdr = reinterpret_cast<const APFS_BlockHeader *>(m_block.data());
-	m_bt = reinterpret_cast<const APFS_BTHeader *>(m_block.data() + sizeof(APFS_BlockHeader));
+	m_hdr = reinterpret_cast<const APFS_ObjHeader *>(m_block.data());
+	m_bt = reinterpret_cast<const APFS_BTHeader *>(m_block.data() + sizeof(APFS_ObjHeader));
 
-	assert(m_bt->keys_offs == 0);
+	assert(m_bt->table_space_offset == 0);
 
-	m_keys_start = 0x38 + m_bt->keys_len;
+	m_keys_start = 0x38 + m_bt->table_space_length;
 	m_vals_start = (nid_parent != 0) ? blocksize : blocksize - sizeof(APFS_BTFooter);
 }
 
 std::shared_ptr<BTreeNode> BTreeNode::CreateNode(BTree & tree, const uint8_t * block, size_t blocksize, uint64_t nid_parent, uint64_t bid)
 {
-	const APFS_BTHeader *bt = reinterpret_cast<const APFS_BTHeader *>(block + sizeof(APFS_BlockHeader));
+	const APFS_BTHeader *bt = reinterpret_cast<const APFS_BTHeader *>(block + sizeof(APFS_ObjHeader));
 
 	if (bt->flags & 4)
 		return std::make_shared<BTreeNodeFix>(tree, block, blocksize, nid_parent, bid);
@@ -109,7 +109,7 @@ bool BTreeNodeFix::GetEntry(BTreeEntry & result, uint32_t index) const
 {
 	result.clear();
 
-	if (index >= m_bt->entries_cnt)
+	if (index >= m_bt->key_count)
 		return false;
 
 	result.key = m_block.data() + m_keys_start + m_entries[index].key_offs;
@@ -139,7 +139,7 @@ bool BTreeNodeVar::GetEntry(BTreeEntry & result, uint32_t index) const
 {
 	result.clear();
 
-	if (index >= m_bt->entries_cnt)
+	if (index >= m_bt->key_count)
 		return false;
 
 	result.key = m_block.data() + m_keys_start + m_entries[index].key_offs;
