@@ -295,7 +295,6 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 	uint8_t *bdata = reinterpret_cast<uint8_t *>(data);
 
 	size_t cur_size;
-	unsigned idx;
 
 	while (size > 0)
 	{
@@ -323,7 +322,7 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 			return false;
 
 		// TODO: 12 is dependent on block size ...
-		idx = (offs - ext_key->logical_addr) >> 12;
+		auto idx = (offs - ext_key->logical_addr) >> 12;
 		// ext_val->size has a mysterious upper byte set. At least sometimes.
 		// Let us clear it.
 		uint64_t extent_size = ext_val->flags_length & 0x00FFFFFFFFFFFFFFULL;

@@ -22,6 +22,8 @@
 #include <cstring>
 #include <cassert>
 
+#include <limits.h>
+
 #include "Decmpfs.h"
 #include "Endian.h"
 
@@ -84,7 +86,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 	const CompressionHeader *hdr = reinterpret_cast<const CompressionHeader *>(compressed.data());
 	const uint8_t *cdata = compressed.data() + sizeof(CompressionHeader);
 	size_t csize = compressed.size() - sizeof(CompressionHeader);
-	size_t decoded_bytes = 0;
+	size_t decoded_bytes;
 
 #if 1 // Disable to get compressed data
 	if (g_debug & Dbg_Cmpfs)
@@ -147,7 +149,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			{
 				size_t src_offset = cmpf_rsrc->entry[k].off;
 				const uint8_t *src = cmpf_rsrc_base + src_offset;
-				size_t src_len = cmpf_rsrc->entry[k].size;
+				auto src_len = cmpf_rsrc->entry[k].size; //cmpf_rsrc->entry[k].size is uint32_t
 				uint8_t *dst = decompressed.data() + 0x10000 * k;
 				size_t expected_len = hdr->size - (0x10000 * k);
 				if (expected_len > 0x10000)
@@ -162,7 +164,8 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 
 				if (src[0] == 0x78)
 				{
-					decoded_bytes = DecompressZLib(dst, 0x10000, src, src_len);
+					assert(src_len <= UINT_MAX);
+					decoded_bytes = DecompressZLib(dst, 0x10000, src, (unsigned int)src_len);
 				}
 				else if ((src[0] & 0x0F) == 0x0F)
 				{
@@ -236,7 +239,9 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		{
 			if (cdata[0] == 0x78)
 			{
-				decoded_bytes = DecompressZLib(decompressed.data(), decompressed.size(), cdata, csize);
+				assert(decompressed.size() <= UINT_MAX);
+				assert(csize <= UINT_MAX);
+				decoded_bytes = DecompressZLib(decompressed.data(), (unsigned int)decompressed.size(), cdata, (unsigned int)csize);
 			}
 			else if (cdata[0] == 0xFF) // cdata[0] & 0x0F == 0x0F ?
 			{
@@ -260,6 +265,10 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			{
 				decoded_bytes = DecompressLZVN(decompressed.data(), decompressed.size(), cdata, csize);
 			}
+		}
+		else
+		{
+			decoded_bytes = 0;
 		}
 
 		if (decoded_bytes != hdr->size)

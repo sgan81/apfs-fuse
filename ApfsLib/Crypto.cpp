@@ -9,6 +9,8 @@
 #include <iostream>
 #include <iomanip>
 
+#include <limits.h>
+
 #include "Endian.h"
 
 union Rfc3394_Unit {
@@ -26,7 +28,8 @@ void Rfc3394_KeyWrap(uint8_t *crypto, const uint8_t *plain, size_t size, const u
 	uint64_t r[6];
 	int i;
 	int j;
-	int n = size / sizeof(uint64_t);
+	assert(size / sizeof(uint64_t) <= INT_MAX);
+	int n = int(size / sizeof(uint64_t));
 	uint64_t t;
 	const uint64_t *p = reinterpret_cast<const uint64_t *>(plain);
 	uint64_t *c = reinterpret_cast<uint64_t *>(crypto);
@@ -65,7 +68,8 @@ bool Rfc3394_KeyUnwrap(uint8_t *plain, const uint8_t *crypto, size_t size, const
 	uint64_t r[6];
 	int i;
 	int j;
-	int n = size / sizeof(uint64_t);
+	assert(size / sizeof(uint64_t) <= INT_MAX);
+	int n = int(size / sizeof(uint64_t));
 	uint64_t t;
 	const uint64_t *c = reinterpret_cast<const uint64_t *>(crypto);
 	uint64_t *p = reinterpret_cast<uint64_t *>(plain);

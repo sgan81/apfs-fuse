@@ -2,6 +2,8 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <assert.h>
+#include <limits.h>
 
 #include "ApfsContainer.h"
 #include "AesXts.h"
@@ -641,8 +643,8 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	uint64_t iv;
 	bool rc = false;
 
-	int cnt = recs_bag.GetKeyCnt();
-	int k;
+	auto cnt = recs_bag.GetKeyCnt();
+	decltype(cnt) k;
 
 	// Check all KEKs for any valid KEK.
 	for (k = 0; k < cnt; k++)
@@ -659,7 +661,8 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		if (!DecodeKEKBlob(kek_blob, kek_data))
 			continue;
 
-		PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(password), strlen(password), kek_blob.salt, sizeof(kek_blob.salt), kek_blob.iterations, dk, sizeof(dk));
+		assert(kek_blob.iterations <= INT_MAX);
+		PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(password), strlen(password), kek_blob.salt, sizeof(kek_blob.salt), int(kek_blob.iterations), dk, sizeof(dk));
 
 		switch (kek_blob.unk_82.unk_00)
 		{
@@ -673,6 +676,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		default:
 			std::cerr << "Unknown KEK key flags 82/00 = " << std::hex << kek_blob.unk_82.unk_00 << ". Please file a bug report." << std::endl;
 			rc = false;
+			iv = 0; // to silence warning about iv being used uninitialized.
 			break;
 		}
 
@@ -737,6 +741,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		// Unknown method.
 		std::cerr << "Unknown VEK key flags 82/00 = " << std::hex << vek_blob.unk_82.unk_00 << ". Please file a bug report." << std::endl;
 		rc = false;
+		iv = 0; // to silence the uninitialized warning
 	}
 
 	if (g_debug & Dbg_Crypto)

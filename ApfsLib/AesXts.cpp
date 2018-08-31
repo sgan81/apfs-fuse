@@ -82,6 +82,10 @@ void AesXts::Xor(uint8_t *out, const uint8_t *op1, const uint8_t *op2)
 	val64[1] = op1_64[1] ^ op2_64[1];
 }
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wconditional-uninitialized"
+#endif
+
 void AesXts::MultiplyTweak(uint8_t* tweak)
 {
 	uint8_t cin;
@@ -95,6 +99,6 @@ void AesXts::MultiplyTweak(uint8_t* tweak)
 		tweak[k] = (tweak[k] << 1) | cin;
 		cin = cout;
 	}
-	if (cout)
+	if (cout) // 2018-08 : wrongly reported uninitialized by clang
 		tweak[0] ^= 0x87;
 }
