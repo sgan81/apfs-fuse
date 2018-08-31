@@ -149,7 +149,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			{
 				size_t src_offset = cmpf_rsrc->entry[k].off;
 				const uint8_t *src = cmpf_rsrc_base + src_offset;
-				size_t src_len = cmpf_rsrc->entry[k].size;
+				auto src_len = cmpf_rsrc->entry[k].size; //cmpf_rsrc->entry[k].size is uint32_t
 				uint8_t *dst = decompressed.data() + 0x10000 * k;
 				size_t expected_len = hdr->size - (0x10000 * k);
 				if (expected_len > 0x10000)
