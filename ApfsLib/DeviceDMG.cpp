@@ -21,6 +21,8 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 #include <vector>
 #include <iostream>
 #include <iomanip>
+#include <assert.h>
+#include <limits.h>
 
 #include "DeviceDMG.h"
 #include "Util.h"
@@ -435,10 +437,14 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 					DecompressADC(sect.cache, sect.disk_length, compr_buf, sect.dmg_length);
 					break;
 				case 0x80000005:
-					DecompressZLib(sect.cache, sect.disk_length, compr_buf, sect.dmg_length);
+					assert(sect.disk_length <= UINT_MAX);
+					assert(sect.dmg_length <= UINT_MAX);
+					DecompressZLib(sect.cache, (unsigned int)sect.disk_length, compr_buf, (unsigned int)sect.dmg_length);
 					break;
 				case 0x80000006:
-					DecompressBZ2(sect.cache, sect.disk_length, compr_buf, sect.dmg_length);
+					assert(sect.disk_length <= UINT_MAX);
+					assert(sect.dmg_length <= UINT_MAX);
+					DecompressBZ2(sect.cache, (unsigned int)sect.disk_length, compr_buf, (unsigned int)sect.dmg_length);
 					break;
 				case 0x80000007:
 					DecompressLZFSE(sect.cache, sect.disk_length, compr_buf, sect.dmg_length);

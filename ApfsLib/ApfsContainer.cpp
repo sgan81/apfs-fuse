@@ -30,10 +30,10 @@
 int g_debug = 0;
 bool g_lax = false;
 
-ApfsContainer::ApfsContainer(Device &disk, uint64_t start, uint64_t len) :
+ApfsContainer::ApfsContainer(Device &disk, uint64_t start/*, uint64_t len*/) :
 	m_disk(disk),
 	m_part_start(start),
-	m_part_len(len),
+//	m_part_len(len),
 	m_nodemap_vol(*this),
 	m_nidmap_bt(*this),
 	m_oldmgr_bt(*this),

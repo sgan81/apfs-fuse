@@ -432,7 +432,7 @@ void BlockDumper::DumpBTEntry_APFS_Root(const byte_t *key_data, size_t key_lengt
 		{
 			const APFS_Xattr_Val *attr = reinterpret_cast<const APFS_Xattr_Val *>(value_data);
 
-			assert(attr->size + 4 == value_length);
+			assert( decltype(value_length)(attr->size + 4) == value_length); // attr->size + 4 is promoted to int, giving a warning (comparison between signed and unsigned integer expressions). Hence the cast.
 
 			m_os << " => " << attr->type << " " << attr->size;
 

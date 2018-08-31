@@ -34,7 +34,7 @@ class BlockDumper;
 class ApfsContainer
 {
 public:
-	ApfsContainer(Device &disk, uint64_t start, uint64_t len);
+	ApfsContainer(Device &disk, uint64_t start/*, uint64_t len*/);
 	~ApfsContainer();
 
 	bool Init();
@@ -55,13 +55,13 @@ public:
 private:
 	Device &m_disk;
 	const uint64_t m_part_start;
-	const uint64_t m_part_len;
+//	const uint64_t m_part_len; // Currently not used.
 
 	std::string m_passphrase;
 
 	APFS_NX_Superblock m_sb;
 
-	APFS_Block_8_5_Spaceman m_spaceman_hdr;
+//	APFS_Block_8_5_Spaceman m_spaceman_hdr;
 	// Block_8_11 ?
 
 	ApfsNodeMapperBTree m_nodemap_vol;
