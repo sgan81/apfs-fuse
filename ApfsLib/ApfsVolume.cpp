@@ -62,7 +62,7 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 	if (m_sb.apfs_magic != 0x42535041)
 		return false;
 
-	if (!m_nodemap_dir.Init(m_sb.apfs_omap_oid, m_sb.hdr.o_xid))
+	if (!m_nodemap_dir.Init(m_sb.apfs_omap_oid, m_sb.hdr.xid))
 		std::cerr << "WARNING: Volume node id mapper btree init failed." << std::endl;
 
 	if ((m_sb.apfs_fs_flags & 3) != 1)
@@ -91,13 +91,13 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 		m_is_encrypted = true;
 	}
 
-	if (!m_bt_directory.Init(m_sb.apfs_root_tree_oid, m_sb.hdr.o_xid, &m_nodemap_dir))
+	if (!m_bt_directory.Init(m_sb.apfs_root_tree_oid, m_sb.hdr.xid, &m_nodemap_dir))
 		std::cerr << "WARNING: Directory btree init failed" << std::endl;
 
-	if (!m_bt_blockmap.Init(m_sb.apfs_extentref_tree_oid, m_sb.hdr.o_xid))
+	if (!m_bt_blockmap.Init(m_sb.apfs_extentref_tree_oid, m_sb.hdr.xid))
 		std::cerr << "WARNING: Block map btree init failed" << std::endl;
 
-	if (!m_bt_snapshots.Init(m_sb.apfs_snap_meta_tree_oid, m_sb.hdr.o_xid))
+	if (!m_bt_snapshots.Init(m_sb.apfs_snap_meta_tree_oid, m_sb.hdr.xid))
 		std::cerr << "WARNING: Snapshots btree init failed" << std::endl;
 
 	return true;

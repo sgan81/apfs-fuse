@@ -76,11 +76,11 @@ enum XFType
 
 struct APFS_ObjHeader
 {
-	le<uint64_t> o_cksum;
-	le<uint64_t> o_oid;
-	le<uint64_t> o_xid;
-	le<uint32_t> o_type;
-	le<uint32_t> o_subtype;
+	le<uint64_t> cksum;
+	le<uint64_t> oid;
+	le<uint64_t> xid;
+	le<uint32_t> type;
+	le<uint32_t> subtype;
 };
 
 #define APFS_OBJ_TYPE(x) (x & 0xFFFFFFF)
@@ -146,17 +146,6 @@ struct APFS_BTEntryFixed
 {
 	le<uint16_t> key_offs;
 	le<uint16_t> value_offs;
-};
-
-// Entries in Bitmap Table
-
-struct APFS_Chunk
-{
-	le<uint64_t> xid;
-	le<uint64_t> offset;
-	le<uint32_t> bits_total;
-	le<uint32_t> bits_avail;
-	le<uint64_t> block;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -355,16 +344,6 @@ struct APFS_XF_Entry
 
 /* -------------------------------------------------------------------------- */
 
-struct APFS_CPM_Map
-{
-	le<uint32_t> type; // type?
-	le<uint32_t> subtype;
-	le<uint64_t> unk_08; // size?
-	le<uint64_t> unk_10;
-	le<uint64_t> nid;
-	le<uint64_t> block;
-};
-
 struct APFS_OMap_Key
 {
 	le<uint64_t> ok_oid;
@@ -390,6 +369,8 @@ struct APFS_Key_8_9
 	// Value = Number of blocks
 	// If no value, the number of blocks is 1
 };
+
+constexpr uint32_t NX_MAGIC = 0x4253584E;
 
 struct APFS_NX_Superblock // Ab 0x20
 {
@@ -424,7 +405,9 @@ struct APFS_NX_Superblock // Ab 0x20
 	le<uint64_t> nx_blocked_out_blocks;
 	le<uint64_t> unk_4E8;
 	le<uint64_t> unk_4F0;
-	le<uint64_t> unk_4F8[3];
+	le<uint64_t> nx_efi_jumpstart_paddr;
+	le<uint64_t> unk_500;
+	le<uint64_t> unk_508;
 	le<uint64_t> nx_keybag_base;
 	le<uint64_t> nx_keybag_blocks;
 	le<uint64_t> nx_ephemeral_info[5];
@@ -443,6 +426,8 @@ struct APFS_Superblock_APSB_AccessInfo
 	le<uint64_t> timestamp;
 	le<uint64_t> last_xid;
 };
+
+constexpr uint32_t APSB_MAGIC = 0x42535041;
 
 constexpr uint64_t APFS_APSB_CaseSensitive = 8;
 constexpr uint64_t APFS_APSB_CaseInsensitive = 1;
@@ -494,39 +479,84 @@ struct APFS_Superblock_APSB
 
 static_assert(sizeof(APFS_Superblock_APSB) == 0x3D0, "APSB Superblock size wrong");
 
-struct APFS_Block_4_7_Bitmaps
+struct APFS_ChunkABlock
 {
-	APFS_ObjHeader hdr;
-	APFS_TableHeader tbl;
-	APFS_Chunk bmp[0x7E];
+	APFS_ObjHeader o;
+	le<uint32_t> flags;
+	le<uint32_t> count;
+	le<uint64_t> entry[0x1FB];
 };
 
-static_assert(sizeof(APFS_Block_4_7_Bitmaps) == 0xFE8, "Block-40000007 size wrong");
+static_assert(sizeof(APFS_ChunkABlock) == 0x1000, "CAB block size wrong");
 
+struct APFS_Chunk
+{
+	le<uint64_t> xid;
+	le<uint64_t> offset;
+	le<uint32_t> bits_total;
+	le<uint32_t> bits_avail;
+	le<uint64_t> block;
+};
+
+struct APFS_ChunkInfoBlock
+{
+	APFS_ObjHeader o;
+	le<uint32_t> id;
+	le<uint32_t> chunk_count;
+	APFS_Chunk chunk[0x7E];
+};
+
+static_assert(sizeof(APFS_ChunkInfoBlock) == 0xFE8, "CIB block size wrong");
+
+/*
 struct APFS_Entry_4_B
 {
 	le<uint32_t> type_1;
 	le<uint32_t> type_2;
-	le<uint64_t> blk;
+	le<uint64_t> om_tree_paddr;
+	le<uint64_t> oms_tree_paddr;
+	le<uint64_t> oms_tree_xid;
 };
+*/
 
-struct APFS_Block_4_B_BTreeRootPtr
+struct APFS_OMap_Root
 {
 	APFS_ObjHeader hdr;
-	APFS_TableHeader tbl;
-	APFS_Entry_4_B entry[0xFD];
+	// APFS_TableHeader tbl;
+	// APFS_Entry_4_B entry[0xFD];
+	le<uint32_t> unk_20;
+	le<uint32_t> unk_24;
+	le<uint32_t> type_1;
+	le<uint32_t> type_2;
+	le<uint64_t> om_tree_oid;
+	le<uint64_t> oms_tree_oid;
+	le<uint64_t> oms_tree_xid;
+
+	// oms tree (0x13): xid -> u64, u64
 };
 
-static_assert(sizeof(APFS_Block_4_B_BTreeRootPtr) == 0xFF8, "Block-4000000B size wrong");
+// static_assert(sizeof(APFS_OMap_Root) == 0xFF8, "Block-4000000B size wrong");
 
-struct APFS_Block_4_C
+struct APFS_CpmEntry
 {
-	APFS_ObjHeader hdr;
-	APFS_TableHeader tbl;
-	APFS_CPM_Map entry[0x65];
+	le<uint32_t> cpm_type; // type?
+	le<uint32_t> cpm_subtype;
+	le<uint32_t> cpm_size; // size?
+	le<uint32_t> cpm_unk_C;
+	le<uint64_t> cpm_fs_oid; // not sure ...
+	le<uint64_t> cpm_oid;
+	le<uint64_t> cpm_paddr;
 };
 
-static_assert(sizeof(APFS_Block_4_C) == 0xFF0, "Block-4000000C size wrong");
+struct APFS_CheckPointMap
+{
+	APFS_ObjHeader cpm_o;
+	le<uint32_t> cpm_flags;
+	le<uint32_t> cpm_count;
+	APFS_CpmEntry cpm_map[0x65];
+};
+
+static_assert(sizeof(APFS_CheckPointMap) == 0xFF0, "Block-4000000C size wrong");
 
 struct APFS_NX_Reaper // 0x40000011
 {
@@ -571,7 +601,7 @@ struct APFS_NX_ReapList // 0x40000012
 	APFS_NX_ReapList_Entry nrle[0x64];
 };
 
-struct APFS_Block_8_5_Spaceman
+struct APFS_Spaceman
 {
 	APFS_ObjHeader hdr;
 	le<uint32_t> block_size;
@@ -603,25 +633,26 @@ struct APFS_Block_8_5_Spaceman
 	le<uint64_t> unk_C0;
 	le<uint64_t> free_queue_count_1;
 	le<uint64_t> free_queue_tree_1; // Obsolete B*-Tree fuer Mgr-Bitmap-Blocks
-	le<uint64_t> unk_D8;
+	le<uint64_t> unk_D8; // oldest xid
 	le<uint64_t> unk_E0;
 	le<uint64_t> unk_E8;
 	le<uint64_t> free_queue_count_2;
 	le<uint64_t> free_queue_tree_2; // Obsolete B*-Tree fuer Volume;
-	le<uint64_t> unk_100;
+	le<uint64_t> unk_100; // oldest xid
 	le<uint64_t> unk_108;
 	le<uint64_t> unk_110;
 	le<uint64_t> free_queue_count_3;
 	le<uint64_t> free_queue_tree_3;
-	le<uint64_t> unk_128;
+	le<uint64_t> unk_128; // oldest xid
 	le<uint64_t> unk_130;
 	le<uint64_t> unk_138;
 	le<uint16_t> bitmap_next_array_free;
 	le<uint16_t> unk_142;
 	le<uint32_t> unk_144; // Bitmap-Array-Offset?
 	le<uint32_t> unk_148;
-	le<uint32_t> unk_14C;
-	le<uint64_t> unk_150;
+	le<uint32_t> unk_array_offs; // Offset to u16 array (count is ip_bitmap_blk_count)
+	le<uint32_t> unk_150;
+	le<uint32_t> unk_154;
 	le<uint64_t> unk_158;
 	le<uint16_t> unk_160[0x10];
 	le<uint64_t> blockid_vol_bitmap_hdr;
@@ -633,6 +664,25 @@ struct APFS_Block_8_5_Spaceman
 	// Ab A08 bid bitmap-header
 };
 
-static_assert(sizeof(APFS_Block_8_5_Spaceman) == 0x1000, "Spaceman Header wrong size");
+static_assert(sizeof(APFS_Spaceman) == 0x1000, "Spaceman Header wrong size");
+
+struct APFS_EFI_JS_Extent
+{
+	le<uint64_t> base;
+	le<uint64_t> blocks;
+};
+
+struct APFS_EFI_JumpStart
+{
+	APFS_ObjHeader obj;
+	le<uint32_t> magic; // JSDR
+	le<uint32_t> unk_24;
+	le<uint32_t> filesize;
+	le<uint32_t> extent_count;
+	uint8_t unk_30[0x80];
+	APFS_EFI_JS_Extent extent[0xF5];
+};
+
+static_assert(sizeof(APFS_EFI_JumpStart) == 0x1000, "EFI JS record wrong size");
 
 #pragma pack(pop)

@@ -79,6 +79,7 @@ ApfsDir::ApfsDir(ApfsVolume &vol) :
 {
 	m_txt_fmt = vol.getTextFormat();
 
+	m_blksize_sh = log2(vol.getContainer().GetBlocksize());
 	// m_bt.EnableDebugOutput();
 }
 
@@ -323,18 +324,18 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 			return false;
 
 		// TODO: 12 is dependent on block size ...
-		idx = (offs - ext_key->logical_addr) >> 12;
+		idx = (offs - ext_key->logical_addr) >> m_blksize_sh;
 		// ext_val->size has a mysterious upper byte set. At least sometimes.
 		// Let us clear it.
 		uint64_t extent_size = ext_val->flags_length & 0x00FFFFFFFFFFFFFFULL;
 
 		cur_size = size;
-		if (((idx << 12) + cur_size) > extent_size)
-			cur_size = extent_size - (idx << 12);
+		if (((idx << m_blksize_sh) + cur_size) > extent_size)
+			cur_size = extent_size - (idx << m_blksize_sh);
 		if (cur_size == 0)
 			break;
 		if (ext_val->phys_block_num != 0)
-			m_vol.ReadBlocks(bdata, ext_val->phys_block_num + idx, cur_size >> 12, true, ext_val->crypto_id + idx);
+			m_vol.ReadBlocks(bdata, ext_val->phys_block_num + idx, cur_size >> m_blksize_sh, true, ext_val->crypto_id + idx);
 		else
 			memset(bdata, 0, cur_size);
 		bdata += cur_size;

@@ -47,6 +47,7 @@ private:
 	void DumpTableHeader(const APFS_TableHeader &tbl);
 
 	void DumpBlk_APSB();
+	void DumpBlk_CAB();
 	void DumpBlk_CIB();
 	void DumpBlk_OM();
 	void DumpBlk_CPM();
@@ -54,6 +55,7 @@ private:
 	void DumpBlk_SM();
 	void DumpBlk_NR();
 	void DumpBlk_NRL();
+	void DumpBlk_JSDR();
 
 	void DumpBTNode_0();
 
@@ -76,6 +78,12 @@ public:
 
 private:
 	static std::string tstamp(uint64_t apfs_time);
+
+	void dumpm(const char *name, const void *base, const uint8_t &v);
+	void dumpm(const char *name, const void *base, const le<uint16_t> &v);
+	void dumpm(const char *name, const void *base, const le<uint32_t> &v);
+	void dumpm(const char *name, const void *base, const le<uint64_t> &v);
+	void dumpm(const char *name, const void *base, const apfs_uuid_t &uuid);
 
 	uint32_t m_text_flags; // 00 - Alt, 01 - insensitive, 08 - sensitive
 

@@ -79,7 +79,7 @@ public:
 
 	virtual ~BTreeNode();
 
-	uint64_t nodeid() const { return m_hdr->o_oid; }
+	uint64_t nodeid() const { return m_hdr->oid; }
 	uint32_t entries_cnt() const { return m_bt->key_count; }
 	uint16_t level() const { return m_bt->level; }
 	uint64_t blockid() const { return m_bid; }

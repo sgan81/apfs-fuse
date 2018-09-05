@@ -17,6 +17,8 @@ add_library(ApfsLib
 	BlockDumper.h
 	BTree.cpp
 	BTree.h
+	CheckPointMap.cpp
+	CheckPointMap.h
 	Crc32.cpp
 	Crc32.h
 	Crypto.cpp

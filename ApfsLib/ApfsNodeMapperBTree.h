@@ -38,7 +38,7 @@ public:
 	void dump(BlockDumper &bd) { m_tree.dump(bd); }
 
 private:
-	APFS_Block_4_B_BTreeRootPtr m_root_ptr;
+	APFS_OMap_Root m_root_ptr;
 	BTree m_tree;
 
 	ApfsContainer &m_container;

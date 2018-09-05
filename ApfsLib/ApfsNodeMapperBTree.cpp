@@ -69,15 +69,15 @@ bool ApfsNodeMapperBTree::Init(uint64_t bid_root, uint64_t xid)
 		return false;
 	}
 
-	memcpy(&m_root_ptr, blk.data(), sizeof(APFS_Block_4_B_BTreeRootPtr));
+	memcpy(&m_root_ptr, blk.data(), sizeof(APFS_OMap_Root));
 
-	if (APFS_OBJ_TYPE(m_root_ptr.hdr.o_type) != BlockType_BTreeRootPtr)
+	if (APFS_OBJ_TYPE(m_root_ptr.hdr.type) != BlockType_BTreeRootPtr)
 	{
-		std::cerr << "ERROR: Wrong header type 0x" << std::hex << m_root_ptr.hdr.o_type << std::endl;
+		std::cerr << "ERROR: Wrong header type 0x" << std::hex << m_root_ptr.hdr.type << std::endl;
 		return false;
 	}
 
-	return m_tree.Init(m_root_ptr.entry[0].blk, xid);
+	return m_tree.Init(m_root_ptr.om_tree_oid, xid);
 }
 
 bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t xid)

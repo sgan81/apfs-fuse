@@ -771,6 +771,10 @@ void KeyManager::dump(std::ostream &st)
 
 		if ((d.header->type == 3) && (d.header->length == sizeof(key_extent_t)))
 		{
+			st << std::endl;
+			st << "---------------------------------------------------------------------------------------------------------------------------" << std::endl;
+			st << std::endl;
+
 			const key_extent_t &ext = *reinterpret_cast<const key_extent_t *>(d.data.data);
 			Keybag recs_bag;
 
@@ -813,11 +817,11 @@ bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t
 
 	const APFS_ObjHeader &hdr = *reinterpret_cast<const APFS_ObjHeader *>(data.data());
 
-	if (hdr.o_type != type)
+	if (hdr.type != type)
 	{
 		if (g_debug & Dbg_Errors)
 		{
-			std::cout << "Keybag block types not matching: " << hdr.o_type << ", expected " << type << std::endl;
+			std::cout << "Keybag block types not matching: " << hdr.type << ", expected " << type << std::endl;
 			DumpHex(std::cout, data.data(), data.size());
 		}
 

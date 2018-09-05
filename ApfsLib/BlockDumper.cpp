@@ -80,7 +80,7 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 
 	DumpNodeHeader(node, blk_nr);
 
-	switch (node->o_type & 0xFFFFFFF)
+	switch (node->type & 0xFFFFFFF)
 	{
 	case 0x0001: // NXSB Block
 		DumpBlk_NXSB();
@@ -91,6 +91,9 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 		break;
 	case 0x0005:
 		DumpBlk_SM();
+		break;
+	case 0x0006:
+		DumpBlk_CAB();
 		break;
 	case 0x0007: // Bitmap Block List
 		DumpBlk_CIB();
@@ -111,9 +114,13 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 		DumpBlk_NRL();
 		break;
 
+	case 0x14:
+		DumpBlk_JSDR();
+		break;
+
 	default:
 		// assert(false);
-		std::cerr << "!!! UNKNOWN NODE TYPE " << hex << setw(8) << node->o_type << " in block " << setw(16) << blk_nr << " !!!" << endl;
+		std::cerr << "!!! UNKNOWN NODE TYPE " << hex << setw(8) << node->type << " in block " << setw(16) << blk_nr << " !!!" << endl;
 		m_os << "!!! UNKNOWN NODE TYPE !!!" << endl;
 		DumpBlockHex();
 		break;
@@ -132,15 +139,16 @@ void BlockDumper::DumpNodeHeader(const APFS_ObjHeader *blk, uint64_t blk_nr)
 	m_os << "-----------------+------------------+------------------+------------------+----------+----------+-----------------------" << endl;
 
 	m_os << setw(16) << blk_nr << " | ";
-	m_os << setw(16) << blk->o_cksum << " | ";
-	m_os << setw(16) << blk->o_oid << " | ";
-	m_os << setw(16) << blk->o_xid << " | ";
-	m_os << setw(8) << blk->o_type << " | ";
-	m_os << setw(8) << blk->o_subtype << " | ";
-	m_os << GetNodeType(blk->o_type, blk->o_subtype) << endl;
+	m_os << setw(16) << blk->cksum << " | ";
+	m_os << setw(16) << blk->oid << " | ";
+	m_os << setw(16) << blk->xid << " | ";
+	m_os << setw(8) << blk->type << " | ";
+	m_os << setw(8) << blk->subtype << " | ";
+	m_os << GetNodeType(blk->type, blk->subtype) << endl;
 	m_os << endl;
 }
 
+#undef BT_VERBOSE
 
 void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_size)
 {
@@ -157,23 +165,63 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 	uint16_t end;
 	size_t k;
 
+#ifdef BT_VERBOSE
+	struct FreeListEntry
+	{
+		uint16_t next_offs;
+		uint16_t free_size;
+	};
+
+	const FreeListEntry *fle;
+	uint16_t flo;
+
+	uint16_t tot_key_free = 0;
+	uint16_t tot_val_free = 0;
+#endif
+
+	// DumpHex(m_block, 0x1000);
+
 	DumpBTHeader();
 
 	base = bt->table_space_offset + bt->table_space_length + 0x38;
-	end = (APFS_OBJ_TYPE(hdr->o_type) == BlockType_BTRoot) ? (m_blocksize - sizeof(APFS_BTFooter)) : m_blocksize;
+	end = (APFS_OBJ_TYPE(hdr->type) == BlockType_BTRoot) ? (m_blocksize - sizeof(APFS_BTFooter)) : m_blocksize;
 
-#if 0
-	if (bt->unk_30 != 0x0000 && bt->unk_32 != 0xFFFF && bt->unk_32 != 0x0000)
+#ifdef BT_VERBOSE
+	if (bt->key_free_list_space_offset != 0xFFFF)
 	{
-		m_os << "Entry-30:" << endl;
-		DumpHex(m_block + base + bt->unk_30, bt->unk_32);
+		m_os << "Key Free List Space (" << setw(4) << (base + bt->key_free_list_space_offset) << ") :" << endl;
+		// DumpHex(m_block + base + bt->key_free_list_space_offset, bt->key_free_list_space_length);
+		flo = bt->key_free_list_space_offset;
+		while (flo != 0xFFFF)
+		{
+			fle = reinterpret_cast<const FreeListEntry *>(m_block + base + flo);
+			m_os << setw(4) << flo << ":" << setw(4) << fle->next_offs << "/" << setw(4) << fle->free_size << endl;
+			DumpHex(m_block + base + flo, fle->free_size);
+			flo = fle->next_offs;
+			tot_key_free += fle->free_size;
+		}
 	}
 
-	if (bt->unk_34 != 0x0000 && bt->unk_36 != 0xFFFF && bt->unk_36 != 0x0000)
+	if (bt->val_free_list_space_offset != 0xFFFF)
 	{
-		m_os << "Entry-34:" << endl;
-		DumpHex(m_block + end - bt->unk_34, bt->unk_36);
+		m_os << "Val Free List Space (" << setw(4) << (end - bt->val_free_list_space_offset) << ") :" << endl;
+		// DumpHex(m_block + end - bt->val_free_list_space_offset, bt->val_free_list_space_length);
+		flo = bt->val_free_list_space_offset;
+		while (flo != 0xFFFF)
+		{
+			fle = reinterpret_cast<const FreeListEntry *>(m_block + end - flo);
+			m_os << setw(4) << flo << ":" << setw(4) << fle->next_offs << "/" << setw(4) << fle->free_size << endl;
+			DumpHex(m_block + end - flo, fle->free_size);
+			flo = fle->next_offs;
+			tot_val_free += fle->free_size;
+		}
 	}
+
+	m_os << "Free List: Tot Key = " << tot_key_free << ", Tot Val = " << tot_val_free << endl;
+	if (tot_key_free != bt->key_free_list_space_length)
+		m_os << "[!!!]" << endl;
+	if (tot_val_free != bt->val_free_list_space_length)
+		m_os << "[!!!]" << endl;
 #endif
 
 	if (bt->flags & 4)
@@ -182,7 +230,7 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 		{
 			m_os << "!!! UNKNOWN FIXED KEY / VALUE SIZE !!!" << endl << endl;
 
-			if (APFS_OBJ_TYPE(hdr->o_type) == BlockType_BTRoot)
+			if (APFS_OBJ_TYPE(hdr->type) == BlockType_BTRoot)
 				DumpBTFooter();
 
 			return;
@@ -192,6 +240,10 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 
 		for (k = 0; k < bt->key_count; k++)
 		{
+#ifdef BT_VERBOSE
+			m_os << endl << k << ": " << setw(4) << entry[k].key_offs << " / " << setw(4) << entry[k].value_offs << endl;
+#endif
+
 			assert(entry[k].key_offs != 0xFFFF);
 
 			if (entry[k].key_offs == 0xFFFF)
@@ -211,6 +263,11 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 
 		for (k = 0; k < bt->key_count; k++)
 		{
+#ifdef BT_VERBOSE
+			m_os << endl << k << ": " << setw(4) << entry[k].key_offs << " L " << setw(4) << entry[k].key_len;
+			m_os << " / " << setw(4) << entry[k].value_offs << " / " << setw(4) << entry[k].value_len << endl;
+#endif
+
 			assert(entry[k].key_offs != 0xFFFF);
 
 			if (entry[k].key_offs == 0xFFFF)
@@ -227,7 +284,7 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 
 	m_os << endl;
 
-	if (APFS_OBJ_TYPE(hdr->o_type) == BlockType_BTRoot)
+	if (APFS_OBJ_TYPE(hdr->type) == BlockType_BTRoot)
 		DumpBTFooter();
 }
 
@@ -307,7 +364,7 @@ void BlockDumper::DumpBTHeader(bool dump_offsets)
 
 void BlockDumper::DumpBTFooter()
 {
-	const APFS_BTFooter * const tail = reinterpret_cast<const APFS_BTFooter *>(m_block + 0xFD8);
+	const APFS_BTFooter * const tail = reinterpret_cast<const APFS_BTFooter *>(m_block + (m_blocksize - sizeof(APFS_BTFooter)));
 
 	m_os << endl;
 	m_os << "Unk-FD8  | Nodesize | Key Size | Val Size | Key Max  | Val Max  | Key Count        | Node Count " << endl;
@@ -607,7 +664,7 @@ void BlockDumper::DumpBTEntry_APFS_Root(const byte_t *key_data, size_t key_lengt
 
 			m_os << setw(8) << hash_stored << " ";
 
-#if 1 // Hash verify
+#if 0 // Hash verify
 			uint32_t hash_calc = HashFilename(reinterpret_cast<const char *>(key_data + 12), hash_stored & 0x3FF, (m_text_flags & APFS_APSB_CaseInsensitive) != 0);
 			m_os << "[" << setw(8) << hash_calc << "] ";
 
@@ -783,8 +840,8 @@ void BlockDumper::DumpBTEntry_APFS_SnapMeta(const byte_t * key_ptr, size_t key_l
 				const APFS_SnapMetadata_Val *val = reinterpret_cast<const APFS_SnapMetadata_Val *>(val_ptr);
 				m_os << setw(16) << val->extentref_tree_oid << " ";
 				m_os << setw(16) << val->sblock_oid << " ";
-				// m_os << setw(16) << val->tstamp_10 << " ";
-				// m_os << setw(16) << val->tstamp_18 << " ";
+				// m_os << setw(16) << val->change_time << " ";
+				// m_os << setw(16) << val->create_time << " ";
 				m_os << "[" << tstamp(val->change_time) << "] ";
 				m_os << "[" << tstamp(val->create_time) << "] ";
 				m_os << setw(16) << val->inum << " ";
@@ -811,8 +868,26 @@ void BlockDumper::DumpBTEntry_13(const byte_t * key_ptr, size_t key_length, cons
 	(void)value_length;
 	(void)index;
 
-	DumpHex(key_ptr, 0x08);
-	DumpHex(val_ptr, 0x10);
+	assert(key_length == 8);
+
+	m_os << *reinterpret_cast<const uint64_t *>(key_ptr) << " => ";
+
+	if (index)
+	{
+		assert(value_length == 0x08);
+
+		m_os << *reinterpret_cast<const uint64_t *>(val_ptr);
+	}
+	else
+	{
+		assert(value_length == 0x10);
+
+		m_os << *reinterpret_cast<const uint64_t *>(val_ptr) << " ";
+		m_os << *reinterpret_cast<const uint64_t *>(val_ptr + 8);
+	}
+
+	// DumpHex(key_ptr, 0x08);
+	// DumpHex(val_ptr, 0x10);
 	m_os << endl;
 }
 
@@ -981,32 +1056,67 @@ void BlockDumper::DumpBlk_APSB()
 	DumpBlockHex();
 }
 
+void BlockDumper::DumpBlk_CAB()
+{
+	const APFS_ChunkABlock * const cab = reinterpret_cast<const APFS_ChunkABlock *>(m_block);
+
+	size_t k;
+	size_t cnt;
+
+	dumpm("id     ", cab, cab->flags);
+	dumpm("count  ", cab, cab->count);
+
+	m_os << endl;
+
+	cnt = cab->count;
+
+	for (k = 0; k < cnt; k++)
+	{
+		dumpm("cib oid", cab, cab->entry[k]);
+	}
+}
+
 void BlockDumper::DumpBlk_CIB()
 {
-	const APFS_Block_4_7_Bitmaps * const blk = reinterpret_cast<const APFS_Block_4_7_Bitmaps *>(m_block);
+	const APFS_ChunkInfoBlock * const cib = reinterpret_cast<const APFS_ChunkInfoBlock *>(m_block);
 
 	size_t k;
 
-	DumpTableHeader(blk->tbl);
+	dumpm("id         ", cib, cib->id);
+	dumpm("chunk_count", cib, cib->chunk_count);
+	m_os << endl;
 
 	m_os << "Xid              | Offset           | Bits Tot | Bits Avl | Block" << endl;
 	m_os << "-----------------+------------------+----------+----------+-----------------" << endl;
 
-	for (k = 0; k < blk->tbl.entries_cnt; k++)
+	for (k = 0; k < cib->chunk_count; k++)
 	{
-		m_os << setw(16) << blk->bmp[k].xid << " | ";
-		m_os << setw(16) << blk->bmp[k].offset << " | ";
-		m_os << setw(8) << blk->bmp[k].bits_total << " | ";
-		m_os << setw(8) << blk->bmp[k].bits_avail << " | ";
-		m_os << setw(16) << blk->bmp[k].block << endl;
+		m_os << setw(16) << cib->chunk[k].xid << " | ";
+		m_os << setw(16) << cib->chunk[k].offset << " | ";
+		m_os << setw(8) << cib->chunk[k].bits_total << " | ";
+		m_os << setw(8) << cib->chunk[k].bits_avail << " | ";
+		m_os << setw(16) << cib->chunk[k].block << endl;
 	}
 }
 
 void BlockDumper::DumpBlk_OM()
 {
-	const APFS_Block_4_B_BTreeRootPtr * const blk = reinterpret_cast<const APFS_Block_4_B_BTreeRootPtr *>(m_block);
+	const APFS_OMap_Root * const om = reinterpret_cast<const APFS_OMap_Root *>(m_block);
 
-	DumpTableHeader(blk->tbl);
+	dumpm("?              ", om, om->unk_20);
+	dumpm("?              ", om, om->unk_24);
+
+	// DumpTableHeader(blk->tbl);
+
+	dumpm("om_type_1      ", om, om->type_1);
+	dumpm("om_type_2      ", om, om->type_2);
+	dumpm("om_oid         ", om, om->om_tree_oid);
+	dumpm("oms_oid        ", om, om->oms_tree_oid);
+	dumpm("oms_xid        ", om, om->oms_tree_xid);
+	/* AA98B -> tree = AA9A6, unk_38=AAF85, unk_40=0650 */
+	/* AAF85 -> oms btree */
+
+	/*
 
 	m_os << "Type 1   | Type 2   | Block" << endl;
 	m_os << "---------+----------+-----------------" << endl;
@@ -1014,6 +1124,8 @@ void BlockDumper::DumpBlk_OM()
 	m_os << setw(8) << blk->entry[0].type_1 << " | ";
 	m_os << setw(8) << blk->entry[0].type_2 << " | ";
 	m_os << setw(16) << blk->entry[0].blk << endl;
+	*/
+
 	m_os << endl;
 
 	if (!IsZero(m_block + 0x38, 0xFC8))
@@ -1025,63 +1137,110 @@ void BlockDumper::DumpBlk_OM()
 
 void BlockDumper::DumpBlk_CPM()
 {
-	const APFS_Block_4_C * const blk = reinterpret_cast<const APFS_Block_4_C *>(m_block);
+	const APFS_CheckPointMap * const cpm = reinterpret_cast<const APFS_CheckPointMap *>(m_block);
 
 	size_t k;
 
-	DumpTableHeader(blk->tbl);
+	dumpm("cpm_flags", cpm, cpm->cpm_flags);
+	dumpm("cpm_count", cpm, cpm->cpm_count);
+	m_os << endl;
 
-	m_os << "Typ      | Subtype  | Unk-08           | Unk-10           | Node-ID          | Block" << endl;
-	m_os << "---------+----------+------------------+------------------+------------------+-----------------" << endl;
+	m_os << "Type     | Subtype  | Size     | Unk-0C   | FS-OID?          | OID              | PAddr" << endl;
+	m_os << "---------+----------+----------+----------+------------------+------------------+-----------------" << endl;
 
-	for (k = 0; k < blk->tbl.entries_cnt; k++)
+	for (k = 0; k < cpm->cpm_count; k++)
 	{
-		m_os << setw(8) << blk->entry[k].type << " | ";
-		m_os << setw(8) << blk->entry[k].subtype << " | ";
-		m_os << setw(16) << blk->entry[k].unk_08 << " | ";
-		m_os << setw(16) << blk->entry[k].unk_10 << " | ";
-		m_os << setw(16) << blk->entry[k].nid << " | ";
-		m_os << setw(16) << blk->entry[k].block << endl;
+		m_os << setw(8) << cpm->cpm_map[k].cpm_type << " | ";
+		m_os << setw(8) << cpm->cpm_map[k].cpm_subtype << " | ";
+		m_os << setw(8) << cpm->cpm_map[k].cpm_size << " | ";
+		m_os << setw(8) << cpm->cpm_map[k].cpm_unk_C << " | ";
+		m_os << setw(16) << cpm->cpm_map[k].cpm_fs_oid << " | ";
+		m_os << setw(16) << cpm->cpm_map[k].cpm_oid << " | ";
+		m_os << setw(16) << cpm->cpm_map[k].cpm_paddr << endl;
 	}
 }
 
 void BlockDumper::DumpBlk_NXSB()
 {
-	const APFS_NX_Superblock * const sb = reinterpret_cast<const APFS_NX_Superblock *>(m_block);
+	const APFS_NX_Superblock * const nx = reinterpret_cast<const APFS_NX_Superblock *>(m_block);
+	size_t k;
 
 	m_os << hex;
-	m_os << "magic            : " << setw(8) << sb->nx_magic << endl;
-	m_os << "block_size       : " << setw(8) << sb->nx_block_size << endl;
-	m_os << "block_count      : " << setw(16) << sb->nx_block_count << endl;
-	m_os << "features         : " << setw(16) << sb->nx_features << endl;
-	m_os << "ro_compat_feat's : " << setw(16) << sb->nx_read_only_compatible_features << endl;
-	m_os << "incompat_feat's  : " << setw(16) << sb->nx_incompatible_features << endl;
-	m_os << "uuid             : " << setw(16) << uuidstr(sb->nx_uuid) << endl;
-	m_os << "next_oid         : " << setw(16) << sb->nx_next_oid << endl;
-	m_os << "next_xid         : " << setw(16) << sb->nx_next_xid << endl;
-	m_os << "xp_desc_blocks   : " << setw(8) << sb->nx_xp_desc_blocks << endl;
-	m_os << "xp_data_blocks   : " << setw(8) << sb->nx_xp_data_blocks << endl;
-	m_os << "xp_desc_base     : " << setw(16) << sb->nx_xp_desc_base << endl;
-	m_os << "xp_data_base     : " << setw(16) << sb->nx_xp_data_base << endl;
-	m_os << "xp_desc_next     : " << setw(8) << sb->nx_xp_desc_next << endl;
-	m_os << "xp_data_next     : " << setw(8) << sb->nx_xp_data_next << endl;
-	m_os << "xp_desc_index    : " << setw(8) << sb->nx_xp_desc_index << endl;
-	m_os << "xp_desc_len      : " << setw(8) << sb->nx_xp_desc_len << endl;
-	m_os << "xp_data_index    : " << setw(8) << sb->nx_xp_data_index << endl;
-	m_os << "xp_data_len      : " << setw(8) << sb->nx_xp_data_len << endl;
-	m_os << "spaceman_oid     : " << setw(16) << sb->nx_spaceman_oid << endl;
-	m_os << "omap_oid         : " << setw(16) << sb->nx_omap_oid << endl;
-	m_os << "reaper_oid       : " << setw(16) << sb->nx_reaper_oid << endl;
-	m_os << "Unknown 0xB0     : " << setw(8) << sb->unk_B0 << endl;
-	m_os << "max_file_systems : " << setw(8) << sb->nx_max_file_systems << endl;
-
-	for (size_t k = 0; (k < 100) && (sb->nx_fs_oid[k] != 0); k++)
-		m_os << "fs_oid       " << setw(2) << k << "  : " << setw(16) << sb->nx_fs_oid[k] << endl;
-
+	dumpm("magic           ", nx, nx->nx_magic);
+	dumpm("block_size      ", nx, nx->nx_block_size);
+	dumpm("block_count     ", nx, nx->nx_block_count);
+	dumpm("features        ", nx, nx->nx_features);
+	dumpm("ro_compat_feat's", nx, nx->nx_read_only_compatible_features);
+	dumpm("incompat_feat's ", nx, nx->nx_incompatible_features);
+	dumpm("uuid            ", nx, nx->nx_uuid);
+	dumpm("next_oid        ", nx, nx->nx_next_oid);
+	dumpm("next_xid        ", nx, nx->nx_next_xid);
+	dumpm("xp_desc_blocks  ", nx, nx->nx_xp_desc_blocks);
+	dumpm("xp_data_blocks  ", nx, nx->nx_xp_data_blocks);
+	dumpm("xp_desc_base    ", nx, nx->nx_xp_desc_base);
+	dumpm("xp_data_base    ", nx, nx->nx_xp_data_base);
+	dumpm("xp_desc_next    ", nx, nx->nx_xp_desc_next);
+	dumpm("xp_data_next    ", nx, nx->nx_xp_data_next);
+	dumpm("xp_desc_index   ", nx, nx->nx_xp_desc_index);
+	dumpm("xp_desc_len     ", nx, nx->nx_xp_desc_len);
+	dumpm("xp_data_index   ", nx, nx->nx_xp_data_index);
+	dumpm("xp_data_len     ", nx, nx->nx_xp_data_len);
+	dumpm("spaceman_oid    ", nx, nx->nx_spaceman_oid);
+	dumpm("omap_oid        ", nx, nx->nx_omap_oid);
+	dumpm("reaper_oid      ", nx, nx->nx_reaper_oid);
+	dumpm("?               ", nx, nx->unk_B0);
+	dumpm("max_file_systems", nx, nx->nx_max_file_systems);
 	m_os << endl;
 
-	m_os << "keybag_base      : " << setw(16) << sb->nx_keybag_base << endl;
-	m_os << "keybag_blocks    : " << setw(16) << sb->nx_keybag_blocks << endl;
+	for (k = 0; k < nx->nx_max_file_systems && nx->nx_fs_oid[k] != 0; k++)
+		dumpm("fs_oid          ", nx, nx->nx_fs_oid[k]);
+
+	/*
+	m_os << "magic            : " << setw(8) << nx->nx_magic << endl;
+	m_os << "block_size       : " << setw(8) << nx->nx_block_size << endl;
+	m_os << "block_count      : " << setw(16) << nx->nx_block_count << endl;
+	m_os << "features         : " << setw(16) << nx->nx_features << endl;
+	m_os << "ro_compat_feat's : " << setw(16) << nx->nx_read_only_compatible_features << endl;
+	m_os << "incompat_feat's  : " << setw(16) << nx->nx_incompatible_features << endl;
+	m_os << "uuid             : " << setw(16) << uuidstr(nx->nx_uuid) << endl;
+	m_os << "next_oid         : " << setw(16) << nx->nx_next_oid << endl;
+	m_os << "next_xid         : " << setw(16) << nx->nx_next_xid << endl;
+	m_os << "xp_desc_blocks   : " << setw(8) << nx->nx_xp_desc_blocks << endl;
+	m_os << "xp_data_blocks   : " << setw(8) << nx->nx_xp_data_blocks << endl;
+	m_os << "xp_desc_base     : " << setw(16) << nx->nx_xp_desc_base << endl;
+	m_os << "xp_data_base     : " << setw(16) << nx->nx_xp_data_base << endl;
+	m_os << "xp_desc_next     : " << setw(8) << nx->nx_xp_desc_next << endl;
+	m_os << "xp_data_next     : " << setw(8) << nx->nx_xp_data_next << endl;
+	m_os << "xp_desc_index    : " << setw(8) << nx->nx_xp_desc_index << endl;
+	m_os << "xp_desc_len      : " << setw(8) << nx->nx_xp_desc_len << endl;
+	m_os << "xp_data_index    : " << setw(8) << nx->nx_xp_data_index << endl;
+	m_os << "xp_data_len      : " << setw(8) << nx->nx_xp_data_len << endl;
+	m_os << "spaceman_oid     : " << setw(16) << nx->nx_spaceman_oid << endl;
+	m_os << "omap_oid         : " << setw(16) << nx->nx_omap_oid << endl;
+	m_os << "reaper_oid       : " << setw(16) << nx->nx_reaper_oid << endl;
+	m_os << "Unknown 0xB0     : " << setw(8) << nx->unk_B0 << endl;
+	m_os << "max_file_systems : " << setw(8) << nx->nx_max_file_systems << endl;
+
+	for (size_t k = 0; (k < 100) && (nx->nx_fs_oid[k] != 0); k++)
+		m_os << "fs_oid       " << setw(2) << k << "  : " << setw(16) << nx->nx_fs_oid[k] << endl;
+	*/
+	m_os << endl;
+
+	/*
+	m_os << "keybag_base      : " << setw(16) << nx->nx_keybag_base << endl;
+	m_os << "keybag_blocks    : " << setw(16) << nx->nx_keybag_blocks << endl;
+	*/
+
+	dumpm("blocked_out_base", nx, nx->nx_blocked_out_base);
+	dumpm("blocked_out_blks", nx, nx->nx_blocked_out_blocks);
+	dumpm("                ", nx, nx->unk_4E8);
+	dumpm("                ", nx, nx->unk_4F0);
+	dumpm("efi_js_paddr    ", nx, nx->nx_efi_jumpstart_paddr);
+	dumpm("                ", nx, nx->unk_500);
+	dumpm("                ", nx, nx->unk_508);
+	dumpm("keybag_base     ", nx, nx->nx_keybag_base);
+	dumpm("keybag_blocks   ", nx, nx->nx_keybag_blocks);
+
 
 	m_os << endl;
 
@@ -1091,60 +1250,103 @@ void BlockDumper::DumpBlk_NXSB()
 void BlockDumper::DumpBlk_SM()
 {
 	size_t k;
-	const APFS_Block_8_5_Spaceman *b = reinterpret_cast<const APFS_Block_8_5_Spaceman *>(m_block);
+	size_t cnt;
+	const APFS_Spaceman *b = reinterpret_cast<const APFS_Spaceman *>(m_block);
 
 	m_os << hex;
-	m_os << "block_size       : " << setw(8) << b->block_size << endl;
-	m_os << "blocks_per_chunk : " << setw(8) << b->blocks_per_chunk << endl;
-	m_os << "chunks_per_cib   : " << setw(8) << b->chunks_per_cib << endl;
-	m_os << "cibs_per_cab     : " << setw(8) << b->cibs_per_cab << endl;
-	m_os << "block_count      : " << setw(16) << b->block_count << endl;
-	m_os << "chunk_count      : " << setw(16) << b->chunk_count << endl;
-	m_os << "cib_count        : " << setw(8) << b->cib_count << endl;
-	m_os << "cab_count        : " << setw(8) << b->cab_count << endl;
-	m_os << "free_count       : " << setw(16) << b->free_count << endl;
-	m_os << "0050             : " << setw(16) << b->cib_arr_offs << endl;
-	m_os << "0058             : " << setw(16) << b->unk_58 << endl;
-	m_os << "tier2_block_count: " << setw(16) << b->tier2_block_count << endl;
-	m_os << "tier2_chunk_count: " << setw(16) << b->tier2_chunk_count << endl;
-	m_os << "tier2_cib_count  : " << setw(8) << b->tier2_cib_count << endl;
-	m_os << "tier2_cab_count  : " << setw(8) << b->tier2_cab_count << endl;
-	m_os << "tier2_free_count : " << setw(16) << b->tier2_free_count << endl;
-	m_os << "0080             : " << setw(16) << b->tier2_cib_arr_offs << endl;
-	m_os << "0088             : " << setw(16) << b->unk_88 << endl;
-	m_os << "0090             : " << setw(8) << b->unk_90 << endl;
-	m_os << "0094             : " << setw(8) << b->unk_94 << endl;
-	m_os << "ip_block_count   : " << setw(16) << b->ip_block_count << endl;
-	m_os << "ip_bm_block_count: " << setw(8) << b->ip_bm_block_count << endl;
-	m_os << "ip_bitmap_block_c: " << setw(8) << b->ip_bitmap_block_count << endl;
-	m_os << "ip_bm_base_addr  : " << setw(16) << b->ip_bm_base_address << endl;
-	m_os << "ip_base_addr     : " << setw(16) << b->ip_base_address << endl;
-	m_os << "00B8             : " << setw(16) << b->unk_B8 << endl;
-	m_os << "00C0             : " << setw(16) << b->unk_C0 << endl;
-	m_os << "free_queue_count : " << setw(16) << b->free_queue_count_1 << endl;
-	m_os << "free_queue_tree_1: " << setw(16) << b->free_queue_tree_1 << endl;
-	m_os << "00D8             : " << setw(16) << b->unk_D8 << endl;
-	m_os << "00E0             : " << setw(16) << b->unk_E0 << endl;
-	m_os << "00E8             : " << setw(16) << b->unk_E8 << endl;
-	m_os << "free_queue_count : " << setw(16) << b->free_queue_count_2 << endl;
-	m_os << "free_queue_tree_2: " << setw(16) << b->free_queue_tree_2 << endl;
-	m_os << "0100             : " << setw(16) << b->unk_100 << endl;
-	m_os << "0108             : " << setw(16) << b->unk_108 << endl;
-	m_os << "0110             : " << setw(16) << b->unk_110 << endl;
-	m_os << "free_queue_count : " << setw(16) << b->free_queue_count_3 << endl;
-	m_os << "free_queue_tree_3: " << setw(16) << b->free_queue_tree_3 << endl;
-	m_os << "0128             : " << setw(16) << b->unk_128 << endl;
-	m_os << "0130             : " << setw(16) << b->unk_130 << endl;
-	m_os << "0138             : " << setw(16) << b->unk_138 << endl;
-	m_os << "bmp_next_arr_free: " << setw(4) << b->bitmap_next_array_free << endl;
-	m_os << "0142             : " << setw(4) << b->unk_142 << endl;
-	m_os << "0144             : " << setw(8) << b->unk_144 << endl;
-	m_os << "0148             : " << setw(8) << b->unk_148 << endl;
-	m_os << "014C             : " << setw(8) << b->unk_14C << endl;
-	m_os << "0150             : " << setw(16) << b->unk_150 << endl;
-	m_os << "0158             : " << setw(16) << b->unk_158 << endl;
+	dumpm("block_size          ", b, b->block_size);
+	dumpm("blocks_per_chunk    ", b, b->blocks_per_chunk);
+	dumpm("chunks_per_cib      ", b, b->chunks_per_cib);
+	dumpm("cibs_per_cab        ", b, b->cibs_per_cab);
+	dumpm("block_count         ", b, b->block_count);
+	dumpm("chunk_count         ", b, b->chunk_count);
+	dumpm("cib_count           ", b, b->cib_count);
+	dumpm("cab_count           ", b, b->cab_count);
+	dumpm("free_count          ", b, b->free_count);
+	dumpm("cib_arr_offs?       ", b, b->cib_arr_offs);
+	dumpm("?                   ", b, b->unk_58);
+	dumpm("t2_block_count      ", b, b->tier2_block_count);
+	dumpm("t2_chunk_count      ", b, b->tier2_chunk_count);
+	dumpm("t2_cib_count        ", b, b->tier2_cib_count);
+	dumpm("t2_cab_count        ", b, b->tier2_cab_count);
+	dumpm("t2_free_count       ", b, b->tier2_free_count);
+	dumpm("t2_cib_arr_offs?    ", b, b->tier2_cib_arr_offs);
+	dumpm("?                   ", b, b->unk_88);
+	dumpm("?                   ", b, b->unk_90);
+	dumpm("?                   ", b, b->unk_94);
+	dumpm("ip_block_count      ", b, b->ip_block_count);
+	dumpm("ip_bm_block_cnt     ", b, b->ip_bm_block_count);
+	dumpm("ip_bitmap_blk_cnt   ", b, b->ip_bitmap_block_count);
+	dumpm("ip_bm_base          ", b, b->ip_bm_base_address);
+	dumpm("ip_base             ", b, b->ip_base_address);
+	dumpm("?                   ", b, b->unk_B8);
+	dumpm("?                   ", b, b->unk_C0);
+	dumpm("fq_count_1          ", b, b->free_queue_count_1);
+	dumpm("fq_tree_1           ", b, b->free_queue_tree_1);
+	dumpm("?                   ", b, b->unk_D8);
+	dumpm("?                   ", b, b->unk_E0);
+	dumpm("?                   ", b, b->unk_E8);
+	dumpm("fq_count_2          ", b, b->free_queue_count_2);
+	dumpm("fq_tree_2           ", b, b->free_queue_tree_2);
+	dumpm("?                   ", b, b->unk_100);
+	dumpm("?                   ", b, b->unk_108);
+	dumpm("?                   ", b, b->unk_110);
+	dumpm("fq_count_3          ", b, b->free_queue_count_3);
+	dumpm("fq_tree_3           ", b, b->free_queue_tree_3);
+	dumpm("?                   ", b, b->unk_128);
+	dumpm("?                   ", b, b->unk_130);
+	dumpm("?                   ", b, b->unk_138);
+	dumpm("bmp_next_arr_free   ", b, b->bitmap_next_array_free);
+	dumpm("?                   ", b, b->unk_142);
+	dumpm("?                   ", b, b->unk_144);
+	dumpm("?                   ", b, b->unk_148);
+	dumpm("array offset ?      ", b, b->unk_array_offs);
+	dumpm("?                   ", b, b->unk_150);
+	dumpm("?                   ", b, b->unk_154);
+	dumpm("?                   ", b, b->unk_158);
+	m_os << endl;
+
+	/*
 	for (k = 0; k < 0x10; k++)
-		m_os << setw(4) << (0x160 + 2 * k) << "             : " << setw(4) << b->unk_160[k] << endl;
+		dumpm("?                   ", b, b->unk_160[k]);
+	m_os << endl;
+	*/
+
+	const le<uint16_t> *unk_arr = reinterpret_cast<const le<uint16_t> *>(m_block + b->unk_array_offs);
+	for (k = 0; k < b->ip_bitmap_block_count; k++)
+		dumpm("?                   ", b, unk_arr[k]);
+
+	if (b->cab_count > 0)
+		cnt = b->cab_count;
+	else
+		cnt = b->cib_count;
+
+	if (b->cib_arr_offs != 0 && cnt != 0)
+	{
+		const le<uint64_t> *cib_oid = reinterpret_cast<const le<uint64_t> *>(m_block + b->cib_arr_offs);
+
+		for (k = 0; k < cnt; k++)
+			dumpm("oid                 ", b, cib_oid[k]);
+	}
+
+	m_os << endl;
+
+	if (b->unk_144 != 0)
+	{
+		const le<uint64_t> &unk_xid = *reinterpret_cast<const le<uint64_t> *>(m_block + b->unk_144);
+		dumpm("unk_144->?          ", b, unk_xid);
+	}
+
+	if (b->unk_148 != 0)
+	{
+		const le<uint64_t> &unk_148 = *reinterpret_cast<const le<uint64_t> *>(m_block + b->unk_148);
+		dumpm("unk_148->?          ", b, unk_148);
+	}
+
+	// unk_14C and unk_154 also point to some data ...
+
+	/*
+
 	m_os << "0180 BID BmpHdr  : " << setw(16) << b->blockid_vol_bitmap_hdr << endl;
 	m_os << "..." << endl;
 	m_os << "09D8 Some XID    : " << setw(16) << b->some_xid_9D8 << endl;
@@ -1154,6 +1356,9 @@ void BlockDumper::DumpBlk_SM()
 	for (k = 0; k < 0xBF && b->bid_bmp_hdr_list[k] != 0; k++)
 		m_os << setw(4) << (0xA08 + 8 * k) << "cib_oid      : " << setw(16) << b->bid_bmp_hdr_list[k] << endl;
 
+	*/
+
+	m_os << endl;
 	DumpBlockHex();
 }
 
@@ -1184,7 +1389,7 @@ void BlockDumper::DumpBlk_NRL()
 {
 	const APFS_NX_ReapList *nrl = reinterpret_cast<const APFS_NX_ReapList *>(m_block);
 	uint32_t k;
-	
+
 	m_os << hex;
 	m_os << "unk 20      : " << setw(8) << nrl->unk_20 << endl;
 	m_os << "unk 24      : " << setw(8) << nrl->unk_24 << endl;
@@ -1212,11 +1417,32 @@ void BlockDumper::DumpBlk_NRL()
 	DumpBlockHex();
 }
 
+void BlockDumper::DumpBlk_JSDR()
+{
+	const APFS_EFI_JumpStart *js = reinterpret_cast<const APFS_EFI_JumpStart *>(m_block);
+
+	dumpm("magic           ", js, js->magic);
+	dumpm("?               ", js, js->unk_24);
+	dumpm("filesize        ", js, js->filesize);
+	dumpm("extent count    ", js, js->extent_count);
+	m_os << "..." << endl;
+
+	for (size_t k = 0; k < js->extent_count; k++)
+	{
+		dumpm("apfs.efi base   ", js, js->extent[k].base);
+		dumpm("apfs.efi blocks ", js, js->extent[k].blocks);
+	}
+
+	m_os << endl;
+
+	DumpBlockHex();
+}
+
 void BlockDumper::DumpBTNode_0()
 {
 	const APFS_ObjHeader * const hdr = reinterpret_cast<const APFS_ObjHeader *>(m_block);
 
-	switch (hdr->o_subtype)
+	switch (hdr->subtype)
 	{
 	case 0x09:
 		DumpBTNode(&BlockDumper::DumpBTEntry_FreeList, 0x10, 0x08);
@@ -1283,22 +1509,25 @@ const char * BlockDumper::GetNodeType(uint32_t type, uint32_t subtype)
 		switch (subtype)
 		{
 		case 0x00000009:
-			typestr = "Purgatory B*-Tree (?)";
+			typestr = "btn / fq / Free Queue Tree";
 			break;
 		case 0x0000000B:
-			typestr = "btn / om / Mapping Node-ID => Block-ID";
+			typestr = "btn / om / O-Map Tree";
 			break;
 		case 0x0000000E:
-			typestr = "btn / apfs_root / Directory";
+			typestr = "btn / apfs_root / Directory Tree";
 			break;
 		case 0x0000000F:
-			typestr = "btn / apfs_extentref / Mapping Block-ID => Object-ID";
+			typestr = "btn / apfs_extentref / Extent-Ref Tree";
 			break;
 		case 0x00000010:
-			typestr = "btn / apfs_snap_meta / Snapshot Metadata";
+			typestr = "btn / apfs_snap_meta / Snapshot Metadata Tree";
 			break;
 		case 0x00000013:
-			typestr = "oms / (?)";
+			typestr = "btn / oms / (?)";
+			break;
+		default:
+			typestr = "btn / (?)";
 			break;
 		}
 		break;
@@ -1318,7 +1547,7 @@ const char * BlockDumper::GetNodeType(uint32_t type, uint32_t subtype)
 		typestr = "sm_ip / Spaceman IP (?)";
 		break;
 	case 0x000B:
-		typestr = "om / (?)";
+		typestr = "om / OMap";
 		break;
 	case 0x000C:
 		typestr = "cpm / Checkpoint Map (?)";
@@ -1327,10 +1556,13 @@ const char * BlockDumper::GetNodeType(uint32_t type, uint32_t subtype)
 		typestr = "apfs / Volume Superblock (APSB)";
 		break;
 	case 0x0011:
-		typestr = "nr / (?)";
+		typestr = "nr / NX Reaper";
 		break;
 	case 0x12:
-		typestr = "nrl / (?)";
+		typestr = "nrl / NX Reap List";
+		break;
+	case 0x14:
+		typestr = "jsdr / EFI JumpStart Record";
 		break;
 	case 0x16:
 		typestr = "wbc / (?)";
@@ -1370,4 +1602,56 @@ std::string BlockDumper::tstamp(uint64_t apfs_time)
 	st << setw(9) << nanos;
 
 	return st.str();
+}
+
+#define DUMP_OT
+
+void BlockDumper::dumpm(const char* name, const void *base, const uint8_t& v)
+{
+#ifdef DUMP_OT
+	ptrdiff_t d = reinterpret_cast<uintptr_t>(&v) - reinterpret_cast<uintptr_t>(base);
+	m_os << setw(4) << d << " u8  ";
+#endif
+
+	m_os << name << " : " << setw(2) << static_cast<unsigned>(v) << endl;
+}
+
+void BlockDumper::dumpm(const char* name, const void *base, const le<uint16_t>& v)
+{
+#ifdef DUMP_OT
+	ptrdiff_t d = reinterpret_cast<uintptr_t>(&v) - reinterpret_cast<uintptr_t>(base);
+	m_os << setw(4) << d << " u16 ";
+#endif
+
+	m_os << name << " : " << setw(4) << v.get() << endl;
+}
+
+void BlockDumper::dumpm(const char* name, const void *base, const le<uint32_t>& v)
+{
+#ifdef DUMP_OT
+	ptrdiff_t d = reinterpret_cast<uintptr_t>(&v) - reinterpret_cast<uintptr_t>(base);
+	m_os << setw(4) << d << " u32 ";
+#endif
+
+	m_os << name << " : " << setw(8) << v.get() << endl;
+}
+
+void BlockDumper::dumpm(const char* name, const void *base, const le<uint64_t>& v)
+{
+#ifdef DUMP_OT
+	ptrdiff_t d = reinterpret_cast<uintptr_t>(&v) - reinterpret_cast<uintptr_t>(base);
+	m_os << setw(4) << d << " u64 ";
+#endif
+
+	m_os << name << " : " << setw(16) << v.get() << endl;
+}
+
+void BlockDumper::dumpm(const char* name, const void* base, const apfs_uuid_t& uuid)
+{
+#ifdef DUMP_OT
+	ptrdiff_t d = reinterpret_cast<uintptr_t>(&uuid) - reinterpret_cast<uintptr_t>(base);
+	m_os << setw(4) << d << " uid ";
+#endif
+
+	m_os << name << " : " << setw(16) << uuidstr(uuid) << endl;
 }

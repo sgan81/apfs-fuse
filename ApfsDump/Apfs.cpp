@@ -27,11 +27,14 @@
 #include <ApfsLib/BlockDumper.h>
 #include <ApfsLib/GptPartitionMap.h>
 
+#include "Dumper.h"
+
 #ifdef __linux__
 #include <signal.h>
 #endif
 
 #undef RAW_VERBOSE
+
 
 constexpr size_t BLOCKSIZE = 0x1000;
 
@@ -66,6 +69,12 @@ void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 
 	for (bid = 0; bid < bcnt && !g_abort; bid++)
 	{
+		if ((bid & 0xFFF) == 0)
+		{
+			std::cout << '.';
+			std::cout.flush();
+		}
+
 		dev.Read(block, (bid_start + bid) * BLOCKSIZE, BLOCKSIZE);
 
 		if (IsEmptyBlock(block, BLOCKSIZE))
@@ -79,15 +88,15 @@ void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 		if (VerifyBlock(block, BLOCKSIZE))
 		{
 			os << setw(8) << bid << " | ";
-			os << setw(8) << blk->o_oid << " | ";
-			os << setw(8) << blk->o_xid << " | ";
-			os << setw(8) << blk->o_type << " | ";
-			os << setw(8) << blk->o_subtype << " | ";
+			os << setw(8) << blk->oid << " | ";
+			os << setw(8) << blk->xid << " | ";
+			os << setw(8) << blk->type << " | ";
+			os << setw(8) << blk->subtype << " | ";
 			os << setw(4) << tbl->page << " | ";
 			os << setw(4) << tbl->level << " | ";
 			os << setw(8) << tbl->entries_cnt << " | ";
-			os << BlockDumper::GetNodeType(blk->o_type, blk->o_subtype);
-			if (APFS_OBJ_TYPE(blk->o_type) == 2)
+			os << BlockDumper::GetNodeType(blk->type, blk->subtype);
+			if (APFS_OBJ_TYPE(blk->type) == 2)
 				os << " [Root]";
 			os << endl;
 			last_was_used = true;
@@ -95,7 +104,7 @@ void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 		else
 		{
 			os << setw(8) << bid;
-			os << " |          |          |      |      |          |      |      |          | Data" << endl;
+			os << " |          |          |          |          |      |      |          | Data" << endl;
 			last_was_used = true;
 		}
 	}
@@ -109,10 +118,16 @@ void ScanBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt
 	uint64_t bid;
 	uint8_t block[BLOCKSIZE];
 
-	bd.SetTextFlags(0x01);
+	bd.SetTextFlags(0x00);
 
 	for (bid = 0; bid < bcnt && !g_abort; bid++)
 	{
+		if ((bid & 0xFFF) == 0)
+		{
+			std::cout << '.';
+			std::cout.flush();
+		}
+
 		dev.Read(block, (bid_start + bid) * BLOCKSIZE, BLOCKSIZE);
 
 		if (IsEmptyBlock(block, BLOCKSIZE))
@@ -139,7 +154,7 @@ void DumpSpaceman(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bc
 	uint8_t data[BLOCKSIZE];
 	BlockDumper bd(os, BLOCKSIZE);
 	const APFS_ObjHeader *bhdr;
-	const APFS_Block_8_5_Spaceman *sm;
+	const APFS_Spaceman *sm;
 	const APFS_NX_Superblock *nxsb;
 	uint64_t bid;
 	uint64_t cnt;
@@ -157,7 +172,7 @@ void DumpSpaceman(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bc
 		return;
 
 	nxsb = reinterpret_cast<const APFS_NX_Superblock *>(sb);
-	if (nxsb->hdr.o_type != 0x80000001)
+	if (nxsb->hdr.type != 0x80000001)
 		return;
 
 	if (nxsb->nx_magic != 0x4253584E)
@@ -195,9 +210,9 @@ void DumpSpaceman(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bc
 		bid++;
 
 		bhdr = reinterpret_cast<const APFS_ObjHeader *>(data);
-		if (bhdr->o_type == 0x80000005)
+		if (bhdr->type == 0x80000005)
 		{
-			sm = reinterpret_cast<const APFS_Block_8_5_Spaceman *>(data);
+			sm = reinterpret_cast<const APFS_Spaceman *>(data);
 			smbmp_bid = sm->ip_bm_base_address;
 			smbmp_cnt = sm->ip_bitmap_block_count;
 			volbmp_bid = sm->ip_base_address;
@@ -233,6 +248,8 @@ static void ctrl_c_handler(int sig)
 	(void)sig;
 	g_abort = true;
 }
+
+#if 0
 
 int main(int argc, const char *argv[])
 {
@@ -303,7 +320,7 @@ int main(int argc, const char *argv[])
 		return 3;
 	}
 
-	// DumpSpaceman(os, *dev, bid_start, bcnt);
+	DumpSpaceman(os, *dev, bid_start, bcnt);
 	ScanBlocks(os, *dev, bid_start, bcnt);
 
 	dev->Close();
@@ -313,3 +330,75 @@ int main(int argc, const char *argv[])
 
 	return 0;
 }
+
+#else
+
+int main(int argc, const char *argv[])
+{
+	if (argc < 3)
+	{
+		std::cerr << "Syntax: apfs-dump file.img output.txt [map.txt]" << std::endl;
+		return 1;
+	}
+
+	Device *dev;
+	std::ofstream os;
+
+	g_debug = 255;
+
+#if defined(__linux__) || defined(__APPLE__)
+	signal(SIGINT, ctrl_c_handler);
+#endif
+
+	dev = Device::OpenDevice(argv[1]);
+
+	if (!dev)
+	{
+		std::cerr << "Device " << argv[1] << " not found." << std::endl;
+		return 2;
+	}
+
+	{
+		Dumper dmp(*dev);
+
+		if (!dmp.Initialize())
+			return -1;
+
+#if 1
+		if (argc > 3)
+		{
+			os.open(argv[3]);
+			if (!os.is_open())
+			{
+				std::cerr << "Could not open output file " << argv[3] << std::endl;
+				dev->Close();
+				delete dev;
+				return 3;
+			}
+
+			dmp.DumpBlockList(os);
+			os.close();
+		}
+#endif
+
+		os.open(argv[2]);
+		if (!os.is_open())
+		{
+			std::cerr << "Could not open output file " << argv[2] << std::endl;
+			dev->Close();
+			delete dev;
+			return 3;
+		}
+
+		dmp.DumpContainer(os);
+	}
+
+	dev->Close();
+	os.close();
+
+	delete dev;
+
+	return 0;
+}
+
+#endif

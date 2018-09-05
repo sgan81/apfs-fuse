@@ -528,3 +528,13 @@ size_t DecompressLZFSE(uint8_t * dst, size_t dst_size, const uint8_t * src, size
 	return lzfse_decode_buffer(dst, dst_size, src, src_size, nullptr);
 }
 
+int log2(uint32_t val)
+{
+	int r = 0;
+	if (val & 0xFFFF0000) { val >>= 16; r += 16; }
+	if (val & 0xFF00) { val >>= 8; r += 8; }
+	if (val & 0xF0) { val >>= 4; r += 4; }
+	if (val & 0xC) { val >>= 2; r += 2; }
+	if (val & 0x2) { val >>= 1; r += 1; }
+	return r;
+}

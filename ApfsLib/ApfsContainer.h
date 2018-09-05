@@ -23,10 +23,12 @@
 #include "BTree.h"
 #include "DiskStruct.h"
 #include "Device.h"
+#include "CheckPointMap.h"
 #include "ApfsNodeMapperBTree.h"
 #include "KeyMgmt.h"
 
 #include <cstdint>
+#include <vector>
 
 class ApfsVolume;
 class BlockDumper;
@@ -45,7 +47,7 @@ public:
 	bool ReadBlocks(byte_t *data, uint64_t blkid, uint64_t blkcnt = 1) const;
 	bool ReadAndVerifyHeaderBlock(byte_t *data, uint64_t blkid) const;
 
-	uint32_t GetBlocksize() const { return m_sb.nx_block_size; }
+	uint32_t GetBlocksize() const { return m_nx.nx_block_size; }
 
 	bool GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password = nullptr);
 	bool GetPasswordHint(std::string &hint, const apfs_uuid_t &vol_uuid);
@@ -59,16 +61,18 @@ private:
 
 	std::string m_passphrase;
 
-	APFS_NX_Superblock m_sb;
+	APFS_NX_Superblock m_nx;
 
-	APFS_Block_8_5_Spaceman m_spaceman_hdr;
-	// Block_8_11 ?
+	CheckPointMap m_cpm;
+	ApfsNodeMapperBTree m_omap;
 
-	ApfsNodeMapperBTree m_nodemap_vol;
+	std::vector<uint8_t> m_sm_data;
+	const APFS_Spaceman *m_sm;
+	// Block_8_11 -> omap
 
-	BTree m_nidmap_bt; // 4_2/B
-	BTree m_oldmgr_bt; // 8_2/9
-	BTree m_oldvol_bt; // 8_2/9
+	// BTree m_omap_tree; // see ApfsNodeMapperBTree
+	BTree m_fq_tree_mgr;
+	BTree m_fq_tree_vol;
 
 	KeyManager m_keymgr;
 };

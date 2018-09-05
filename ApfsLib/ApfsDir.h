@@ -75,4 +75,5 @@ private:
 	ApfsVolume &m_vol;
 	BTree &m_bt;
 	uint32_t m_txt_fmt;
+	int m_blksize_sh;
 };

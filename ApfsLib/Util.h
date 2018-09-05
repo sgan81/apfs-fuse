@@ -50,3 +50,5 @@ size_t DecompressBZ2(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t s
 size_t DecompressLZFSE(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 
 bool GetPassword(std::string &pw);
+
+int log2(uint32_t val);
