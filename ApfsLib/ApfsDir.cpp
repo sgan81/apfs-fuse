@@ -79,7 +79,11 @@ ApfsDir::ApfsDir(ApfsVolume &vol) :
 {
 	m_txt_fmt = vol.getTextFormat();
 
-	m_blksize_sh = log2(vol.getContainer().GetBlocksize());
+	m_blksize = vol.getContainer().GetBlocksize();
+	m_blksize_sh = log2(m_blksize);
+	m_blksize_mask_lo = m_blksize - 1;
+	m_blksize_mask_hi = ~m_blksize_mask_lo;
+	m_tmp_blk.resize(m_blksize);
 	// m_bt.EnableDebugOutput();
 }
 
@@ -290,13 +294,13 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 	const APFS_FileExtent_Val *ext_val = nullptr;
 	bool rc;
 
-	assert((offs & 0xFFF) == 0);
-	assert((size & 0xFFF) == 0);
-
 	uint8_t *bdata = reinterpret_cast<uint8_t *>(data);
 
 	size_t cur_size;
-	unsigned idx;
+	uint64_t blk_idx;
+	uint64_t blk_offs;
+	uint64_t extent_size;
+	uint64_t extent_offs;
 
 	while (size > 0)
 	{
@@ -316,26 +320,55 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 
 		if (g_debug & Dbg_Dir)
 		{
-			std::cout << "Key: inode=" << ext_key->obj_id << ", offset=" << ext_key->logical_addr << std::endl;
-			std::cout << "Value: size=" << ext_val->flags_length << ", block=" << ext_val->phys_block_num << ", xts_iv=" << ext_val->crypto_id << std::endl;
+			std::cout << "FileExtent " << ext_key->obj_id << " " << ext_key->logical_addr << " => ";
+			std::cout << ext_val->flags_length << " " << ext_val->phys_block_num << " " << ext_val->crypto_id << std::endl;
 		}
 
 		if (ext_key->obj_id != key.obj_id)
 			return false;
 
-		// TODO: 12 is dependent on block size ...
-		idx = (offs - ext_key->logical_addr) >> m_blksize_sh;
-		// ext_val->size has a mysterious upper byte set. At least sometimes.
-		// Let us clear it.
-		uint64_t extent_size = ext_val->flags_length & 0x00FFFFFFFFFFFFFFULL;
+		// Remove flags from length member
+		extent_size = ext_val->flags_length & 0x00FFFFFFFFFFFFFFULL;
+
+		extent_offs = offs - ext_key->logical_addr;
+		blk_idx = extent_offs >> m_blksize_sh;
+		blk_offs = extent_offs & m_blksize_mask_lo;
 
 		cur_size = size;
-		if (((idx << m_blksize_sh) + cur_size) > extent_size)
-			cur_size = extent_size - (idx << m_blksize_sh);
+
+		if ((extent_offs + cur_size) > extent_size)
+			cur_size = extent_size - extent_offs;
+
 		if (cur_size == 0)
 			break;
+
 		if (ext_val->phys_block_num != 0)
-			m_vol.ReadBlocks(bdata, ext_val->phys_block_num + idx, cur_size >> m_blksize_sh, true, ext_val->crypto_id + idx);
+		{
+			if (blk_offs == 0 && cur_size > m_blksize)
+				cur_size &= m_blksize_mask_hi;
+
+			if (blk_offs == 0 && (cur_size & m_blksize_mask_lo) == 0)
+			{
+				if (g_debug & Dbg_Dir)
+					std::cout << "Full read blk " << ext_val->phys_block_num + blk_idx << " cnt " << (cur_size >> m_blksize_sh) << std::endl;
+				m_vol.ReadBlocks(bdata, ext_val->phys_block_num + blk_idx, cur_size >> m_blksize_sh, true, ext_val->crypto_id + blk_idx);
+			}
+			else
+			{
+				if (g_debug & Dbg_Dir)
+					std::cout << "Partial read blk " << ext_val->phys_block_num + blk_idx << " cnt 1" << std::endl;
+
+				m_vol.ReadBlocks(m_tmp_blk.data(), ext_val->phys_block_num + blk_idx, 1, true, ext_val->crypto_id + blk_idx);
+
+				if (blk_offs + cur_size > m_blksize)
+					cur_size = m_blksize - blk_offs;
+
+				if (g_debug & Dbg_Dir)
+					std::cout << "Partial copy off " << blk_offs << " size " << cur_size << std::endl;
+
+				memcpy(bdata, m_tmp_blk.data() + blk_offs, cur_size);
+			}
+		}
 		else
 			memset(bdata, 0, cur_size);
 		bdata += cur_size;

@@ -75,5 +75,9 @@ private:
 	ApfsVolume &m_vol;
 	BTree &m_bt;
 	uint32_t m_txt_fmt;
+	uint32_t m_blksize;
+	uint64_t m_blksize_mask_hi;
+	uint64_t m_blksize_mask_lo;
 	int m_blksize_sh;
+	std::vector<uint8_t> m_tmp_blk;
 };
