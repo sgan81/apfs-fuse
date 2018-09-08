@@ -24,19 +24,10 @@
 #endif
 
 #ifdef __linux__
-#ifdef USE_FUSE2
-#include <fuse/fuse.h>
-#include <fuse/fuse_lowlevel.h>
-#else
-#include <fuse3/fuse.h>
-#include <fuse3/fuse_lowlevel.h>
-#endif
 #include <unistd.h>
 #endif
-#ifdef __APPLE__
-#include <fuse/fuse.h>
-#include <fuse/fuse_lowlevel.h>
-#endif
+#include <fuse.h>
+#include <fuse_lowlevel.h>
 
 #include <getopt.h>
 

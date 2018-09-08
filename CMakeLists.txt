@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.6) # IMPORTED_TARGET for pkg_check_modules()
 # set(CMAKE_C_COMPILER "clang")
 # set(CMAKE_CXX_COMPILER "clang++")
 
@@ -16,6 +16,13 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -march=native")
 # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -march=native -fsanitize=undefined")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -march=native -fsanitize=undefined")
 # set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=undefined")
+
+find_package(PkgConfig REQUIRED)
+if (USE_FUSE3)
+pkg_check_modules(FUSE REQUIRED fuse3 IMPORTED_TARGET)
+else()
+pkg_check_modules(FUSE REQUIRED fuse IMPORTED_TARGET)
+endif()
 
 include_directories(. 3rdparty/lzfse/src)
 
@@ -116,18 +123,12 @@ target_link_libraries(apfs-dump-quick apfs)
 add_executable(apfs-fuse
 	apfsfuse/ApfsFuse.cpp)
 target_compile_definitions(apfs-fuse PRIVATE _FILE_OFFSET_BITS=64 _DARWIN_USE_64_BIT_INODE)
-if (APPLE)
-target_include_directories(apfs-fuse PRIVATE /usr/local/include/osxfuse/)
-# link_directories(/usr/local/lib/)
-target_link_libraries(apfs-fuse apfs /usr/local/lib/libosxfuse.dylib)
-else()
-if (USE_FUSE3)
-target_link_libraries(apfs-fuse apfs fuse3)
-else()
-target_link_libraries(apfs-fuse apfs fuse)
+
+if (NOT USE_FUSE3)
 target_compile_definitions(apfs-fuse PRIVATE USE_FUSE2)
 endif()
-endif()
+
+target_link_libraries(apfs-fuse apfs PkgConfig::FUSE)
 
 add_executable(apfsutil ApfsUtil/ApfsUtil.cpp)
 target_link_libraries(apfsutil apfs)
