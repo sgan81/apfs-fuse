@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdlib>
 #include <vector>
 
 int normalizeOptFoldU32Char(char32_t ch, bool case_insensitive, char32_t *sequence_out, unsigned char *unknown_out);

@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <ostream>
 #include <vector>
