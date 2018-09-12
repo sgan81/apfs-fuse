@@ -30,6 +30,7 @@
 
 #include <getopt.h>
 
+#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -53,6 +54,8 @@ static struct fuse_lowlevel_ops ops;
 static Device *g_disk = nullptr;
 static ApfsContainer *g_container = nullptr;
 static ApfsVolume *g_volume = nullptr;
+static uid_t g_uid = 0;
+static gid_t g_gid = 0;
 
 struct Directory
 {
@@ -104,8 +107,8 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 		st.st_mode = rec.ino.mode;
 		// st.st_nlink = rec.ino.refcnt;
 		st.st_nlink = 1;
-		// st_uid
-		// st_gid
+		st.st_uid = g_uid;
+		st.st_gid = g_gid;
 		// st_rdev?
 
 		if (S_ISREG(st.st_mode))
@@ -602,6 +605,24 @@ bool add_option(std::string &optstr, const char *name, const char *value)
 	return true;
 }
 
+static int apfs_parse_fuse_opt(void* data, const char* arg, int key, struct fuse_args* outargs)
+{
+	if (key == FUSE_OPT_KEY_OPT)
+	{
+		if (strncmp(arg, "uid=", 4) == 0 || strncmp(arg, "user_id=", 8) == 0)
+		{
+			g_uid = (uid_t)strtol(strchr(arg, '=') + sizeof(char), NULL, 10);
+			return 0;
+		}
+		if (strncmp(arg, "gid=", 4) == 0 || strncmp(arg, "group_id=", 9) == 0)
+		{
+			g_gid = (gid_t)strtol(strchr(arg, '=') + sizeof(char), NULL, 10);
+			return 0;
+		}
+	}
+	return 1;
+}
+
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(0, nullptr);
@@ -623,6 +644,8 @@ int main(int argc, char *argv[])
 	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/apfs_clone_test.img";
 
 	memset(&ops, 0, sizeof(ops));
+	g_uid = geteuid();
+	g_gid = getegid();
 
 	// ops.bmap = apfs_bmap;
 	// ops.destroy = apfs_destroy;
@@ -745,7 +768,11 @@ int main(int argc, char *argv[])
 	fuse_opt_add_arg(&args, "-o");
 	fuse_opt_add_arg(&args, mount_options.c_str());
 
-	if ((ch = fuse_mount(mountpoint, &args)) != NULL)
+	if (fuse_opt_parse(&args, NULL, NULL, apfs_parse_fuse_opt) != 0)
+	{
+		std::cerr << "Unable to parse options!" << std::endl;
+	}
+	else if ((ch = fuse_mount(mountpoint, &args)) != NULL)
 	{
 		struct fuse_session *se;
 
