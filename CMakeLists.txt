@@ -14,6 +14,8 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 
 include_directories(. 3rdparty/lzfse/src)
 
+include(GNUInstallDirs)
+
 add_subdirectory(3rdparty/lzfse)
 add_subdirectory(ApfsLib)
 add_subdirectory(ApfsDump)
