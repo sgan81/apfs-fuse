@@ -18,33 +18,6 @@ struct bagdata_t
 	size_t size;
 };
 
-struct key_hdr_t
-{
-	apfs_uuid_t uuid;
-	uint16_t type;
-	uint16_t length;
-	uint32_t unknown;
-};
-
-struct key_data_t
-{
-	const key_hdr_t *header;
-	bagdata_t data;
-};
-
-struct keybag_hdr_t
-{
-	uint16_t version;
-	uint16_t no_of_keys;
-	uint32_t no_of_bytes;
-};
-
-struct key_extent_t
-{
-	uint64_t blk;
-	uint64_t bcnt;
-};
-
 struct blob_header_t
 {
 	uint64_t unk_80;
@@ -207,118 +180,88 @@ void KeyParser::GetRemaining(bagdata_t &data)
 
 Keybag::Keybag()
 {
+	m_kl = nullptr;
 }
 
 Keybag::~Keybag()
 {
 }
 
-bool Keybag::Init(const uint8_t * data, size_t size)
+bool Keybag::Init(const media_keybag_t * mk, size_t size)
 {
-	const keybag_hdr_t &hdr = *reinterpret_cast<const keybag_hdr_t *>(data);
-
 	(void)size;
 
-	if (hdr.version != 2)
+	if (mk->mk_locker.kl_version != 2)
 		return false;
 
-	m_data.assign(data, data + hdr.no_of_bytes);
+	const uint8_t *data = reinterpret_cast<const uint8_t *>(&mk->mk_locker);
+
+	m_data.assign(data, data + mk->mk_locker.kl_nbytes);
+	m_kl = reinterpret_cast<kb_locker_t *>(m_data.data());
 
 	return true;
 }
 
 size_t Keybag::GetKeyCnt()
 {
-	if (m_data.empty())
+	if (m_kl)
+		return m_kl->kl_nkeys;
+	else
 		return 0;
-
-	const keybag_hdr_t &hdr = *reinterpret_cast<const keybag_hdr_t *>(m_data.data());
-
-	return hdr.no_of_keys;
 }
 
-bool Keybag::GetKey(size_t nr, key_data_t & keydata)
+const keybag_entry_t * Keybag::GetKey(size_t nr)
 {
-	if (m_data.empty())
-		return false;
+	if (!m_kl)
+		return nullptr;
 
-	const keybag_hdr_t &hdr = *reinterpret_cast<const keybag_hdr_t *>(m_data.data());
-
-	if (nr >= hdr.no_of_keys)
-		return false;
+	if (nr >= m_kl->kl_nkeys)
+		return nullptr;
 
 	const uint8_t *ptr;
-	const key_hdr_t *khdr;
+	const keybag_entry_t *kb;
 	size_t len;
 	size_t k;
 
-	ptr = m_data.data() + 0x10;
+	ptr = m_kl->kl_entries;
 
 	for (k = 0; k < nr; k++)
 	{
-		khdr = reinterpret_cast<const key_hdr_t *>(ptr);
+		kb = reinterpret_cast<const keybag_entry_t *>(ptr);
 
-		len = (khdr->length + sizeof(key_hdr_t) + 0xF) & ~0xF;
+		len = (kb->ke_keylen + sizeof(keybag_entry_t) + 0x0F) & ~0xF;
 		ptr += len;
 	}
 
-	khdr = reinterpret_cast<const key_hdr_t *>(ptr);
+	kb = reinterpret_cast<const keybag_entry_t *>(ptr);
 
-	keydata.header = khdr;
-	keydata.data.data = ptr + sizeof(key_hdr_t);
-	keydata.data.size = khdr->length;
-
-	return true;
+	return kb;
 }
 
-bool Keybag::FindKey(const apfs_uuid_t & uuid, uint16_t type, key_data_t & keydata)
+const keybag_entry_t * Keybag::FindKey(const apfs_uuid_t & uuid, uint16_t type)
 {
-	if (m_data.empty())
-		return false;
-
-	const keybag_hdr_t &hdr = *reinterpret_cast<const keybag_hdr_t *>(m_data.data());
+	if (!m_kl)
+		return nullptr;
 
 	const uint8_t *ptr;
-	const key_hdr_t *khdr;
+	const keybag_entry_t *kb;
 	size_t len;
 	size_t k;
 
-	ptr = m_data.data() + 0x10;
+	ptr = m_kl->kl_entries;
 
-	for (k = 0; k < hdr.no_of_keys; k++)
+	for (k = 0; k < m_kl->kl_nkeys; k++)
 	{
-		khdr = reinterpret_cast<const key_hdr_t *>(ptr);
+		kb = reinterpret_cast<const keybag_entry_t *>(ptr);
 
-		if (memcmp(uuid, khdr->uuid, sizeof(apfs_uuid_t)) == 0 && khdr->type == type)
-		{
-			keydata.header = khdr;
-			keydata.data.data = ptr + sizeof(key_hdr_t);
-			keydata.data.size = khdr->length;
+		if (memcmp(uuid, kb->ke_uuid, sizeof(apfs_uuid_t)) == 0 && kb->ke_tag == type)
+			return kb;
 
-			return true;
-		}
-
-		len = (khdr->length + sizeof(key_hdr_t) + 0xF) & ~0xF;
+		len = (kb->ke_keylen + sizeof(keybag_entry_t) + 0x0F) & ~0xF;
 		ptr += len;
 	}
 
-	return false;
-}
-
-std::string hexstr(const uint8_t *data, size_t size)
-{
-	using namespace std;
-
-	std::ostringstream st;
-
-	size_t k;
-
-	st << hex << uppercase << setfill('0');
-
-	for (k = 0; k < size; k++)
-		st << setw(2) << static_cast<unsigned int>(data[k]);
-
-	return st.str();
+	return nullptr;
 }
 
 #undef DUMP_RAW_KEYS
@@ -331,14 +274,15 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 
 	size_t s;
 	size_t k;
-	key_data_t kd;
 	blob_header_t bhdr;
+	const keybag_entry_t *ke;
+	bagdata_t bd;
 	const char *typestr;
 
 	st << "Dumping Keybag (" << (cbag ? "recs" : "keys") << ")" << endl;
 	st << endl;
 
-	if (m_data.empty())
+	if (m_data.empty() || !m_kl)
 	{
 		st << "Keybag is empty." << endl;
 		return;
@@ -349,54 +293,56 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 	st << endl;
 #endif
 
-	const keybag_hdr_t &hdr = *reinterpret_cast<const keybag_hdr_t *>(m_data.data());
-
-	st << "Version : " << setw(4) << hdr.version << endl;
-	st << "Keys    : " << setw(4) << hdr.no_of_keys << endl;
-	st << "Bytes   : " << setw(8) << hdr.no_of_bytes << endl;
+	st << "Version : " << setw(4) << m_kl->kl_version << endl;
+	st << "Keys    : " << setw(4) << m_kl->kl_nkeys << endl;
+	st << "Bytes   : " << setw(8) << m_kl->kl_nbytes << endl;
 	st << endl;
 
 	s = GetKeyCnt();
 
 	for (k = 0; k < s; k++)
 	{
-		GetKey(k, kd);
+		ke = GetKey(k);
 
 		typestr = "!!! Unknown !!!";
 
 		if (!cbag)
 		{
-			switch (kd.header->type)
+			switch (ke->ke_tag)
 			{
-				case 2: typestr = "VEK"; break;
-				case 3: typestr = "Keybag Ref"; break;
+				case KB_TAG_VOLUME_KEY: typestr = "VEK"; break;
+				case KB_TAG_VOLUME_UNLOCK_RECORDS: typestr = "Keybag Ref"; break;
 				default: break;
 			}
 		}
 		else
 		{
-			switch (kd.header->type)
+			switch (ke->ke_tag)
 			{
-				case 3: typestr = "KEK"; break;
-				case 4: typestr = "Password Hint"; break;
+				case KB_TAG_VOLUME_UNLOCK_RECORDS: typestr = "KEK"; break;
+				case KB_TAG_VOLUME_PASSPHRASE_HINT: typestr = "Password Hint"; break;
 				default: break;
 			}
 		}
 
 		st << "Key " << k << ":" << endl;
-		st << "UUID    : " << uuidstr(kd.header->uuid) << endl;
-		st << "Type    : " << setw(4) << kd.header->type << " [" << typestr << "]" << endl;
-		st << "Length  : " << setw(4) << kd.header->length << endl;
-		st << "Unknown : " << setw(8) << kd.header->unknown << endl;
+		st << "UUID    : " << uuidstr(ke->ke_uuid) << endl;
+		st << "Type    : " << setw(4) << ke->ke_tag << " [" << typestr << "]" << endl;
+		st << "Length  : " << setw(4) << ke->ke_keylen << endl;
+		/* Skip the ke->_padding_ */
+
 		// DumpHex(st, kd.data.data, kd.data.size);
 		st << endl;
 
 		if (!cbag)
 		{
-			switch (kd.header->type)
+			switch (ke->ke_tag)
 			{
 			case 2:
-				if (KeyManager::DecodeBlobHeader(bhdr, kd.data))
+				bd.data = ke->ke_keydata;
+				bd.size = ke->ke_keylen;
+
+				if (KeyManager::DecodeBlobHeader(bhdr, bd))
 				{
 					st << "[Blob Header]" << endl;
 					st << "Unk 80  : " << bhdr.unk_80 << endl;
@@ -432,9 +378,9 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 				break;
 			case 3:
 				{
-					const key_extent_t *ext = reinterpret_cast<const key_extent_t *>(kd.data.data);
-					st << "Block   : " << setw(16) << ext->blk << endl;
-					st << "Count   : " << setw(16) << ext->bcnt << endl;
+					const prange_t *pr = reinterpret_cast<const prange_t *>(ke->ke_keydata);
+					st << "Block   : " << setw(16) << pr->pr_start_addr << endl;
+					st << "Count   : " << setw(16) << pr->pr_block_count << endl;
 				}
 				break;
 			default:
@@ -444,10 +390,13 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 		}
 		else
 		{
-			switch (kd.header->type)
+			switch (ke->ke_tag)
 			{
 			case 3:
-				if (KeyManager::DecodeBlobHeader(bhdr, kd.data))
+				bd.data = ke->ke_keydata;
+				bd.size = ke->ke_keylen;
+
+				if (KeyManager::DecodeBlobHeader(bhdr, bd))
 				{
 					st << "[Blob Header]" << endl;
 					st << "Unk 80  : " << bhdr.unk_80 << endl;
@@ -542,7 +491,7 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 				}
 				break;
 			case 4:
-				st << "Hint    : " << string(reinterpret_cast<const char *>(kd.data.data), kd.data.size) << endl;
+				st << "Hint    : " << string(reinterpret_cast<const char *>(ke->ke_keydata), ke->ke_keylen) << endl;
 				break;
 			}
 		}
@@ -578,39 +527,43 @@ bool KeyManager::Init(uint64_t block, uint64_t blockcnt, const apfs_uuid_t& cont
 
 bool KeyManager::GetPasswordHint(std::string& hint, const apfs_uuid_t& volume_uuid)
 {
-	key_data_t recs_block;
-	key_data_t hint_data;
+	const keybag_entry_t *ke;
 
-	if (!m_container_bag.FindKey(volume_uuid, 3, recs_block))
+	ke = m_container_bag.FindKey(volume_uuid, KB_TAG_VOLUME_UNLOCK_RECORDS);
+	if (!ke)
 		return false;
 
-	if (recs_block.data.size != sizeof(key_extent_t))
+	if (ke->ke_keylen != sizeof(prange_t))
 		return false;
 
-	const key_extent_t &recs_ext = *reinterpret_cast<const key_extent_t *>(recs_block.data.data);
+	const prange_t *pr = reinterpret_cast<const prange_t *>(ke->ke_keydata);
 
 	Keybag recs_bag;
 
-	if (!LoadKeybag(recs_bag, 0x72656373, recs_ext.blk, recs_ext.bcnt, volume_uuid))
+	if (!LoadKeybag(recs_bag, APFS_VOL_KEYBAG_OBJ, pr->pr_start_addr, pr->pr_block_count, volume_uuid))
 		return false;
 
-	if (!recs_bag.FindKey(volume_uuid, 4, hint_data))
+	ke = recs_bag.FindKey(volume_uuid, KB_TAG_VOLUME_PASSPHRASE_HINT);
+	if (!ke)
 		return false;
 
-	hint.assign(reinterpret_cast<const char *>(hint_data.data.data), hint_data.data.size);
+	hint.assign(reinterpret_cast<const char *>(ke->ke_keydata), ke->ke_keylen);
 
 	return true;
 }
 
 bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, const char* password)
 {
+	/*
 	key_data_t recs_block;
 	key_data_t kek_header;
 	key_data_t vek_header;
+	*/
 	bagdata_t kek_data;
 	bagdata_t vek_data;
 	kek_blob_t kek_blob;
 	vek_blob_t vek_blob;
+	const keybag_entry_t *ke_recs;
 
 	if (g_debug & Dbg_Crypto)
 	{
@@ -620,17 +573,18 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		m_container_bag.dump(std::cout, nullptr, volume_uuid);
 	}
 
-	if (!m_container_bag.FindKey(volume_uuid, 3, recs_block))
+	ke_recs = m_container_bag.FindKey(volume_uuid, 3);
+	if (!ke_recs)
 		return false;
 
-	if (recs_block.data.size != sizeof(key_extent_t))
+	if (ke_recs->ke_keylen != sizeof(prange_t))
 		return false;
 
-	const key_extent_t &recs_ext = *reinterpret_cast<const key_extent_t *>(recs_block.data.data);
+	const prange_t *pr = reinterpret_cast<const prange_t *>(ke_recs->ke_keydata);
 
 	Keybag recs_bag;
 
-	if (!LoadKeybag(recs_bag, 0x72656373, recs_ext.blk, recs_ext.bcnt, volume_uuid))
+	if (!LoadKeybag(recs_bag, APFS_VOL_KEYBAG_OBJ, pr->pr_start_addr, pr->pr_block_count, volume_uuid))
 		return false;
 
 	if (g_debug & Dbg_Crypto)
@@ -640,6 +594,9 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	uint8_t kek[0x20] = { 0 };
 	uint64_t iv;
 	bool rc = false;
+	const keybag_entry_t *ke_kek;
+	const keybag_entry_t *ke_vek;
+	bagdata_t bd;
 
 	int cnt = recs_bag.GetKeyCnt();
 	int k;
@@ -647,13 +604,17 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	// Check all KEKs for any valid KEK.
 	for (k = 0; k < cnt; k++)
 	{
-		if (!recs_bag.GetKey(k, kek_header))
+		ke_kek = recs_bag.GetKey(k);
+		if (!ke_kek)
 			continue;
 
-		if (kek_header.header->type != 3)
+		if (ke_kek->ke_tag != KB_TAG_VOLUME_UNLOCK_RECORDS)
 			continue;
 
-		if (!VerifyBlob(kek_header.data, kek_data))
+		bd.data = ke_kek->ke_keydata;
+		bd.size = ke_kek->ke_keylen;
+
+		if (!VerifyBlob(bd, kek_data))
 			continue;
 
 		if (!DecodeKEKBlob(kek_blob, kek_data))
@@ -696,10 +657,14 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		return false;
 	}
 
-	if (!m_container_bag.FindKey(volume_uuid, 2, vek_header))
+	ke_vek = m_container_bag.FindKey(volume_uuid, KB_TAG_VOLUME_KEY);
+	if (!ke_vek)
 		return false;
 
-	if (!VerifyBlob(vek_header.data, vek_data))
+	bd.data = ke_vek->ke_keydata;
+	bd.size = ke_vek->ke_keylen;
+
+	if (!VerifyBlob(bd, vek_data))
 		return false;
 
 	if (!DecodeVEKBlob(vek_blob, vek_data))
@@ -753,7 +718,7 @@ void KeyManager::dump(std::ostream &st)
 {
 	size_t k;
 	size_t s;
-	key_data_t d;
+	const keybag_entry_t *ke;
 	apfs_uuid_t dummy_uuid;
 	std::ios::fmtflags fl = st.setf(st.hex | st.uppercase);
 	char ch = st.fill('0');
@@ -766,20 +731,21 @@ void KeyManager::dump(std::ostream &st)
 
 	for (k = 0; k < s; k++)
 	{
-		if (!m_container_bag.GetKey(k, d))
+		ke = m_container_bag.GetKey(k);
+		if (!ke)
 			continue;
 
-		if ((d.header->type == 3) && (d.header->length == sizeof(key_extent_t)))
+		if ((ke->ke_tag == KB_TAG_VOLUME_UNLOCK_RECORDS) && (ke->ke_keylen == sizeof(prange_t)))
 		{
 			st << std::endl;
 			st << "---------------------------------------------------------------------------------------------------------------------------" << std::endl;
 			st << std::endl;
 
-			const key_extent_t &ext = *reinterpret_cast<const key_extent_t *>(d.data.data);
+			const prange_t *pr = reinterpret_cast<const prange_t *>(ke->ke_keydata);
 			Keybag recs_bag;
 
-			if (LoadKeybag(recs_bag, 0x72656373, ext.blk, ext.bcnt, d.header->uuid))
-				recs_bag.dump(st, &m_container_bag, d.header->uuid);
+			if (LoadKeybag(recs_bag, APFS_VOL_KEYBAG_OBJ, pr->pr_start_addr, pr->pr_block_count, ke->ke_uuid))
+				recs_bag.dump(st, &m_container_bag, ke->ke_uuid);
 		}
 	}
 
@@ -815,20 +781,20 @@ bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t
 	if (g_debug & Dbg_Crypto)
 		std::cout << " all blocks verified" << std::endl;
 
-	const APFS_ObjHeader &hdr = *reinterpret_cast<const APFS_ObjHeader *>(data.data());
+	const media_keybag_t *mk = reinterpret_cast<const media_keybag_t *>(data.data());
 
-	if (hdr.type != type)
+	if (mk->mk_obj.o_type != type)
 	{
 		if (g_debug & Dbg_Errors)
 		{
-			std::cout << "Keybag block types not matching: " << hdr.type << ", expected " << type << std::endl;
+			std::cout << "Keybag block types not matching: " << mk->mk_obj.o_type << ", expected " << type << std::endl;
 			DumpHex(std::cout, data.data(), data.size());
 		}
 
 		return false;
 	}
 
-	bag.Init(data.data() + sizeof(APFS_ObjHeader), data.size() - sizeof(APFS_ObjHeader)); // TODO: This only works with one block ...
+	bag.Init(mk, data.size()); // TODO: This only works with one block ...
 
 	return true;
 }

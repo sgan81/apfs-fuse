@@ -50,25 +50,39 @@ Also helps making the driver run on big-endian architectures.
 
 #ifdef APFS_LITTLE_ENDIAN
 // Swap to/from little endian.
+inline int16_t bswap_le(const int16_t &x) { return x; }
+inline int32_t bswap_le(const int32_t &x) { return x; }
+inline int64_t bswap_le(const int64_t &x) { return x; }
 inline uint16_t bswap_le(const uint16_t &x) { return x; }
 inline uint32_t bswap_le(const uint32_t &x) { return x; }
 inline uint64_t bswap_le(const uint64_t &x) { return x; }
 // Swap to/from big endian.
+inline int16_t bswap_be(const int16_t &x) { return bswap_16(x); }
+inline int32_t bswap_be(const int32_t &x) { return bswap_32(x); }
+inline int64_t bswap_be(const int64_t &x) { return bswap_64(x); }
 inline uint16_t bswap_be(const uint16_t &x) { return bswap_16(x); }
 inline uint32_t bswap_be(const uint32_t &x) { return bswap_32(x); }
 inline uint64_t bswap_be(const uint64_t &x) { return bswap_64(x); }
 #endif
 #ifdef APFS_BIG_ENDIAN
 // Swap to/from little endian.
+inline int16_t bswap_le(const int16_t &x) { return bswap_16(x); }
+inline int32_t bswap_le(const int32_t &x) { return bswap_32(x); }
+inline int64_t bswap_le(const int64_t &x) { return bswap_64(x); }
 inline uint16_t bswap_le(const uint16_t &x) { return bswap_16(x); }
 inline uint32_t bswap_le(const uint32_t &x) { return bswap_32(x); }
 inline uint64_t bswap_le(const uint64_t &x) { return bswap_64(x); }
 // Swap to/from big endian.
+inline int16_t bswap_be(const int16_t &x) { return x; }
+inline int32_t bswap_be(const int32_t &x) { return x; }
+inline int64_t bswap_be(const int64_t &x) { return x; }
 inline uint16_t bswap_be(const uint16_t &x) { return x; }
 inline uint32_t bswap_be(const uint32_t &x) { return x; }
 inline uint64_t bswap_be(const uint64_t &x) { return x; }
 #endif
 
+inline int8_t bswap_le(const int8_t &x) { return x; }
+inline int8_t bswap_be(const int8_t &x) { return x; }
 inline uint8_t bswap_le(const uint8_t &x) { return x; }
 inline uint8_t bswap_be(const uint8_t &x) { return x; }
 

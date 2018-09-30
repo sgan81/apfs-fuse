@@ -26,8 +26,8 @@
 #include "DeviceLinux.h"
 #include "DeviceMac.h"
 #include "DeviceDMG.h"
-
-#undef DISABLE_DMG
+#include "DeviceSparseImage.h"
+#include "DeviceVDI.h"
 
 Device::Device()
 {
@@ -40,49 +40,50 @@ Device::~Device()
 Device * Device::OpenDevice(const char * name)
 {
 	Device *dev = nullptr;
-#ifndef DISABLE_DMG
-	DeviceDMG *dmg = nullptr;
-#endif
 	bool rc;
+	const char *ext;
 
 #ifdef _WIN32
 	if (!strncmp(name, "\\\\.\\PhysicalDrive", 17))
 	{
 		dev = new DeviceWinPhys();
 		rc = dev->Open(name);
-		if (!rc)
+		if (rc)
+			return dev;
+		else
 		{
 			dev->Close();
 			delete dev;
 			dev = nullptr;
 		}
 	}
-#ifndef DISABLE_DMG
-	else
-		dmg = new DeviceDMG();
 #endif
-#else
-#ifndef DISABLE_DMG
-	if (strncmp(name, "/dev/", 5))
-		dmg = new DeviceDMG();
-#endif
-#endif
-#ifndef DISABLE_DMG
-	if (dmg)
+
+	ext = strrchr(name, '.');
+	if (ext)
 	{
-		rc = dmg->Open(name);
-		if (rc)
+		if (!strcmp(ext, ".dmg"))
 		{
-			dev = dmg;
-		}
-		else
-		{
+			DeviceDMG *dmg;
+			dmg = new DeviceDMG();
+			rc = dmg->Open(name);
+			if (rc)
+				return dmg;
 			dmg->Close();
 			delete dmg;
-			dmg = nullptr;
+		}
+
+		if (!strcmp(ext, ".sparseimage"))
+		{
+			DeviceSparseImage *sprs;
+			sprs = new DeviceSparseImage();
+			rc = sprs->Open(name);
+			if (rc)
+				return sprs;
+			sprs->Close();
+			delete sprs;
 		}
 	}
-#endif
 
 	if (!dev)
 	{

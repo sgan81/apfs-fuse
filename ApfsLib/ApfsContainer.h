@@ -61,13 +61,13 @@ private:
 
 	std::string m_passphrase;
 
-	APFS_NX_Superblock m_nx;
+	nx_superblock_t m_nx;
 
 	CheckPointMap m_cpm;
 	ApfsNodeMapperBTree m_omap;
 
 	std::vector<uint8_t> m_sm_data;
-	const APFS_Spaceman *m_sm;
+	const spaceman_phys_t *m_sm;
 	// Block_8_11 -> omap
 
 	// BTree m_omap_tree; // see ApfsNodeMapperBTree

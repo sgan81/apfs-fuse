@@ -22,11 +22,10 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 #include <iostream>
 #include <iomanip>
 
-#include "DeviceDMG.h"
+#include "Endian.h"
 #include "Util.h"
 #include "PList.h"
-#include "TripleDes.h"
-#include "Crypto.h"
+#include "DeviceDMG.h"
 
 #pragma pack(push, 1)
 
@@ -76,7 +75,7 @@ struct MishHeader
 	be<uint32_t> unk;
 	be<uint64_t> sector_start;
 	be<uint64_t> sector_count;
-	be<uint64_t> unk_18;
+	be<uint64_t> dmg_offset;
 	be<uint32_t> unk_20;
 	be<uint32_t> part_id;
 	be<uint8_t>  unk_28[0x18];
@@ -101,87 +100,6 @@ struct MishEntry
 
 static_assert(sizeof(MishEntry) == 0x28, "Wrong Mish Entry Size");
 
-struct DmgCryptHeaderV1
-{
-	uint8_t uuid[0x10];
-	be<uint32_t> block_size;
-	be<uint32_t> unk_14;
-	be<uint32_t> unk_18;
-	be<uint32_t> unk_1C;
-	be<uint32_t> unk_20;
-	be<uint32_t> unk_24;
-	be<uint32_t> kdf_algorithm;
-	be<uint32_t> kdf_prng_algorithm;
-	be<uint32_t> kdf_iteration_count;
-	be<uint32_t> kdf_salt_len;
-	uint8_t kdf_salt[0x20];
-	be<uint32_t> unk_58;
-	be<uint32_t> unk_5C;
-	be<uint32_t> unk_60;
-	be<uint32_t> unk_64;
-	uint8_t unwrap_iv[0x20];
-	be<uint32_t> wrapped_aes_key_len;
-	uint8_t wrapped_aes_key[0x100];
-	be<uint32_t> unk_18C;
-	be<uint32_t> unk_190;
-	uint8_t unk_194[0x20];
-	be<uint32_t> wrapped_hmac_sha1_key_len;
-	uint8_t wrapped_hmac_sha1_key[0x100];
-	be<uint32_t> unk_2B8;
-	be<uint32_t> unk_2BC;
-	uint8_t unk_2C0[0x20];
-	be<uint32_t> wrapped_integrity_key_len;
-	uint8_t wrapped_integrity_key[0x100];
-	be<uint32_t> unk_3E8_len;
-	uint8_t unk_3E8[0x100];
-	be<uint64_t> decrypted_data_length;
-	be<uint32_t> unk_4F0;
-	char signature[8];
-};
-
-static_assert(sizeof(DmgCryptHeaderV1) == 0x4FC, "DmgCryptHeaderV1 invalid length.");
-
-struct DmgCryptHeaderV2
-{
-	char signature[8];
-	be<uint32_t> maybe_version;
-	be<uint32_t> unk_0C;
-	be<uint32_t> unk_10;
-	be<uint32_t> unk_14;
-	be<uint32_t> key_bits;
-	be<uint32_t> unk_1C;
-	be<uint32_t> unk_20;
-	uint8_t uuid[0x10];
-	be<uint32_t> block_size;
-	be<uint64_t> encrypted_data_length;
-	be<uint64_t> encrypted_data_offset;
-	be<uint32_t> no_of_keys;
-};
-
-struct DmgKeyPointer
-{
-	be<uint32_t> key_type;
-	be<uint64_t> key_offset;
-	be<uint64_t> key_length;
-};
-
-struct DmgKeyData
-{
-	be<uint32_t> kdf_algorithm;
-	be<uint32_t> prng_algorithm;
-	be<uint32_t> iteration_count;
-	be<uint32_t> salt_len;
-	uint8_t salt[0x20];
-	be<uint32_t> blob_enc_iv_size;
-	uint8_t blob_enc_iv[0x20];
-	be<uint32_t> blob_enc_key_bits;
-	be<uint32_t> blob_enc_algorithm;
-	be<uint32_t> blob_unk_5C;
-	be<uint32_t> blob_enc_mode;
-	be<uint32_t> encr_key_blob_size;
-	uint8_t encr_key_blob[0x200];
-};
-
 #pragma pack(pop)
 
 DeviceDMG::DmgSection::DmgSection()
@@ -205,81 +123,49 @@ DeviceDMG::DeviceDMG() : m_crc(true)
 	m_size = 0;
 
 	m_is_raw = false;
-	m_is_encrypted = false;
-	m_crypt_offset = 0;
-	m_crypt_size = 0;
-	m_crypt_blocksize = 0;
+
+#ifdef DMG_CACHE
+	m_cache_base = 0;
+	m_cache_size = 0;
+	m_cache_data = 0;
+#endif
 }
 
 DeviceDMG::~DeviceDMG()
 {
 	Close();
+
+#ifdef DMG_CACHE
+	delete[] m_cache_data;
+#endif
 }
 
 bool DeviceDMG::Open(const char * name)
 {
 	Close();
 
-	m_dmg.open(name, std::ios::binary);
-
-	if (!m_dmg.is_open())
+	if (!m_img.Open(name))
 		return false;
+
+	if (!m_img.CheckSetupEncryption())
+	{
+		m_img.Close();
+		return false;
+	}
 
 	KolyHeader koly;
-	char signature[8];
 
-	m_dmg.seekg(0, std::ios::end);
-
-	m_is_raw = false;
-	m_is_encrypted = false;
-	m_crypt_offset = 0;
-	m_crypt_size = m_dmg.tellg();
-
-	m_dmg.seekg(-8, std::ios::end);
-	m_dmg.read(signature, 8);
-
-	if (!memcmp(signature, "cdsaencr", 8))
-	{
-		m_dmg.close();
-		fprintf(stderr, "Encrypted DMG V1 detected. This is not supported.\n");
-		return false;
-		// TODO
-	}
-
-	m_dmg.seekg(0);
-	m_dmg.read(signature, 8);
-
-	if (!memcmp(signature, "encrcdsa", 8))
-	{
-		m_is_encrypted = true;
-
-		if (!SetupEncryptionV2())
-		{
-			m_dmg.close();
-			fprintf(stderr, "Error setting up decryption V2.\n");
-			return false;
-		}
-	}
-
-	ReadInternal(m_crypt_size - 0x200, &koly, sizeof(koly));
+	m_img.Read(m_img.GetContentSize() - 0x200, &koly, sizeof(koly));
 
 	if (memcmp(koly.signature, "koly", 4))
 	{
-		if (m_is_encrypted)
-		{
-			m_is_raw = true;
-			m_size = m_crypt_size;
-			return true;
-		}
-		else
-		{
-			m_dmg.close();
-			return false; // R/W Image ...
-		}
+		m_is_raw = true;
+		m_size = m_img.GetContentSize();
+		return true;
 	}
 
 #ifdef DMG_DEBUG
-	m_dbg.open("mish.txt");
+	m_dbg.open("mish_ev1.txt");
 	m_dbg.flags(m_dbg.hex | m_dbg.uppercase);
 	m_dbg.fill('0');
 
@@ -312,20 +198,30 @@ bool DeviceDMG::Open(const char * name)
 		if (!ProcessHeaderXML(koly.xml_offset, koly.xml_length))
 		{
 			fprintf(stderr, "Error parsing propertiy list.\n");
-			m_dmg.close();
+			m_img.Close();
+			m_img.Reset();
+			m_size = 0;
 			return false;
 		}
 	}
 	else if (koly.rsrc_fork_offset != 0)
 	{
-		m_dmg.close();
-		m_size = 0;
-		fprintf(stderr, "DMG using old resource fork format not supported.\n");
-		return false;
+		if (g_debug & Dbg_Info)
+			printf("Loading DMG using RSRC fork.\n");
+
+		if (!ProcessHeaderRsrc(koly.rsrc_fork_offset, koly.rsrc_fork_length))
+		{
+			fprintf(stderr, "Error processing resource fork.\n");
+			m_img.Close();
+			m_img.Reset();
+			m_size = 0;
+			return false;
+		}
 	}
 	else
 	{
-		m_dmg.close();
+		m_img.Close();
+		m_img.Reset();
 		m_size = 0;
 		return false;
 	}
@@ -339,10 +235,9 @@ bool DeviceDMG::Open(const char * name)
 
 void DeviceDMG::Close()
 {
-	m_dmg.close();
+	m_img.Close();
 	m_size = 0;
 	m_sections.clear();
-	m_is_encrypted = false;
 	m_is_raw = false;
 }
 
@@ -350,7 +245,7 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 {
 	if (m_is_raw)
 	{
-		ReadInternal(offs, data, len);
+		m_img.Read(offs, data, len);
 		return true;
 		// TODO: Error handling ...
 	}
@@ -404,7 +299,7 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 		switch (sect.method)
 		{
 		case 1: // raw
-			ReadInternal(rd_offs + sect.dmg_offset, bdata, rd_size);
+			m_img.Read(rd_offs + sect.dmg_offset, bdata, rd_size);
 			break;
 		case 2: // ignore
 			memset(bdata, 0, rd_size);
@@ -421,13 +316,52 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 
 		if (compressed)
 		{
+#ifdef DMG_CACHE
+			if (m_cache_data == 0 || m_cache_base != sect.disk_offset || m_cache_size != sect.disk_length)
+			{
+				delete[] m_cache_data;
+				m_cache_data = 0;
+
+				uint8_t *compr_buf = new uint8_t[sect.dmg_length];
+
+				m_cache_data = new uint8_t[sect.disk_length];
+				m_cache_base = sect.disk_offset;
+				m_cache_size = sect.disk_length;
+
+				m_img.Read(sect.dmg_offset, compr_buf, sect.dmg_length);
+
+				switch (sect.method)
+				{
+				case 0x80000004:
+					DecompressADC(m_cache_data, sect.disk_length, compr_buf, sect.dmg_length);
+					break;
+				case 0x80000005:
+					DecompressZLib(m_cache_data, sect.disk_length, compr_buf, sect.dmg_length);
+					break;
+				case 0x80000006:
+					DecompressBZ2(m_cache_data, sect.disk_length, compr_buf, sect.dmg_length);
+					break;
+				case 0x80000007:
+					DecompressLZFSE(m_cache_data, sect.disk_length, compr_buf, sect.dmg_length);
+					break;
+				default:
+					return false;
+					break;
+				}
+
+				delete[] compr_buf;
+			}
+
+			memcpy(bdata, m_cache_data + rd_offs, rd_size);
+#else
+
 			if (sect.cache == nullptr)
 			{
 				uint8_t *compr_buf = new uint8_t[sect.dmg_length];
 
 				sect.cache = new uint8_t[sect.disk_length];
 
-				ReadInternal(sect.dmg_offset, compr_buf, sect.dmg_length);
+				m_img.Read(sect.dmg_offset, compr_buf, sect.dmg_length);
 
 				switch (sect.method)
 				{
@@ -457,6 +391,7 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 				sect.cache = nullptr;
 #endif
 			}
+#endif
 		}
 
 
@@ -480,7 +415,7 @@ bool DeviceDMG::ProcessHeaderXML(uint64_t off, uint64_t size)
 
 	xmldata.resize(size, 0);
 
-	ReadInternal(off, xmldata.data(), size);
+	m_img.Read(off, xmldata.data(), size);
 
 	PListXmlParser parser(xmldata.data(), xmldata.size());
 	const PLDict *plist = parser.Parse()->toDict();
@@ -520,6 +455,11 @@ bool DeviceDMG::ProcessHeaderXML(uint64_t off, uint64_t size)
 	return true;
 }
 
+bool DeviceDMG::ProcessHeaderRsrc(uint64_t off, uint64_t size)
+{
+	return false;
+}
+
 void DeviceDMG::ProcessMish(const uint8_t * data, size_t size)
 {
 	(void)size;
@@ -542,7 +482,7 @@ void DeviceDMG::ProcessMish(const uint8_t * data, size_t size)
 	m_dbg << std::setw(8) << mish->unk << ' ';
 	m_dbg << std::setw(16) << mish->sector_start << ' ';
 	m_dbg << std::setw(16) << mish->sector_count << ' ';
-	m_dbg << std::setw(16) << mish->unk_18 << ' ';
+	m_dbg << std::setw(16) << mish->dmg_offset << ' ';
 	m_dbg << std::setw(8) << mish->unk_20 << ' ';
 	m_dbg << std::setw(8) << mish->part_id << " - ";
 	m_dbg << std::setw(8) << mish->checksum_data << std::endl;
@@ -567,7 +507,7 @@ void DeviceDMG::ProcessMish(const uint8_t * data, size_t size)
 		section.comment = entry[k].comment;
 		section.disk_offset = (entry[k].sector_start + partition_start) * 0x200;
 		section.disk_length = entry[k].sector_count * 0x200;
-		section.dmg_offset = entry[k].dmg_offset;
+		section.dmg_offset = entry[k].dmg_offset + mish->dmg_offset;
 		section.dmg_length = entry[k].dmg_length;
 		section.cache = nullptr;
 
@@ -578,155 +518,4 @@ void DeviceDMG::ProcessMish(const uint8_t * data, size_t size)
 #ifdef DMG_DEBUG
 	m_dbg << std::endl;
 #endif
-}
-
-void DeviceDMG::ReadInternal(uint64_t off, void * data, size_t size)
-{
-	if (!m_is_encrypted)
-	{
-		m_dmg.seekg(off);
-		m_dmg.read(reinterpret_cast<char *>(data), size);
-	}
-	else
-	{
-		uint8_t buffer[0x1000];
-		uint64_t mask = m_crypt_blocksize - 1;
-		uint32_t blkid;
-		uint8_t iv[0x14];
-		size_t rd_len;
-		uint8_t *bdata = reinterpret_cast<uint8_t *>(data);
-
-		if (off & mask)
-		{
-			blkid = static_cast<uint32_t>(off / m_crypt_blocksize);
-			blkid = bswap_be(blkid);
-
-			m_dmg.seekg(m_crypt_offset + (off & ~mask));
-			m_dmg.read(reinterpret_cast<char *>(buffer), m_crypt_blocksize);
-
-			HMAC_SHA1(m_hmac_key, 0x14, reinterpret_cast<const uint8_t *>(&blkid), sizeof(uint32_t), iv);
-
-			m_aes.SetIV(iv);
-			m_aes.DecryptCBC(buffer, buffer, m_crypt_blocksize);
-
-			rd_len = m_crypt_blocksize - (off & mask);
-			if (rd_len > size)
-				rd_len = size;
-
-			memcpy(bdata, buffer + (off & mask), rd_len);
-
-			bdata += rd_len;
-			off += rd_len;
-			size -= rd_len;
-		}
-
-		while (size > 0)
-		{
-			blkid = static_cast<uint32_t>(off / m_crypt_blocksize);
-			blkid = bswap_be(blkid);
-
-			m_dmg.seekg(m_crypt_offset + (off & ~mask));
-			m_dmg.read(reinterpret_cast<char *>(buffer), m_crypt_blocksize);
-
-			HMAC_SHA1(m_hmac_key, 0x14, reinterpret_cast<const uint8_t *>(&blkid), sizeof(uint32_t), iv);
-
-			m_aes.SetIV(iv);
-			m_aes.DecryptCBC(buffer, buffer, m_crypt_blocksize);
-
-			rd_len = m_crypt_blocksize;
-			if (rd_len > size)
-				rd_len = size;
-
-			memcpy(bdata, buffer, rd_len);
-
-			bdata += rd_len;
-			off += rd_len;
-			size -= rd_len;
-		}
-	}
-}
-
-bool DeviceDMG::SetupEncryptionV2()
-{
-	std::vector<uint8_t> data;
-	std::vector<uint8_t> kdata;
-
-	const DmgCryptHeaderV2 *hdr;
-	const DmgKeyPointer *keyptr;
-	const DmgKeyData *keydata;
-	std::string password;
-	uint32_t no_of_keys;
-	uint32_t key_id;
-
-	uint8_t derived_key[0x18];
-	uint8_t blob[0x200];
-	uint32_t blob_len;
-
-	TripleDES des;
-
-	bool key_ok = false;
-
-	data.resize(0x1000);
-
-	m_dmg.seekg(0);
-	m_dmg.read(reinterpret_cast<char *>(data.data()), data.size());
-
-	hdr = reinterpret_cast<const DmgCryptHeaderV2 *>(data.data());
-
-	if (memcmp(hdr->signature, "encrcdsa", 8))
-		return false;
-
-	m_crypt_offset = hdr->encrypted_data_offset;
-	m_crypt_size = hdr->encrypted_data_length;
-	m_crypt_blocksize = hdr->block_size;
-
-	std::cout << "Encryped DMG detected." << std::endl;
-	std::cout << "Password: ";
-	GetPassword(password);
-
-	no_of_keys = hdr->no_of_keys;
-
-	for (key_id = 0; key_id < no_of_keys; key_id++)
-	{
-		keyptr = reinterpret_cast<const DmgKeyPointer *>(data.data() + sizeof(DmgCryptHeaderV2) + key_id * sizeof(DmgKeyPointer));
-
-		kdata.resize(keyptr->key_length);
-		m_dmg.seekg(keyptr->key_offset.get());
-		m_dmg.read(reinterpret_cast<char *>(kdata.data()), kdata.size());
-
-		keydata = reinterpret_cast<const DmgKeyData *>(kdata.data());
-
-		PBKDF2_HMAC_SHA1(reinterpret_cast<const uint8_t *>(password.c_str()), password.size(), keydata->salt, keydata->salt_len, keydata->iteration_count, derived_key, sizeof(derived_key));
-
-		des.SetKey(derived_key);
-		des.SetIV(keydata->blob_enc_iv);
-
-		blob_len = keydata->encr_key_blob_size;
-
-		des.DecryptCBC(blob, keydata->encr_key_blob, blob_len);
-
-		if (blob[blob_len - 1] < 1 || blob[blob_len - 1] > 8)
-			continue;
-		blob_len -= blob[blob_len - 1];
-
-		if (memcmp(blob + blob_len - 5, "CKIE", 4))
-			continue;
-
-		if (hdr->key_bits == 128)
-		{
-			m_aes.SetKey(blob, AES::AES_128);
-			memcpy(m_hmac_key, blob + 0x10, 0x14);
-			key_ok = true;
-			break;
-		}
-		else if (hdr->key_bits == 256)
-		{
-			m_aes.SetKey(blob, AES::AES_256);
-			memcpy(m_hmac_key, blob + 0x20, 0x14);
-			key_ok = true;
-			break;
-		}
-	}
-
-	return key_ok;
 }

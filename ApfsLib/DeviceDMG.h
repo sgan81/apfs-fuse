@@ -24,13 +24,13 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 #include <string>
 #include <vector>
 
-#include "Endian.h"
-#include "Crc32.h"
-#include "Aes.h"
-
 #include "Device.h"
+#include "DiskImageFile.h"
+
+#include "Crc32.h"
 
 #undef DMG_DEBUG
+#define DMG_CACHE
 
 class DeviceDMG : public Device
 {
@@ -60,26 +60,14 @@ public:
 
 private:
 	bool ProcessHeaderXML(uint64_t off, uint64_t size);
-	// bool ProcessHeaderRsrc(uint64_t off, uint64_t size);
+	bool ProcessHeaderRsrc(uint64_t off, uint64_t size);
 
 	void ProcessMish(const uint8_t *data, size_t size);
 
-	void ReadInternal(uint64_t off, void *data, size_t size);
-
-	// void SetupEncryptionV1(); // Probably don't need this for APFS ...
-	bool SetupEncryptionV2();
-
-	std::ifstream m_dmg;
+	DiskImageFile m_img;
 	uint64_t m_size;
 
 	bool m_is_raw;
-	bool m_is_encrypted;
-	uint64_t m_crypt_offset;
-	uint64_t m_crypt_size;
-	uint32_t m_crypt_blocksize;
-	uint8_t m_hmac_key[0x14];
-
-	AES m_aes;
 
 	Crc32 m_crc;
 
@@ -87,5 +75,10 @@ private:
 
 #ifdef DMG_DEBUG
 	std::ofstream m_dbg;
+#endif
+#ifdef DMG_CACHE
+	uint64_t m_cache_base;
+	uint64_t m_cache_size;
+	uint8_t *m_cache_data;
 #endif
 };

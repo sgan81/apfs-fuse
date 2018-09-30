@@ -30,11 +30,11 @@ static int CompareNodeMapKey(const void *skey, size_t skey_len, const void *ekey
 	(void)skey_len;
 	(void)ekey_len;
 
-	assert(skey_len == sizeof(APFS_OMap_Key));
-	assert(ekey_len == sizeof(APFS_OMap_Key));
+	assert(skey_len == sizeof(omap_key_t));
+	assert(ekey_len == sizeof(omap_val_t));
 
-	const APFS_OMap_Key *skey_map = reinterpret_cast<const APFS_OMap_Key *>(skey);
-	const APFS_OMap_Key *ekey_map = reinterpret_cast<const APFS_OMap_Key *>(ekey);
+	const omap_key_t *skey_map = reinterpret_cast<const omap_key_t *>(skey);
+	const omap_key_t *ekey_map = reinterpret_cast<const omap_key_t *>(ekey);
 
 	if (ekey_map->ok_oid < skey_map->ok_oid)
 		return -1;
@@ -69,11 +69,11 @@ bool ApfsNodeMapperBTree::Init(uint64_t bid_root, uint64_t xid)
 		return false;
 	}
 
-	memcpy(&m_root_ptr, blk.data(), sizeof(APFS_OMap_Root));
+	memcpy(&m_root_ptr, blk.data(), sizeof(omap_phys_t));
 
-	if (APFS_OBJ_TYPE(m_root_ptr.hdr.type) != BlockType_BTreeRootPtr)
+	if ((m_root_ptr.om_o.o_type & OBJECT_TYPE_MASK) == OBJECT_TYPE_BTREE)
 	{
-		std::cerr << "ERROR: Wrong header type 0x" << std::hex << m_root_ptr.hdr.type << std::endl;
+		std::cerr << "ERROR: Wrong header type 0x" << std::hex << m_root_ptr.om_o.o_type << std::endl;
 		return false;
 	}
 
@@ -82,10 +82,10 @@ bool ApfsNodeMapperBTree::Init(uint64_t bid_root, uint64_t xid)
 
 bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t xid)
 {
-	APFS_OMap_Key key;
+	omap_key_t key;
 
-	const APFS_OMap_Key *res_key = nullptr;
-	const APFS_OMap_Val *res_val = nullptr;
+	const omap_key_t *res_key = nullptr;
+	const omap_val_t *res_val = nullptr;
 
 	BTreeEntry res;
 
@@ -101,10 +101,10 @@ bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t x
 		return false;
 	}
 
-	assert(res.val_len == sizeof(APFS_OMap_Val));
+	assert(res.val_len == sizeof(omap_val_t));
 
-	res_key = reinterpret_cast<const APFS_OMap_Key *>(res.key);
-	res_val = reinterpret_cast<const APFS_OMap_Val *>(res.val);
+	res_key = reinterpret_cast<const omap_key_t *>(res.key);
+	res_val = reinterpret_cast<const omap_val_t *>(res.val);
 
 	if (key.ok_oid != res_key->ok_oid)
 	{

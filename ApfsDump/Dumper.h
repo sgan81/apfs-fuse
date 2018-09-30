@@ -25,7 +25,7 @@ private:
 
 	void Decrypt(uint8_t *data, size_t size, uint64_t paddr);
 
-	uint64_t cpm_lookup(const APFS_CheckPointMap *cpm, uint64_t oid);
+	uint64_t cpm_lookup(const checkpoint_map_phys_t *cpm, uint64_t oid);
 
 	Device &m_dev;
 	uint64_t m_partbase;

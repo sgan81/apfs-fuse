@@ -20,9 +20,9 @@ bool CheckPointMap::Init(uint64_t root_oid)
 	if (!m_container.ReadAndVerifyHeaderBlock(m_cpm_data.data(), root_oid))
 		return false;
 
-	m_cpm = reinterpret_cast<const APFS_CheckPointMap *>(m_cpm_data.data());
+	m_cpm = reinterpret_cast<const checkpoint_map_phys_t *>(m_cpm_data.data());
 
-	if (m_cpm->cpm_o.type != 0x4000000C)
+	if ((m_cpm->cpm_o.o_type & OBJECT_TYPE_MASK) != OBJECT_TYPE_CHECKPOINT_MAP)
 		return false;
 
 	m_cpm_oid = root_oid;

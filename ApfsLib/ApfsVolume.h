@@ -37,7 +37,7 @@ public:
 
 	bool Init(uint64_t blkid_volhdr);
 
-	const char *name() const { return m_sb.apfs_volname; }
+	const char *name() const { return reinterpret_cast<const char *>(m_sb.apfs_volname); }
 
 	void dump(BlockDumper &bd);
 
@@ -51,7 +51,7 @@ public:
 private:
 	ApfsContainer &m_container;
 
-	APFS_Superblock_APSB m_sb;
+	apfs_superblock_t m_sb;
 
 	ApfsNodeMapperBTree m_nodemap_dir;
 	BTree m_bt_directory;

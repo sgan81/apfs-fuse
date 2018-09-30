@@ -52,6 +52,8 @@ void DumpBlockTrunc(std::ostream &os, const byte_t *data)
 	DumpHex(os, data, sz);
 }
 
+#if 0
+
 void MapBlocks(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bcnt)
 {
 	using namespace std;
@@ -242,6 +244,8 @@ void DumpSpaceman(std::ostream &os, Device &dev, uint64_t bid_start, uint64_t bc
 		bid++;
 	}
 }
+
+#endif
 
 static void ctrl_c_handler(int sig)
 {
