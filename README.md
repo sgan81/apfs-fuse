@@ -26,7 +26,6 @@ should just report an error.
 The following libraries are needed (including the -dev/-devel packages):
 
 * FUSE 2.6 or greater
-* ICU (Only on Linux)
 * zlib
 * bzip2
 * libattr (on some Linux distributions)
@@ -65,6 +64,7 @@ apfs-fuse <device> <mount-directory>
 ```
 Supported options:
 * `-d n`: If n > 0, enable debug output (see below for details).
+* `-f device`: Specify secondary device for Fusion drive.
 * `-o opts`: Comma-separated list of mount options.
 * `-l`: Lax mode: when unexpected data is encountered, try to continue, even if this means
   data returning potentially incorrect data.
@@ -85,7 +85,7 @@ the volume can be specified by the `-v` option.
 If a volume is encrypted, the apfs-fuse command will prompt for a password, unless a password or PRK is
 specified on the command line. The PRK can also be used as password.
 
-**NEW**: It is now possible to directly mount DMG files. The driver will automatically detect if a dmg
+It is also possible to directly mount DMG files. The driver will automatically detect if a dmg
 has to be mounted and take appropriate action. If a dmg is encrypted, you will be asked for the password.
 Note that dmg support is currently a bit slow (especially when compressed), but it should work properly.
 
