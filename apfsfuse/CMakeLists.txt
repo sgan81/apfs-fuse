@@ -11,3 +11,5 @@ else()
 target_link_libraries(apfs-fuse ApfsLib fuse z bz2 lzfse)
 endif()
 target_compile_definitions(apfs-fuse PRIVATE _FILE_OFFSET_BITS=64)
+
+install(TARGETS apfs-fuse RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

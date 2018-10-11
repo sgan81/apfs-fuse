@@ -47,12 +47,12 @@ bool Dumper::Initialize()
 		return false;
 
 	std::vector<uint8_t> nx_data;
-	const APFS_NX_Superblock *nx;
+	const nx_superblock_t *nx;
 
 	nx_data.resize(0x1000);
 	m_dev.Read(nx_data.data(), m_partbase, 0x1000);
 
-	nx = reinterpret_cast<const APFS_NX_Superblock *>(nx_data.data());
+	nx = reinterpret_cast<const nx_superblock_t *>(nx_data.data());
 
 	if (nx->nx_magic != NX_MAGIC)
 	{
@@ -65,7 +65,7 @@ bool Dumper::Initialize()
 	if (m_blocksize != 0x1000)
 	{
 		nx_data.resize(m_blocksize);
-		nx = reinterpret_cast<const APFS_NX_Superblock *>(nx_data.data());
+		nx = reinterpret_cast<const nx_superblock_t *>(nx_data.data());
 		m_dev.Read(nx_data.data(), m_partbase, m_blocksize);
 	}
 
@@ -89,11 +89,11 @@ bool Dumper::DumpContainer(std::ostream &os)
 	std::vector<uint8_t> bmp_data;
 	std::vector<uint8_t> blk_data;
 
-	const APFS_NX_Superblock *nx = nullptr;
-	const APFS_CheckPointMap *cpm = nullptr;
-	const APFS_Spaceman *sm = nullptr;
-	const APFS_ChunkInfoBlock *cib = nullptr;
-	const APFS_ChunkABlock *cab = nullptr;
+	const nx_superblock_t *nx = nullptr;
+	const checkpoint_map_phys_t *cpm = nullptr;
+	const spaceman_phys_t *sm = nullptr;
+	const chunk_info_block_t *cib = nullptr;
+	const cib_addr_block_t *cab = nullptr;
 
 	uint64_t paddr;
 
@@ -124,7 +124,7 @@ bool Dumper::DumpContainer(std::ostream &os)
 	if (!VerifyBlock(nx_data.data(), nx_data.size()))
 		return false;
 
-	nx = reinterpret_cast<const APFS_NX_Superblock *>(nx_data.data());
+	nx = reinterpret_cast<const nx_superblock_t *>(nx_data.data());
 
 	// TODO: Scan xp_desc for most recent nxsb
 
@@ -138,7 +138,7 @@ bool Dumper::DumpContainer(std::ostream &os)
 	if (!VerifyBlock(cpm_data.data(), cpm_data.size()))
 		return false;
 
-	cpm = reinterpret_cast<const APFS_CheckPointMap *>(cpm_data.data());
+	cpm = reinterpret_cast<const checkpoint_map_phys_t *>(cpm_data.data());
 
 	paddr = cpm_lookup(cpm, nx->nx_spaceman_oid);
 
@@ -155,19 +155,19 @@ bool Dumper::DumpContainer(std::ostream &os)
 	if (!VerifyBlock(sm_data.data(), sm_data.size()))
 		return false;
 
-	sm = reinterpret_cast<const APFS_Spaceman *>(sm_data.data());
+	sm = reinterpret_cast<const spaceman_phys_t *>(sm_data.data());
 
 	os << "Now dumping blocks according to bitmap ..." << std::endl;
 
-	block_count = sm->block_count;
-	block_size = sm->block_size;
-	blocks_per_chunk = sm->blocks_per_chunk;
-	chunks_per_cib = sm->chunks_per_cib;
-	cibs_per_cab = sm->cibs_per_cab;
+	block_size = sm->sm_block_size;
+	blocks_per_chunk = sm->sm_blocks_per_chunk;
+	chunks_per_cib = sm->sm_chunks_per_cib;
+	cibs_per_cab = sm->sm_cibs_per_cab;
 
-	cib_count = sm->cib_count;
-	cab_count = sm->cab_count;
-	cxb_oid = reinterpret_cast<const le<uint64_t> *>(sm_data.data() + sm->cib_arr_offs);
+	block_count = sm->sm_dev[SD_MAIN].sm_block_count;
+	cib_count = sm->sm_dev[SD_MAIN].sm_cib_count;
+	cab_count = sm->sm_dev[SD_MAIN].sm_cab_count;
+	cxb_oid = reinterpret_cast<const le<uint64_t> *>(sm_data.data() + sm->sm_dev[SD_MAIN].sm_addr_offset);
 
 	paddr = 0;
 
@@ -179,7 +179,7 @@ bool Dumper::DumpContainer(std::ostream &os)
 	m_aes.SetKey(vek, vek + 0x10);
 #endif
 
-	cib_oid_list.reserve(sm->cib_count);
+	cib_oid_list.reserve(cib_count);
 
 	if (cab_count > 0)
 	{
@@ -190,15 +190,15 @@ bool Dumper::DumpContainer(std::ostream &os)
 			if (!VerifyBlock(cxb_data.data(), cxb_data.size()))
 				return false;
 
-			cab = reinterpret_cast<const APFS_ChunkABlock *>(cxb_data.data());
+			cab = reinterpret_cast<const cib_addr_block_t *>(cxb_data.data());
 
-			for (n = 0; n < cab->count; n++)
-				cib_oid_list.push_back(cab->entry[n]);
+			for (n = 0; n < cab->cab_cib_count; n++)
+				cib_oid_list.push_back(cab->cab_cib_addr[n]);
 		}
 	}
 	else
 	{
-		for (n = 0; n < sm->cib_count; n++)
+		for (n = 0; n < cib_count; n++)
 			cib_oid_list.push_back(cxb_oid[n]);
 	}
 
@@ -211,22 +211,22 @@ bool Dumper::DumpContainer(std::ostream &os)
 		if (!VerifyBlock(cxb_data.data(), cxb_data.size()))
 			return false;
 
-		cib = reinterpret_cast<const APFS_ChunkInfoBlock *>(cxb_data.data());
+		cib = reinterpret_cast<const chunk_info_block_t *>(cxb_data.data());
 
-		for (chunk_id = 0; chunk_id < cib->chunk_count; chunk_id++)
+		for (chunk_id = 0; chunk_id < cib->cib_chunk_info_count; chunk_id++)
 		{
 			if (g_abort)
 				return false;
 
-			std::cout << "  chunk " << chunk_id << " avail=" << cib->chunk[chunk_id].bits_avail.get() << " paddr=" << paddr << std::endl;
+			std::cout << "  chunk " << chunk_id << " avail=" << cib->cib_chunk_info[chunk_id].ci_free_count.get() << " paddr=" << paddr << std::endl;
 
-			if (cib->chunk[chunk_id].block == 0)
+			if (cib->cib_chunk_info[chunk_id].ci_bitmap_addr == 0)
 			{
 				paddr += blocks_per_chunk;
 				continue;
 			}
 
-			if (!Read(bmp_data, cib->chunk[chunk_id].block, 1))
+			if (!Read(bmp_data, cib->cib_chunk_info[chunk_id].ci_bitmap_addr, 1))
 				return false;
 
 			for (blk_id = 0; blk_id < blocks_per_chunk && paddr < block_count; blk_id++)
@@ -256,12 +256,12 @@ bool Dumper::DumpBlockList(std::ostream& os)
 {
 	using namespace std;
 
-	constexpr size_t BLOCKSIZE = 0x1000;
+	constexpr size_t BLOCKSIZE = 0x1000; // Should make this dynamic ...
 
 	uint64_t bid;
 	uint8_t block[BLOCKSIZE];
-	const APFS_ObjHeader * const blk = reinterpret_cast<const APFS_ObjHeader *>(block);
-	const APFS_TableHeader * const tbl = reinterpret_cast<const APFS_TableHeader *>(block + sizeof(APFS_ObjHeader));
+	const obj_phys_t * const o = reinterpret_cast<const obj_phys_t *>(block);
+	const btree_node_phys_t * const bt = reinterpret_cast<const btree_node_phys_t *>(block);
 	bool last_was_used = false;
 
 	os << hex << uppercase << setfill('0');
@@ -269,7 +269,7 @@ bool Dumper::DumpBlockList(std::ostream& os)
 	os << "[Block]  | oid      | xid      | type     | subtype  | Page | Levl | Entries  | Description" << endl;
 	os << "---------+----------+----------+----------+----------+------+------+----------+---------------------------------" << endl;
 
-	for (bid = 0; bid < m_partsize && !g_abort; bid++)
+	for (bid = 0; bid < (m_partsize / BLOCKSIZE) && !g_abort; bid++)
 	{
 		if ((bid & 0xFFF) == 0)
 		{
@@ -290,15 +290,15 @@ bool Dumper::DumpBlockList(std::ostream& os)
 		if (VerifyBlock(block, BLOCKSIZE))
 		{
 			os << setw(8) << bid << " | ";
-			os << setw(8) << blk->oid << " | ";
-			os << setw(8) << blk->xid << " | ";
-			os << setw(8) << blk->type << " | ";
-			os << setw(8) << blk->subtype << " | ";
-			os << setw(4) << tbl->page << " | ";
-			os << setw(4) << tbl->level << " | ";
-			os << setw(8) << tbl->entries_cnt << " | ";
-			os << BlockDumper::GetNodeType(blk->type, blk->subtype);
-			if (APFS_OBJ_TYPE(blk->type) == 2)
+			os << setw(8) << o->o_oid << " | ";
+			os << setw(8) << o->o_xid << " | ";
+			os << setw(8) << o->o_type << " | ";
+			os << setw(8) << o->o_subtype << " | ";
+			os << setw(4) << bt->btn_flags << " | ";
+			os << setw(4) << bt->btn_level << " | ";
+			os << setw(8) << bt->btn_nkeys << " | ";
+			os << BlockDumper::GetNodeType(o->o_type, o->o_subtype);
+			if ((o->o_type & OBJECT_TYPE_MASK) == OBJECT_TYPE_BTREE)
 				os << " [Root]";
 			os << endl;
 			last_was_used = true;
@@ -342,7 +342,7 @@ void Dumper::Decrypt(uint8_t* data, size_t size, uint64_t paddr)
 	}
 }
 
-uint64_t Dumper::cpm_lookup(const APFS_CheckPointMap* cpm, uint64_t oid)
+uint64_t Dumper::cpm_lookup(const checkpoint_map_phys_t* cpm, uint64_t oid)
 {
 	uint32_t k;
 	uint32_t cnt;

@@ -79,9 +79,9 @@ public:
 
 	virtual ~BTreeNode();
 
-	uint64_t nodeid() const { return m_hdr->oid; }
-	uint32_t entries_cnt() const { return m_bt->key_count; }
-	uint16_t level() const { return m_bt->level; }
+	uint64_t nodeid() const { return m_btn->btn_o.o_oid; }
+	uint32_t entries_cnt() const { return m_btn->btn_nkeys; }
+	uint16_t level() const { return m_btn->btn_level; }
 	uint64_t blockid() const { return m_bid; }
 
 	virtual bool GetEntry(BTreeEntry &result, uint32_t index) const = 0;
@@ -99,8 +99,10 @@ protected:
 	const uint64_t m_nid_parent;
 	const uint64_t m_bid;
 
-	const APFS_ObjHeader *m_hdr;
-	const APFS_BTHeader *m_bt;
+	const btree_node_phys_t *m_btn;
+
+	// const APFS_ObjHeader *m_hdr;
+	// const APFS_BTHeader *m_bt;
 };
 
 class BTreeNodeFix : public BTreeNode
@@ -112,7 +114,7 @@ public:
 	// uint32_t Find(const void *key, size_t key_size, BTCompareFunc func) const override;
 
 private:
-	const APFS_BTEntryFixed *m_entries;
+	const kvoff_t *m_entries;
 };
 
 class BTreeNodeVar : public BTreeNode
@@ -124,7 +126,7 @@ public:
 	// uint32_t Find(const void *key, size_t key_size, BTCompareFunc func) const override;
 
 private:
-	const APFS_BTEntry *m_entries;
+	const kvloc_t *m_entries;
 };
 
 class BTree
@@ -148,8 +150,8 @@ public:
 	bool Lookup(BTreeEntry &result, const void *key, size_t key_size, BTCompareFunc func, void *context, bool exact);
 	bool GetIterator(BTreeIterator &it, const void *key, size_t key_size, BTCompareFunc func, void *context);
 
-	uint16_t GetKeyLen() const { return m_treeinfo.key_size; }
-	uint16_t GetValLen() const { return m_treeinfo.val_size; }
+	uint16_t GetKeyLen() const { return m_treeinfo.bt_fixed.bt_key_size; }
+	uint16_t GetValLen() const { return m_treeinfo.bt_fixed.bt_val_size; }
 
 	void dump(BlockDumper &out);
 
@@ -168,7 +170,7 @@ private:
 	std::shared_ptr<BTreeNode> m_root_node;
 	ApfsNodeMapper *m_nodeid_map;
 
-	APFS_BTFooter m_treeinfo;
+	btree_info_t m_treeinfo;
 
 	uint64_t m_xid;
 	bool m_debug;

@@ -174,7 +174,23 @@ std::string uuidstr(const apfs_uuid_t &uuid)
 	return st.str();
 }
 
-void dump_utf8(std::ostream &st, const char* str)
+std::string hexstr(const uint8_t *data, size_t size)
+{
+	using namespace std;
+
+	std::ostringstream st;
+
+	size_t k;
+
+	st << hex << uppercase << setfill('0');
+
+	for (k = 0; k < size; k++)
+		st << setw(2) << static_cast<unsigned int>(data[k]);
+
+	return st.str();
+}
+
+void dump_utf8(std::ostream &st, const uint8_t* str)
 {
 	size_t ptr = 0;
 	uint8_t ch;
@@ -235,7 +251,7 @@ void dump_utf32(std::ostream &st, const char32_t *str, size_t size)
 	st << std::endl;
 }
 
-uint32_t HashFilename(const char* utf8str, uint16_t name_len, bool case_fold)
+uint32_t HashFilename(const uint8_t* utf8str, uint16_t name_len, bool case_fold)
 {
 	std::vector<char32_t> utf32;
 	std::vector<char32_t> utf32_nfd;
@@ -263,7 +279,7 @@ uint32_t HashFilename(const char* utf8str, uint16_t name_len, bool case_fold)
 	return hash;
 }
 
-int StrCmpUtf8NormalizedFolded(const char* s1, const char* s2, bool case_fold)
+int StrCmpUtf8NormalizedFolded(const uint8_t* s1, const uint8_t* s2, bool case_fold)
 {
 	std::vector<char32_t> s1_u32;
 	std::vector<char32_t> s2_u32;
@@ -295,7 +311,7 @@ int StrCmpUtf8NormalizedFolded(const char* s1, const char* s2, bool case_fold)
 	return 0;
 }
 
-bool Utf8toUtf32(std::vector<char32_t> &str32, const char* str)
+bool Utf8toUtf32(std::vector<char32_t> &str32, const uint8_t* str)
 {
 	size_t ip = 0;
 	int cnt = 0;

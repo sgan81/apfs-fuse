@@ -26,6 +26,12 @@
 #include "Global.h"
 #include "DiskStruct.h"
 
+struct FlagDesc
+{
+	uint64_t flag;
+	const char *desc;
+};
+
 class BlockDumper
 {
 public:
@@ -38,13 +44,13 @@ public:
 	std::ostream &st() { return m_os; }
 
 private:
-	typedef void(BlockDumper::*DumpFunc)(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	typedef void(BlockDumper::*DumpFunc)(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
 
-	void DumpNodeHeader(const APFS_ObjHeader *blk, uint64_t blk_nr);
+	void DumpNodeHeader(const obj_phys_t *blk, uint64_t blk_nr);
 	void DumpBTNode(DumpFunc func, uint16_t key_size = 0, uint16_t value_size = 0);
 	void DumpBTHeader(bool dump_offsets = false);
-	void DumpBTFooter();
-	void DumpTableHeader(const APFS_TableHeader &tbl);
+	void DumpBTreeInfo();
+	// void DumpTableHeader(const APFS_TableHeader &tbl);
 
 	void DumpBlk_APSB();
 	void DumpBlk_CAB();
@@ -56,22 +62,27 @@ private:
 	void DumpBlk_NR();
 	void DumpBlk_NRL();
 	void DumpBlk_JSDR();
+	void DumpBlk_ER();
 
 	void DumpBTNode_0();
 
-	void DumpBTEntry_APFS_Root(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_OMap(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_APFS_ExtentRef(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_APFS_SnapMeta(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_13(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
-	void DumpBTEntry_FreeList(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_APFS_Root(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
+	void DumpBTEntry_OMap(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
+	void DumpBTEntry_APFS_ExtentRef(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
+	void DumpBTEntry_APFS_SnapMeta(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
+	void DumpBTEntry_OMap_Snapshot(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
+	void DumpBTEntry_FreeList(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
+	void DumpBTEntry_GBitmap(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
 
-	void DumpBTEntry_Unk(const byte_t *key_data, size_t key_length, const byte_t *value_data, size_t value_length, bool index);
+	void DumpBTEntry_Unk(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
 
-	void Dump_XF(const byte_t *xf_data, size_t xf_size);
+	void Dump_XF(const byte_t *xf_data, size_t xf_size, bool drec);
 
 	void DumpBlockHex();
 	void DumpHex(const byte_t *data, size_t size, size_t line_size = 16);
+
+	static std::string flagstr(uint64_t flag, const FlagDesc *desc);
+	static std::string enumstr(uint64_t flag, const FlagDesc *desc);
 
 public:
 	static const char * GetNodeType(uint32_t type, uint32_t subtype);
@@ -79,10 +90,10 @@ public:
 private:
 	static std::string tstamp(uint64_t apfs_time);
 
-	void dumpm(const char *name, const void *base, const uint8_t &v);
-	void dumpm(const char *name, const void *base, const le<uint16_t> &v);
-	void dumpm(const char *name, const void *base, const le<uint32_t> &v);
-	void dumpm(const char *name, const void *base, const le<uint64_t> &v);
+	void dumpm(const char *name, const void *base, const uint8_t &v, bool lf = true);
+	void dumpm(const char *name, const void *base, const le<uint16_t> &v, bool lf = true);
+	void dumpm(const char *name, const void *base, const le<uint32_t> &v, bool lf = true);
+	void dumpm(const char *name, const void *base, const le<uint64_t> &v, bool lf = true);
 	void dumpm(const char *name, const void *base, const apfs_uuid_t &uuid);
 
 	uint32_t m_text_flags; // 00 - Alt, 01 - insensitive, 08 - sensitive

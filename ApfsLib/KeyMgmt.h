@@ -10,10 +10,7 @@
 class ApfsContainer;
 
 struct bagdata_t;
-struct key_hdr_t;
-struct key_data_t;
-struct keybag_hdr_t;
-struct key_extent_t;
+
 struct blob_header_t;
 struct kek_blob_t;
 struct vek_blob_t;
@@ -56,16 +53,17 @@ public:
 	Keybag();
 	~Keybag();
 
-	bool Init(const uint8_t *data, size_t size);
+	bool Init(const media_keybag_t *mk, size_t size);
 
 	size_t GetKeyCnt();
-	bool GetKey(size_t nr, key_data_t &keydata);
-	bool FindKey(const apfs_uuid_t &uuid, uint16_t type, key_data_t &keydata);
+	const keybag_entry_t * GetKey(size_t nr);
+	const keybag_entry_t * FindKey(const apfs_uuid_t &uuid, uint16_t type);
 
 	void dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid);
 
 private:
 	std::vector<uint8_t> m_data;
+	kb_locker_t *m_kl;
 };
 
 class KeyManager

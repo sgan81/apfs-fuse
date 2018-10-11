@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <string>
 #include <ostream>
 #include <vector>
@@ -34,14 +35,15 @@ void DumpHex(std::ostream &os, const byte_t *data, size_t size, size_t line_size
 void DumpBuffer(const uint8_t *data, size_t len, const char *label);
 
 std::string uuidstr(const apfs_uuid_t &uuid);
-void dump_utf8(std::ostream &st, const char *str);
+std::string hexstr(const uint8_t *data, size_t size);
+void dump_utf8(std::ostream &st, const uint8_t *str);
 void dump_utf32(std::ostream &st, const char32_t *str, size_t size);
 
-uint32_t HashFilename(const char *utf8str, uint16_t name_len, bool case_fold);
+uint32_t HashFilename(const uint8_t *utf8str, uint16_t name_len, bool case_fold);
 
-int StrCmpUtf8NormalizedFolded(const char *s1, const char *s2, bool case_fold);
+int StrCmpUtf8NormalizedFolded(const uint8_t *s1, const uint8_t *s2, bool case_fold);
 
-bool Utf8toUtf32(std::vector<char32_t> &str32, const char * str);
+bool Utf8toUtf32(std::vector<char32_t> &str32, const uint8_t * str);
 
 size_t DecompressZLib(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 size_t DecompressADC(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);

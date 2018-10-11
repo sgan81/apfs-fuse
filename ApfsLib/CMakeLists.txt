@@ -35,10 +35,14 @@ add_library(ApfsLib
 	DeviceLinux.h
 	DeviceMac.cpp
 	DeviceMac.h
+	DeviceSparseImage.cpp
+	DeviceSparseImage.h
 	DeviceWinFile.cpp
 	DeviceWinFile.h
 	DeviceWinPhys.cpp
 	DeviceWinPhys.h
+	DiskImageFile.cpp
+	DiskImageFile.h
 	DiskStruct.h
 	Endian.h
 	Global.h

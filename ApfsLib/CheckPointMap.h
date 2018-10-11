@@ -22,6 +22,6 @@ public:
 private:
 	ApfsContainer &m_container;
 	std::vector<uint8_t> m_cpm_data;
-	const APFS_CheckPointMap *m_cpm;
+	const checkpoint_map_phys_t *m_cpm;
 	uint64_t m_cpm_oid;
 };

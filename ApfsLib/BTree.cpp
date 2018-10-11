@@ -76,20 +76,19 @@ BTreeNode::BTreeNode(BTree &tree, const uint8_t *block, size_t blocksize, uint64
 	m_bid(bid)
 {
 	m_block.assign(block, block + blocksize);
-	m_hdr = reinterpret_cast<const APFS_ObjHeader *>(m_block.data());
-	m_bt = reinterpret_cast<const APFS_BTHeader *>(m_block.data() + sizeof(APFS_ObjHeader));
+	m_btn = reinterpret_cast<const btree_node_phys_t *>(m_block.data());
 
-	assert(m_bt->table_space_offset == 0);
+	assert(m_btn->btn_table_space.off == 0);
 
-	m_keys_start = 0x38 + m_bt->table_space_length;
-	m_vals_start = (nid_parent != 0) ? blocksize : blocksize - sizeof(APFS_BTFooter);
+	m_keys_start = sizeof(btree_node_phys_t) + m_btn->btn_table_space.len;
+	m_vals_start = (nid_parent != 0) ? blocksize : blocksize - sizeof(btree_info_t);
 }
 
 std::shared_ptr<BTreeNode> BTreeNode::CreateNode(BTree & tree, const uint8_t * block, size_t blocksize, uint64_t nid_parent, uint64_t bid)
 {
-	const APFS_BTHeader *bt = reinterpret_cast<const APFS_BTHeader *>(block + sizeof(APFS_ObjHeader));
+	const btree_node_phys_t *btn = reinterpret_cast<const btree_node_phys_t *>(block);
 
-	if (bt->flags & 4)
+	if (btn->btn_flags & BTNODE_FIXED_KV_SIZE)
 		return std::make_shared<BTreeNodeFix>(tree, block, blocksize, nid_parent, bid);
 	else
 		return std::make_shared<BTreeNodeVar>(tree, block, blocksize, nid_parent, bid);
@@ -102,23 +101,23 @@ BTreeNode::~BTreeNode()
 BTreeNodeFix::BTreeNodeFix(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nid_parent, uint64_t bid) :
 	BTreeNode(tree, block, blocksize, nid_parent, bid)
 {
-	m_entries = reinterpret_cast<const APFS_BTEntryFixed *>(m_block.data() + 0x38);
+	m_entries = reinterpret_cast<const kvoff_t *>(m_block.data() + sizeof(btree_node_phys_t));
 }
 
 bool BTreeNodeFix::GetEntry(BTreeEntry & result, uint32_t index) const
 {
 	result.clear();
 
-	if (index >= m_bt->key_count)
+	if (index >= m_btn->btn_nkeys)
 		return false;
 
-	result.key = m_block.data() + m_keys_start + m_entries[index].key_offs;
+	result.key = m_block.data() + m_keys_start + m_entries[index].k;
 	result.key_len = m_tree.GetKeyLen();
 
-	if (m_entries[index].value_offs != 0xFFFF)
+	if (m_entries[index].v != BTOFF_INVALID)
 	{
-		result.val = m_block.data() + m_vals_start - m_entries[index].value_offs;
-		result.val_len = (m_bt->level > 0) ? sizeof(uint64_t) : m_tree.GetValLen();
+		result.val = m_block.data() + m_vals_start - m_entries[index].v;
+		result.val_len = (m_btn->btn_flags & BTNODE_LEAF) ? m_tree.GetValLen() : sizeof(oid_t);
 	}
 	else
 	{
@@ -132,23 +131,23 @@ bool BTreeNodeFix::GetEntry(BTreeEntry & result, uint32_t index) const
 BTreeNodeVar::BTreeNodeVar(BTree &tree, const uint8_t *block, size_t blocksize, uint64_t nid_parent, uint64_t bid) :
 	BTreeNode(tree, block, blocksize, nid_parent, bid)
 {
-	m_entries = reinterpret_cast<const APFS_BTEntry *>(m_block.data() + 0x38);
+	m_entries = reinterpret_cast<const kvloc_t *>(m_block.data() + sizeof(btree_node_phys_t));
 }
 
 bool BTreeNodeVar::GetEntry(BTreeEntry & result, uint32_t index) const
 {
 	result.clear();
 
-	if (index >= m_bt->key_count)
+	if (index >= m_btn->btn_nkeys)
 		return false;
 
-	result.key = m_block.data() + m_keys_start + m_entries[index].key_offs;
-	result.key_len = m_entries[index].key_len;
+	result.key = m_block.data() + m_keys_start + m_entries[index].k.off;
+	result.key_len = m_entries[index].k.len;
 
-	if (m_entries[index].value_offs != 0xFFFF)
+	if (m_entries[index].v.off != BTOFF_INVALID)
 	{
-		result.val = m_block.data() + m_vals_start - m_entries[index].value_offs;
-		result.val_len = m_entries[index].value_len;
+		result.val = m_block.data() + m_vals_start - m_entries[index].v.off;
+		result.val_len = m_entries[index].v.len;
 	}
 	else
 	{
@@ -186,7 +185,7 @@ bool BTree::Init(uint64_t nid_root, uint64_t xid, ApfsNodeMapper *node_map)
 
 	if (m_root_node)
 	{
-		memcpy(&m_treeinfo, m_root_node->block().data() + m_root_node->block().size() - sizeof(APFS_BTFooter), sizeof(APFS_BTFooter));
+		memcpy(&m_treeinfo, m_root_node->block().data() + m_root_node->block().size() - sizeof(btree_info_t), sizeof(btree_info_t));
 		return true;
 	}
 	else
