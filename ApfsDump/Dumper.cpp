@@ -9,10 +9,17 @@
 
 #include "Dumper.h"
 
-Dumper::Dumper(Device& dev) : m_dev(dev)
+Dumper::Dumper(Device *dev_main, Device *dev_tier2)
 {
-	m_partbase = 0;
-	m_partsize = 0;
+	m_dev_main = dev_main;
+	m_dev_tier2 = dev_tier2;
+
+	m_base_main = 0;
+	m_size_main = 0;
+
+	m_base_tier2 = 0;
+	m_size_tier2 = 0;
+
 	m_blocksize = 0;
 	m_is_encrypted = false;
 }
@@ -23,34 +30,55 @@ Dumper::~Dumper()
 
 bool Dumper::Initialize()
 {
-	m_partbase = 0;
-	m_partsize = 0;
+	m_base_main = 0;
+	m_size_main = 0;
+	m_base_tier2 = 0;
+	m_size_tier2 = 0;
+
 	m_blocksize = 0;
 
 	GptPartitionMap pmap;
 
-	if (pmap.LoadAndVerify(m_dev))
+	if (pmap.LoadAndVerify(*m_dev_main))
 	{
 		int partid = pmap.FindFirstAPFSPartition();
 
 		if (partid >= 0)
 		{
-			std::cout << "Dumping EFI partition" << std::endl;
-			pmap.GetPartitionOffsetAndSize(partid, m_partbase, m_partsize);
+			std::cout << "Dumping EFI partition on main" << std::endl;
+			pmap.GetPartitionOffsetAndSize(partid, m_base_main, m_size_main);
 		}
 	}
 
-	if (m_partsize == 0)
-		m_partsize = m_dev.GetSize();
-
-	if (m_partsize == 0)
+	if (m_size_main == 0)
+		m_size_main = m_dev_main->GetSize();
+	if (m_size_main == 0)
 		return false;
+
+	if (m_dev_tier2)
+	{
+		if (pmap.LoadAndVerify(*m_dev_tier2))
+		{
+			int partid = pmap.FindFirstAPFSPartition();
+
+			if (partid >= 0)
+			{
+				std::cout << "Dumping EFI partition on tier2" << std::endl;
+				pmap.GetPartitionOffsetAndSize(partid, m_base_tier2, m_size_tier2);
+			}
+		}
+
+		if (m_size_tier2 == 0)
+			m_size_tier2 = m_dev_tier2->GetSize();
+		if (m_size_tier2 == 0)
+			return false;
+	}
 
 	std::vector<uint8_t> nx_data;
 	const nx_superblock_t *nx;
 
 	nx_data.resize(0x1000);
-	m_dev.Read(nx_data.data(), m_partbase, 0x1000);
+	m_dev_main->Read(nx_data.data(), m_base_main, 0x1000);
 
 	nx = reinterpret_cast<const nx_superblock_t *>(nx_data.data());
 
@@ -66,7 +94,7 @@ bool Dumper::Initialize()
 	{
 		nx_data.resize(m_blocksize);
 		nx = reinterpret_cast<const nx_superblock_t *>(nx_data.data());
-		m_dev.Read(nx_data.data(), m_partbase, m_blocksize);
+		m_dev_main->Read(nx_data.data(), m_base_main, m_blocksize);
 	}
 
 	if (!VerifyBlock(nx_data.data(), m_blocksize))
@@ -112,6 +140,9 @@ bool Dumper::DumpContainer(std::ostream &os)
 	uint32_t blk_id;
 	size_t n;
 
+	int devidx;
+	uint64_t offs = 0;
+
 	std::vector<uint64_t> cib_oid_list;
 
 	// Get NX superblock
@@ -122,7 +153,10 @@ bool Dumper::DumpContainer(std::ostream &os)
 	bd.DumpNode(nx_data.data(), 0);
 
 	if (!VerifyBlock(nx_data.data(), nx_data.size()))
+	{
+		std::cerr << "Superblock checksum error" << std::endl;
 		return false;
+	}
 
 	nx = reinterpret_cast<const nx_superblock_t *>(nx_data.data());
 
@@ -131,7 +165,10 @@ bool Dumper::DumpContainer(std::ostream &os)
 	// Get Check Point Info Block
 
 	if (!Read(cpm_data, nx->nx_xp_desc_base + nx->nx_xp_desc_index, 1))
+	{
+		std::cerr << "Error reading the cpm block" << std::endl;
 		return false;
+	}
 
 	bd.DumpNode(cpm_data.data(), cpm_data.size());
 
@@ -164,90 +201,105 @@ bool Dumper::DumpContainer(std::ostream &os)
 	chunks_per_cib = sm->sm_chunks_per_cib;
 	cibs_per_cab = sm->sm_cibs_per_cab;
 
-	block_count = sm->sm_dev[SD_MAIN].sm_block_count;
-	cib_count = sm->sm_dev[SD_MAIN].sm_cib_count;
-	cab_count = sm->sm_dev[SD_MAIN].sm_cab_count;
-	cxb_oid = reinterpret_cast<const le<uint64_t> *>(sm_data.data() + sm->sm_dev[SD_MAIN].sm_addr_offset);
-
-	paddr = 0;
-
-	std::cout << std::hex;
-
-#if 0
-	static const uint8_t vek[0x20] = { 0 /* enter VEK here */ };
-	m_is_encrypted = true;
-	m_aes.SetKey(vek, vek + 0x10);
-#endif
-
-	cib_oid_list.reserve(cib_count);
-
-	if (cab_count > 0)
+	for (devidx = SD_MAIN; devidx < SD_COUNT; devidx++)
 	{
-		for (cab_id = 0; cab_id < cab_count; cab_id++)
+		std::cout << "Dumping device " << devidx << std::endl;
+
+		if (devidx == SD_TIER2 && m_dev_tier2 == 0)
 		{
-			if (!Read(cxb_data, cxb_oid[cab_id], 1))
+			std::cout << "Aborting" << std::endl;
+			break;
+		}
+
+		offs = (devidx == SD_TIER2) ? (FUSION_TIER2_DEVICE_BYTE_ADDR / m_blocksize) : 0;
+
+		block_count = sm->sm_dev[devidx].sm_block_count;
+		cib_count = sm->sm_dev[devidx].sm_cib_count;
+		cab_count = sm->sm_dev[devidx].sm_cab_count;
+		cxb_oid = reinterpret_cast<const le<uint64_t> *>(sm_data.data() + sm->sm_dev[devidx].sm_addr_offset);
+
+		paddr = 0;
+
+		std::cout << std::hex;
+
+	#if 0
+		static const uint8_t vek[0x20] = { 0 /* enter VEK here */ };
+		m_is_encrypted = true;
+		m_aes.SetKey(vek, vek + 0x10);
+	#endif
+
+		cib_oid_list.clear();
+		cib_oid_list.reserve(cib_count);
+
+		if (cab_count > 0)
+		{
+			for (cab_id = 0; cab_id < cab_count; cab_id++)
+			{
+				if (!Read(cxb_data, cxb_oid[cab_id], 1))
+					return false;
+				if (!VerifyBlock(cxb_data.data(), cxb_data.size()))
+					return false;
+
+				cab = reinterpret_cast<const cib_addr_block_t *>(cxb_data.data());
+
+				for (n = 0; n < cab->cab_cib_count; n++)
+					cib_oid_list.push_back(cab->cab_cib_addr[n]);
+			}
+		}
+		else
+		{
+			for (n = 0; n < cib_count; n++)
+				cib_oid_list.push_back(cxb_oid[n]);
+		}
+
+		for (cib_id = 0; cib_id < cib_count; cib_id++)
+		{
+			std::cout << "cib " << cib_id << std::endl;
+
+			if (!Read(cxb_data, cib_oid_list[cib_id], 1))
 				return false;
 			if (!VerifyBlock(cxb_data.data(), cxb_data.size()))
 				return false;
 
-			cab = reinterpret_cast<const cib_addr_block_t *>(cxb_data.data());
+			cib = reinterpret_cast<const chunk_info_block_t *>(cxb_data.data());
 
-			for (n = 0; n < cab->cab_cib_count; n++)
-				cib_oid_list.push_back(cab->cab_cib_addr[n]);
-		}
-	}
-	else
-	{
-		for (n = 0; n < cib_count; n++)
-			cib_oid_list.push_back(cxb_oid[n]);
-	}
-
-	for (cib_id = 0; cib_id < cib_count; cib_id++)
-	{
-		std::cout << "cib " << cib_id << std::endl;
-
-		if (!Read(cxb_data, cib_oid_list[cib_id], 1))
-			return false;
-		if (!VerifyBlock(cxb_data.data(), cxb_data.size()))
-			return false;
-
-		cib = reinterpret_cast<const chunk_info_block_t *>(cxb_data.data());
-
-		for (chunk_id = 0; chunk_id < cib->cib_chunk_info_count; chunk_id++)
-		{
-			if (g_abort)
-				return false;
-
-			std::cout << "  chunk " << chunk_id << " avail=" << cib->cib_chunk_info[chunk_id].ci_free_count.get() << " paddr=" << paddr << std::endl;
-
-			if (cib->cib_chunk_info[chunk_id].ci_bitmap_addr == 0)
+			for (chunk_id = 0; chunk_id < cib->cib_chunk_info_count; chunk_id++)
 			{
-				paddr += blocks_per_chunk;
-				continue;
-			}
+				if (g_abort)
+					return false;
 
-			if (!Read(bmp_data, cib->cib_chunk_info[chunk_id].ci_bitmap_addr, 1))
-				return false;
+				std::cout << "  chunk " << chunk_id << " avail=" << cib->cib_chunk_info[chunk_id].ci_free_count.get() << " paddr=" << paddr << std::endl;
 
-			for (blk_id = 0; blk_id < blocks_per_chunk && paddr < block_count; blk_id++)
-			{
-				if (bmp_data[blk_id >> 3] & (1 << (blk_id & 7)))
+				if (cib->cib_chunk_info[chunk_id].ci_bitmap_addr == 0)
 				{
-					Read(blk_data, paddr, 1);
-					if (VerifyBlock(blk_data.data(), m_blocksize))
-						bd.DumpNode(blk_data.data(), paddr);
-					else if (m_is_encrypted)
-					{
-						Decrypt(blk_data.data(), blk_data.size(), paddr);
-						if (VerifyBlock(blk_data.data(), m_blocksize))
-							bd.DumpNode(blk_data.data(), paddr);
-					}
+					paddr += blocks_per_chunk;
+					continue;
 				}
 
-				++paddr;
+				if (!Read(bmp_data, cib->cib_chunk_info[chunk_id].ci_bitmap_addr, 1))
+					return false;
+
+				for (blk_id = 0; blk_id < blocks_per_chunk && paddr < block_count; blk_id++)
+				{
+					if (bmp_data[blk_id >> 3] & (1 << (blk_id & 7)))
+					{
+						Read(blk_data, paddr + offs, 1);
+						if (VerifyBlock(blk_data.data(), m_blocksize))
+							bd.DumpNode(blk_data.data(), paddr + offs);
+						else if (m_is_encrypted)
+						{
+							Decrypt(blk_data.data(), blk_data.size(), paddr + offs);
+							if (VerifyBlock(blk_data.data(), m_blocksize))
+								bd.DumpNode(blk_data.data(), paddr + offs);
+						}
+					}
+
+					++paddr;
+				}
 			}
 		}
 	}
+
 
 	return true;
 }
@@ -269,7 +321,7 @@ bool Dumper::DumpBlockList(std::ostream& os)
 	os << "[Block]  | oid      | xid      | type     | subtype  | Page | Levl | Entries  | Description" << endl;
 	os << "---------+----------+----------+----------+----------+------+------+----------+---------------------------------" << endl;
 
-	for (bid = 0; bid < (m_partsize / BLOCKSIZE) && !g_abort; bid++)
+	for (bid = 0; bid < (m_size_main / BLOCKSIZE) && !g_abort; bid++)
 	{
 		if ((bid & 0xFFF) == 0)
 		{
@@ -311,6 +363,53 @@ bool Dumper::DumpBlockList(std::ostream& os)
 		}
 	}
 
+	if (m_dev_tier2)
+	{
+		const uint64_t off = FUSION_TIER2_DEVICE_BYTE_ADDR / m_blocksize;
+
+		for (bid = 0; bid < (m_size_tier2 / BLOCKSIZE) && !g_abort; bid++)
+		{
+			if ((bid & 0xFFF) == 0)
+			{
+				std::cout << '.';
+				std::cout.flush();
+			}
+
+			Read(block + off, bid, 1);
+
+			if (IsEmptyBlock(block, BLOCKSIZE))
+			{
+				if (last_was_used)
+					os << "---------+----------+----------+----------+----------+------+------+----------+ Empty" << endl;
+				last_was_used = false;
+				continue;
+			}
+
+			if (VerifyBlock(block, BLOCKSIZE))
+			{
+				os << setw(8) << bid << " | ";
+				os << setw(8) << o->o_oid << " | ";
+				os << setw(8) << o->o_xid << " | ";
+				os << setw(8) << o->o_type << " | ";
+				os << setw(8) << o->o_subtype << " | ";
+				os << setw(4) << bt->btn_flags << " | ";
+				os << setw(4) << bt->btn_level << " | ";
+				os << setw(8) << bt->btn_nkeys << " | ";
+				os << BlockDumper::GetNodeType(o->o_type, o->o_subtype);
+				if ((o->o_type & OBJECT_TYPE_MASK) == OBJECT_TYPE_BTREE)
+					os << " [Root]";
+				os << endl;
+				last_was_used = true;
+			}
+			else
+			{
+				os << setw(8) << bid;
+				os << " |          |          |          |          |      |      |          | Data" << endl;
+				last_was_used = true;
+			}
+		}
+	}
+
 	os << endl;
 
 	return true;
@@ -318,7 +417,24 @@ bool Dumper::DumpBlockList(std::ostream& os)
 
 bool Dumper::Read(void* data, uint64_t paddr, uint64_t cnt)
 {
-	return m_dev.Read(data, paddr * m_blocksize + m_partbase, cnt * m_blocksize);
+	uint64_t offs;
+	uint64_t size;
+
+	offs = paddr * m_blocksize;
+	size = cnt * m_blocksize;
+
+	if (offs & FUSION_TIER2_DEVICE_BYTE_ADDR)
+	{
+		offs = offs - FUSION_TIER2_DEVICE_BYTE_ADDR + m_base_tier2;
+
+		return m_dev_tier2->Read(data, offs, size);
+	}
+	else
+	{
+		offs = offs + m_base_main;
+
+		return m_dev_main->Read(data, offs, size);
+	}
 }
 
 bool Dumper::Read(std::vector<uint8_t>& data, uint64_t paddr, uint64_t cnt)
@@ -326,7 +442,7 @@ bool Dumper::Read(std::vector<uint8_t>& data, uint64_t paddr, uint64_t cnt)
 	if (data.size() != cnt * m_blocksize)
 		data.resize(cnt * m_blocksize);
 
-	return m_dev.Read(data.data(), paddr * m_blocksize + m_partbase, cnt * m_blocksize);
+	return Read(data.data(), paddr, cnt);
 }
 
 void Dumper::Decrypt(uint8_t* data, size_t size, uint64_t paddr)

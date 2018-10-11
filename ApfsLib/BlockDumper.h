@@ -64,6 +64,10 @@ private:
 	void DumpBlk_JSDR();
 	void DumpBlk_ER();
 
+	void DumpBlk_WBC();
+	void DumpBlk_WBCL();
+
+
 	void DumpBTNode_0();
 
 	void DumpBTEntry_APFS_Root(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
@@ -73,6 +77,7 @@ private:
 	void DumpBTEntry_OMap_Snapshot(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
 	void DumpBTEntry_FreeList(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
 	void DumpBTEntry_GBitmap(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
+	void DumpBTEntry_FusionMT(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
 
 	void DumpBTEntry_Unk(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
 

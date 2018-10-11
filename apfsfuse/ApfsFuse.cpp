@@ -48,10 +48,11 @@
 
 #include <iostream>
 
-
+constexpr double FUSE_TIMEOUT = 86400.0;
 
 static struct fuse_lowlevel_ops ops;
-static Device *g_disk = nullptr;
+static Device *g_disk_main = nullptr;
+static Device *g_disk_tier2 = nullptr;
 static ApfsContainer *g_container = nullptr;
 static ApfsVolume *g_volume = nullptr;
 
@@ -243,7 +244,7 @@ static void apfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 		std::cout << (rc ? "OK" : "FAIL") << std::endl;
 
 	if (rc)
-		fuse_reply_attr(req, &st, 1.0);
+		fuse_reply_attr(req, &st, FUSE_TIMEOUT);
 	else
 		fuse_reply_err(req, ENOENT);
 }
@@ -355,8 +356,8 @@ static void apfs_lookup(fuse_req_t req, fuse_ino_t ino, const char *name)
 		fuse_entry_param e;
 
 		e.ino = res.file_id;
-		e.attr_timeout = 1.0;
-		e.entry_timeout = 1.0;
+		e.attr_timeout = FUSE_TIMEOUT;
+		e.entry_timeout = FUSE_TIMEOUT;
 
 		rc = apfs_stat_internal(res.file_id, e.attr);
 
@@ -596,6 +597,7 @@ void usage(const char *name)
 	std::cout << std::endl;
 	std::cout << "Options:" << std::endl;
 	std::cout << "-d level      : Enable debug output in the console." << std::endl;
+	std::cout << "-f device     : Specify secondary device for fusion drives." << std::endl;
 	std::cout << "-o options    : Additional mount options." << std::endl;
 	std::cout << "-v volume-id  : Specify number of volume to be mounted." << std::endl;
 	std::cout << "-r passphrase : Specify volume passphrase. The driver will ask for it if needed." << std::endl;
@@ -623,14 +625,17 @@ int main(int argc, char *argv[])
 	struct fuse_args args = FUSE_ARGS_INIT(0, nullptr);
 	struct fuse_chan *ch;
 	const char *mountpoint = nullptr;
-	const char *dev_path = nullptr;
+	const char *main_dev_path = nullptr;
+	const char *tier2_dev_path = nullptr;
 	int err = -1;
 	int opt;
 	std::string mount_options;
 	std::string passphrase;
 	unsigned int volume_id = 0;
-	uint64_t container_offset = 0;
-	uint64_t container_size = 0;
+	uint64_t main_offset = 0;
+	uint64_t main_size = 0;
+	uint64_t tier2_offset = 0;
+	uint64_t tier2_size = 0;
 	int partition_id = -1;
 
 	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/ios_11_0_1.img";
@@ -660,12 +665,15 @@ int main(int argc, char *argv[])
 	ops.releasedir = apfs_releasedir;
 	// ops.statfs = apfs_statfs;
 
-	while ((opt = getopt(argc, argv, "d:o:p:v:r:s:l")) != -1)
+	while ((opt = getopt(argc, argv, "d:f:o:p:v:r:s:l")) != -1)
 	{
 		switch (opt)
 		{
 			case 'd':
 				g_debug = strtoul(optarg, nullptr, 10);
+				break;
+			case 'f':
+				tier2_dev_path = optarg;
 				break;
 			case 'o':
 				add_option(mount_options, optarg, nullptr);
@@ -680,7 +688,7 @@ int main(int argc, char *argv[])
 				passphrase = optarg;
 				break;
 			case 's':
-				container_offset = strtoul(optarg, nullptr, 10);
+				main_offset = strtoul(optarg, nullptr, 10);
 				break;
 			case 'l':
 				g_lax = true;
@@ -698,35 +706,45 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	dev_path = argv[optind];
+	main_dev_path = argv[optind];
 	mountpoint = argv[optind + 1];
 
 	add_option(mount_options, "ro", nullptr);
 
-	g_disk = Device::OpenDevice(dev_path);
+	g_disk_main = Device::OpenDevice(main_dev_path);
+	if (tier2_dev_path)
+		g_disk_tier2 = Device::OpenDevice(tier2_dev_path);
 
-	if (!g_disk)
+	if (!g_disk_main)
 	{
 		std::cerr << "Error opening device!" << std::endl;
 		return 1;
 	}
 
-	container_size = g_disk->GetSize();
-
-	if (container_offset >= container_size)
+	if (tier2_dev_path && !g_disk_tier2)
 	{
-		std::cerr << "Invalid container offset specified" << std::endl;
-		g_disk->Close();
-		delete g_disk;
+		std::cerr << "Error opening secondary device!" << std::endl;
 		return 1;
 	}
 
-	if (container_offset == 0)
+	main_size = g_disk_main->GetSize();
+	if (g_disk_tier2)
+		tier2_size = g_disk_tier2->GetSize();
+
+	if (main_offset >= main_size)
+	{
+		std::cerr << "Invalid container offset specified" << std::endl;
+		g_disk_main->Close();
+		delete g_disk_main;
+		return 1;
+	}
+
+	if (main_offset == 0)
 	{
 		GptPartitionMap gpt;
 		bool rc;
 
-		rc = gpt.LoadAndVerify(*g_disk);
+		rc = gpt.LoadAndVerify(*g_disk_main);
 		if (rc)
 		{
 			if (g_debug & Dbg_Info)
@@ -736,25 +754,41 @@ int main(int argc, char *argv[])
 				partition_id = gpt.FindFirstAPFSPartition();
 
 			if (partition_id != -1)
-				gpt.GetPartitionOffsetAndSize(partition_id, container_offset, container_size);
+				gpt.GetPartitionOffsetAndSize(partition_id, main_offset, main_size);
 		}
 	}
 	else
-		container_size -= container_offset;
+		main_size -= main_offset;
 
-	g_container = new ApfsContainer(*g_disk, container_offset, container_size);
+	if (g_disk_tier2)
+	{
+		GptPartitionMap gpt;
+
+		if (gpt.LoadAndVerify(*g_disk_tier2))
+		{
+			if (g_debug & Dbg_Info)
+				std::cout << "Found valid GPT partition table on secondary device. Looking for APFS partition." << std::endl;
+
+			partition_id = gpt.FindFirstAPFSPartition();
+
+			if (partition_id != -1)
+				gpt.GetPartitionOffsetAndSize(partition_id, tier2_offset, tier2_size);
+		}
+	}
+
+	g_container = new ApfsContainer(g_disk_main, main_offset, main_size, g_disk_tier2, tier2_offset, tier2_size);
 	g_container->Init();
 	g_volume = g_container->GetVolume(volume_id, passphrase);
 	if (!g_volume)
 	{
 		std::cerr << "Unable to get volume!" << std::endl;
 		delete g_container;
-		g_disk->Close();
-		delete g_disk;
+		g_disk_main->Close();
+		delete g_disk_main;
 		return 1;
 	}
 
-	add_option(mount_options, "fsname", dev_path);
+	add_option(mount_options, "fsname", main_dev_path);
 	add_option(mount_options, "allow_other", nullptr);
 
 	fuse_opt_add_arg(&args, "apfs-fuse");
@@ -785,8 +819,8 @@ int main(int argc, char *argv[])
 
 	delete g_volume;
 	delete g_container;
-	g_disk->Close();
-	delete g_disk;
+	g_disk_main->Close();
+	delete g_disk_main;
 
 	return err ? 1 : 0;
 }

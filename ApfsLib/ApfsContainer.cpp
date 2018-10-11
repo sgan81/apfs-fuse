@@ -30,10 +30,13 @@
 int g_debug = 0;
 bool g_lax = false;
 
-ApfsContainer::ApfsContainer(Device &disk, uint64_t start, uint64_t len) :
-	m_disk(disk),
-	m_part_start(start),
-	m_part_len(len),
+ApfsContainer::ApfsContainer(Device *disk_main, uint64_t main_start, uint64_t main_len, Device *disk_tier2, uint64_t tier2_start, uint64_t tier2_len) :
+	m_main_disk(disk_main),
+	m_main_part_start(main_start),
+	m_main_part_len(main_len),
+	m_tier2_disk(disk_tier2),
+	m_tier2_part_start(tier2_start),
+	m_tier2_part_len(tier2_len),
 	m_cpm(*this),
 	m_omap(*this),
 	// m_omap_tree(*this),
@@ -54,18 +57,24 @@ bool ApfsContainer::Init()
 
 	blk.resize(0x1000);
 
-	if (!m_disk.Read(blk.data(), m_part_start, 0x1000))
+	if (!m_main_disk->Read(blk.data(), m_main_part_start, 0x1000))
+	{
+		std::cerr << "Reading block 0 from main device failed." << std::endl;
 		return false;
+	}
 
 	memcpy(&m_nx, blk.data(), sizeof(nx_superblock_t));
 
 	if (m_nx.nx_magic != NX_MAGIC)
+	{
+		std::cerr << "This doesn't seem to be an apfs volume (invalid superblock)." << std::endl;
 		return false;
+	}
 
 	if (m_nx.nx_block_size != 0x1000)
 	{
 		blk.resize(m_nx.nx_block_size);
-		m_disk.Read(blk.data(), m_part_start, blk.size());
+		m_main_disk->Read(blk.data(), m_main_part_start, blk.size());
 	}
 
 	if (!VerifyBlock(blk.data(), blk.size()))
@@ -83,7 +92,9 @@ bool ApfsContainer::Init()
 
 	for (bid = m_nx.nx_xp_desc_base; bid < (m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_blocks); bid++)
 	{
-		m_disk.Read(tmp.data(), m_part_start + bid * m_nx.nx_block_size, m_nx.nx_block_size);
+		if (!ReadBlocks(tmp.data(), bid, 1))
+			return false;
+
 		if (!VerifyBlock(tmp.data(), tmp.size()))
 			continue;
 
@@ -103,12 +114,19 @@ bool ApfsContainer::Init()
 		if (g_debug & Dbg_Errors)
 			std::cout << "Found more recent xid " << max_xid << " than superblock 0 contained (" << m_nx.nx_o.o_xid << ")." << std::endl;
 
-		m_disk.Read(tmp.data(), m_part_start + max_bid * m_nx.nx_block_size, m_nx.nx_block_size);
+		ReadBlocks(tmp.data(), max_bid, 1);
+
 		memcpy(&m_nx, tmp.data(), sizeof(nx_superblock_t));
 	}
 #endif
 
-	if (!m_cpm.Init(m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_index))
+	if ((m_nx.nx_incompatible_features & NX_INCOMPAT_FUSION) && !m_tier2_disk)
+	{
+		std::cerr << "Need to specify two devices for a fusion drive." << std::endl;
+		return false;
+	}
+
+	if (!m_cpm.Init(m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_index, m_nx.nx_xp_desc_len - 1))
 	{
 		std::cerr << "Failed to load checkpoint map" << std::endl;
 		return false;
@@ -214,13 +232,28 @@ bool ApfsContainer::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt) c
 	uint64_t offs;
 	uint64_t size;
 
-	if ((blkid + blkcnt) > m_nx.nx_block_count)
-		return false;
+	//if ((blkid + blkcnt) > m_nx.nx_block_count)
+	//	return false;
 
-	offs = m_nx.nx_block_size * blkid + m_part_start;
+	offs = m_nx.nx_block_size * blkid;
 	size = m_nx.nx_block_size * blkcnt;
 
-	return m_disk.Read(data, offs, size);
+	if (offs & FUSION_TIER2_DEVICE_BYTE_ADDR)
+	{
+		if (!m_tier2_disk)
+			return false;
+
+		offs = offs - FUSION_TIER2_DEVICE_BYTE_ADDR + m_tier2_part_start;
+		return m_tier2_disk->Read(data, offs, size);
+	}
+	else
+	{
+		if (!m_main_disk)
+			return false;
+
+		offs = offs + m_main_part_start;
+		return m_main_disk->Read(data, offs, size);
+	}
 }
 
 bool ApfsContainer::ReadAndVerifyHeaderBlock(byte_t * data, uint64_t blkid) const
@@ -296,13 +329,15 @@ void ApfsContainer::dump(BlockDumper& bd)
 	}
 #endif
 
-#if 0
+#if 1
+	bd.st() << std::endl << "Dumping XP desc area (current SB):" << std::endl;
 	for (blkid = m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_index; blkid < (m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_index + m_nx.nx_xp_desc_len); blkid++)
 	{
 		ReadAndVerifyHeaderBlock(blk.data(), blkid);
 		bd.DumpNode(blk.data(), blkid);
 	}
 
+	bd.st() << std::endl << "Dumping XP data area (current SB):" << std::endl;
 	for (blkid = m_nx.nx_xp_data_base + m_nx.nx_xp_data_index; blkid < (m_nx.nx_xp_data_base + m_nx.nx_xp_data_index + m_nx.nx_xp_data_len); blkid++)
 	{
 		ReadAndVerifyHeaderBlock(blk.data(), blkid);

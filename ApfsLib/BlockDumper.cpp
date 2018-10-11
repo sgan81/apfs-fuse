@@ -163,6 +163,25 @@ static const FlagDesc fd_j_inode_mode[] = {
 	{ 0, 0 }
 };
 
+static const FlagDesc fd_j_inode_bsd_flags[] = {
+	{ UF_NODUMP, "UF_NODUMP" },
+	{ UF_IMMUTABLE, "UF_IMMUTABLE" },
+	{ UF_APPEND, "UF_APPEND" },
+	{ UF_OPAQUE, "UF_OPAQUE" },
+	{ UF_NOUNLINK, "UF_NOUNLINK" },
+	{ UF_COMPRESSED, "UF_COMPRESSED" },
+	{ UF_TRACKED, "UF_TRACKED" },
+	{ UF_DATAVAULT, "UF_DATAVAULT" },
+	{ UF_HIDDEN, "UF_HIDDEN" },
+	{ SF_ARCHIVED, "SF_ARCHIVED" },
+	{ SF_IMMUTABLE, "SF_IMMUTABLE" },
+	{ SF_APPEND, "SF_APPEND" },
+	{ SF_RESTRICTED, "SF_RESTRICTED" },
+	{ SF_NOUNLINK, "SF_NOUNLINK" },
+	{ SF_SNAPSHOT, "SF_SNAPSHOT" },
+	{ 0, 0 }
+};
+
 static const FlagDesc fd_j_drec_flags[] = {
 	{ DT_UNKNOWN, "DT_UNKNOWN" },
 	{ DT_FIFO, "DT_FIFO" },
@@ -209,6 +228,12 @@ static const FlagDesc fd_btn_flags[] = {
 	{ BTNODE_LEAF, "BTNODE_LEAF" },
 	{ BTNODE_FIXED_KV_SIZE, "BTNODE_FIXED_KV_SIZE" },
 	{ BTNODE_CHECK_KOFF_INVAL, "BTNODE_CHECK_KOFF_INVAL" },
+	{ 0, 0 }
+};
+
+static const FlagDesc fd_mt_flags[] = {
+	{ FUSION_MT_DIRTY, "FUSION_MT_DIRTY" },
+	{ FUSION_MT_TENANT, "FUSION_MT_TENANT" },
 	{ 0, 0 }
 };
 
@@ -289,13 +314,30 @@ void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
 		DumpBlk_NRL();
 		break;
 
+	// case OBJECT_TYPE_OMAP_SNAPSHOT:
+
 	case OBJECT_TYPE_EFI_JUMPSTART:
 		DumpBlk_JSDR();
+		break;
+
+	// case OBJECT_TYPE_FUSION_MIDDLE_TREE:
+
+	case OBJECT_TYPE_NX_FUSION_WBC:
+		DumpBlk_WBC();
+		break;
+
+	case OBJECT_TYPE_NX_FUSION_WBC_LIST:
+		DumpBlk_WBCL();
 		break;
 
 	case OBJECT_TYPE_ER_STATE:
 		DumpBlk_ER();
 		break;
+
+	// case OBJECT_TYPE_GBITMAP:
+
+	// case OBJECT_TYPE_GBITMAP_TREE:
+	// case OBJECT_TYPE_GBITMAP_BLOCK:
 
 	default:
 		// assert(false);
@@ -633,11 +675,12 @@ void BlockDumper::DumpBTEntry_APFS_Root(const void *key_ptr, size_t key_len, con
 #else
 			m_os << "[TS] ";
 #endif
-			m_os << obj->internal_flags << " ";
+			m_os << obj->internal_flags << " [" << flagstr(obj->internal_flags, fd_j_inode_flags) << "] ";
 			m_os << obj->nchildren.get() << " ";
 			m_os << obj->default_protection_class << " ";
 			m_os << obj->write_generation_counter << " ";
-			m_os << obj->bsd_flags << " ";
+			m_os << obj->bsd_flags << " [" << flagstr(obj->bsd_flags, fd_j_inode_bsd_flags) << "] ";
+			m_os << dec;
 			m_os << obj->owner << " ";
 			m_os << obj->group << " ";
 			m_os << oct << obj->mode << hex << " ";
@@ -1125,6 +1168,24 @@ void BlockDumper::DumpBTEntry_GBitmap(const void *key_ptr, size_t key_len, const
 	m_os << *k << " => " << *v << std::endl;
 }
 
+void BlockDumper::DumpBTEntry_FusionMT(const void* key_ptr, size_t key_len, const void* val_ptr, size_t val_len, bool index)
+{
+	const fusion_mt_key_t *key = reinterpret_cast<const fusion_mt_key_t *>(key_ptr);
+
+	m_os << key->paddr << " => ";
+
+	if (index)
+	{
+		m_os << *reinterpret_cast<const le<oid_t> *>(val_ptr) << endl;
+	}
+	else
+	{
+		const fusion_mt_val_t *val = reinterpret_cast<const fusion_mt_val_t *>(val_ptr);
+
+		m_os << val->fmv_lba << ' ' << val->fmv_length << ' ' << val->fmv_flags << " [" << flagstr(val->fmv_flags, fd_mt_flags) << "]" << endl;
+	}
+}
+
 void BlockDumper::DumpBTEntry_Unk(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index)
 {
 	(void)index;
@@ -1484,6 +1545,7 @@ void BlockDumper::DumpBlk_NXSB()
 
 void BlockDumper::DumpBlk_SM()
 {
+	size_t d;
 	size_t k;
 	size_t cnt;
 	const spaceman_phys_t *b = reinterpret_cast<const spaceman_phys_t *>(m_block);
@@ -1552,16 +1614,17 @@ void BlockDumper::DumpBlk_SM()
 		dumpm("?                   ", b, unk_arr[k]);
 		*/
 
-	for (k = 0; k < SD_COUNT; k++)
+	for (d = 0; d < SD_COUNT; d++)
 	{
-		if (b->sm_dev[k].sm_cab_count > 0)
-			cnt = b->sm_dev[k].sm_cab_count;
+		m_os << "Device " << devstr[d] << " blocks:" << std::endl;
+		if (b->sm_dev[d].sm_cab_count > 0)
+			cnt = b->sm_dev[d].sm_cab_count;
 		else
-			cnt = b->sm_dev[k].sm_cib_count;
+			cnt = b->sm_dev[d].sm_cib_count;
 
-		if (b->sm_dev[k].sm_addr_offset != 0 && cnt != 0)
+		if (b->sm_dev[d].sm_addr_offset != 0 && cnt != 0)
 		{
-			const le<uint64_t> *addr = reinterpret_cast<const le<uint64_t> *>(m_block + b->sm_dev[k].sm_addr_offset);
+			const le<uint64_t> *addr = reinterpret_cast<const le<uint64_t> *>(m_block + b->sm_dev[d].sm_addr_offset);
 
 			for (k = 0; k < cnt; k++)
 				dumpm("addr                ", b, addr[k]);
@@ -1702,6 +1765,49 @@ void BlockDumper::DumpBlk_ER()
 	DumpBlockHex();
 }
 
+void BlockDumper::DumpBlk_WBC()
+{
+	const fusion_wbc_phys_t *wbc = reinterpret_cast<const fusion_wbc_phys_t *>(m_block);
+
+	dumpm("version         ", wbc, wbc->fwp_version);
+	dumpm("listHeadOid     ", wbc, wbc->fwp_listHeadOid);
+	dumpm("listTailOid     ", wbc, wbc->fwp_listTailOid);
+	dumpm("stableHeadOffset", wbc, wbc->fwp_stableHeadOffset);
+	dumpm("stableTailOffset", wbc, wbc->fwp_stableTailOffset);
+	dumpm("listBlocksCount ", wbc, wbc->fwp_listBlocksCount);
+	dumpm("reserved        ", wbc, wbc->fwp_reserved);
+	dumpm("usedByRC        ", wbc, wbc->fwp_usedByRC);
+	dumpm("rcStash base    ", wbc, wbc->fwp_rcStash.pr_start_addr);
+	dumpm("rcStash count   ", wbc, wbc->fwp_rcStash.pr_block_count);
+
+	// DumpBlockHex();
+}
+
+void BlockDumper::DumpBlk_WBCL()
+{
+	const fusion_wbc_list_phys_t *wbcl = reinterpret_cast<const fusion_wbc_list_phys_t *>(m_block);
+	uint32_t k;
+
+	dumpm("version     ", wbcl, wbcl->fwlp_version);
+	dumpm("tailOffset  ", wbcl, wbcl->fwlp_tailOffset);
+	dumpm("indexBegin  ", wbcl, wbcl->fwlp_indexBegin);
+	dumpm("indexEnd    ", wbcl, wbcl->fwlp_indexEnd);
+	dumpm("indexMax    ", wbcl, wbcl->fwlp_indexMax);
+	dumpm("reserved    ", wbcl, wbcl->fwlp_reserved);
+	m_os << endl;
+	m_os << "wbcLba           | targetLba        | length" << endl;
+	m_os << "-----------------+------------------+-----------------" << endl;
+
+	for (k = wbcl->fwlp_indexBegin; k < wbcl->fwlp_indexEnd; k++)
+	{
+		m_os << setw(16) << wbcl->fwlp_listEntries[k].fwle_wbcLba << " | ";
+		m_os << setw(16) << wbcl->fwlp_listEntries[k].fwle_targetLba << " | ";
+		m_os << setw(16) << wbcl->fwlp_listEntries[k].fwle_length << endl;
+	}
+
+	// DumpBlockHex();
+}
+
 void BlockDumper::DumpBTNode_0()
 {
 	const obj_phys_t * const hdr = reinterpret_cast<const obj_phys_t *>(m_block);
@@ -1734,6 +1840,10 @@ void BlockDumper::DumpBTNode_0()
 
 	case OBJECT_TYPE_GBITMAP_TREE:
 		DumpBTNode(&BlockDumper::DumpBTEntry_GBitmap, 8, 8);
+		break;
+
+	case OBJECT_TYPE_FUSION_MIDDLE_TREE:
+		DumpBTNode(&BlockDumper::DumpBTEntry_FusionMT, 8, 16);
 		break;
 
 	default:

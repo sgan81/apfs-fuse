@@ -20,6 +20,7 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <cstring>
 
 #include <ApfsLib/Device.h>
 #include <ApfsLib/Util.h>
@@ -337,15 +338,80 @@ int main(int argc, const char *argv[])
 
 #else
 
+void usage()
+{
+	std::cerr << "Syntax:" << std::endl;
+	std::cerr << "apfs-dump [-map mapfile.txt] file.img output.txt" << std::endl;
+	std::cerr << "apfs-dump [-map mapfile.txt] -fusion main.img tier2.img output.txt" << std::endl;
+}
+
 int main(int argc, const char *argv[])
 {
-	if (argc < 3)
+	const char *name_dev_main = 0;
+	const char *name_dev_tier2 = 0;
+	const char *name_map = 0;
+	const char *name_output = 0;
+	bool use_fusion = false;
+
+	int n;
+	int idx = 0;
+
+	for (n = 1; n < argc; n++)
 	{
-		std::cerr << "Syntax: apfs-dump file.img output.txt [map.txt]" << std::endl;
+		if (!strcmp(argv[n], "-map"))
+		{
+			n++;
+			if (n >= argc)
+			{
+				usage();
+				return 1;
+			}
+			name_map = argv[n];
+		}
+
+		else if (!strcmp(argv[n], "-fusion"))
+			use_fusion = true;
+
+		else
+		{
+			switch (idx)
+			{
+				case 0:
+					name_dev_main = argv[n];
+					printf("main: %s\n", name_dev_main);
+					if (use_fusion)
+						idx++;
+					else
+						idx += 2;
+					break;
+				case 1:
+					name_dev_tier2 = argv[n];
+					printf("tier2: %s\n", name_dev_tier2);
+					idx++;
+					break;
+				case 2:
+					name_output = argv[n];
+					printf("out: %s\n", name_output);
+					idx++;
+					break;
+				default:
+					usage();
+					return 1;
+					break;
+			}
+		}
+	}
+
+	printf("main: %s\n", name_dev_main);
+
+	if ((name_output == 0) || (use_fusion && name_dev_tier2 == 0))
+	{
+		usage();
 		return 1;
 	}
 
-	Device *dev;
+	std::unique_ptr<Device> dev_main;
+	std::unique_ptr<Device> dev_tier2;
 	std::ofstream os;
 
 	g_debug = 255;
@@ -354,29 +420,37 @@ int main(int argc, const char *argv[])
 	signal(SIGINT, ctrl_c_handler);
 #endif
 
-	dev = Device::OpenDevice(argv[1]);
+	dev_main.reset(Device::OpenDevice(name_dev_main));
+	if (use_fusion)
+		dev_tier2.reset(Device::OpenDevice(name_dev_tier2));
 
-	if (!dev)
+	if (!dev_main || !dev_tier2)
 	{
-		std::cerr << "Device " << argv[1] << " not found." << std::endl;
+		if (!dev_main)
+			std::cerr << "Device " << name_dev_main << " not found." << std::endl;
+
+		if (!dev_tier2)
+			std::cerr << "Device " << name_dev_tier2 << " not found." << std::endl;
+
 		return 2;
 	}
 
 	{
-		Dumper dmp(*dev);
+		Dumper dmp(dev_main.get(), dev_tier2.get());
 
 		if (!dmp.Initialize())
 			return -1;
 
 #if 1
-		if (argc > 3)
+		if (name_map)
 		{
-			os.open(argv[3]);
+			os.open(name_map);
 			if (!os.is_open())
 			{
-				std::cerr << "Could not open output file " << argv[3] << std::endl;
-				dev->Close();
-				delete dev;
+				std::cerr << "Could not open map file " << name_map << std::endl;
+				dev_main->Close();
+				if (dev_tier2)
+					dev_tier2->Close();
 				return 3;
 			}
 
@@ -385,22 +459,23 @@ int main(int argc, const char *argv[])
 		}
 #endif
 
-		os.open(argv[2]);
+		os.open(name_output);
 		if (!os.is_open())
 		{
-			std::cerr << "Could not open output file " << argv[2] << std::endl;
-			dev->Close();
-			delete dev;
+			std::cerr << "Could not open output file " << name_output << std::endl;
+			dev_main->Close();
+			if (dev_tier2)
+				dev_tier2->Close();
 			return 3;
 		}
 
 		dmp.DumpContainer(os);
 	}
 
-	dev->Close();
+	dev_main->Close();
+	if (dev_tier2)
+		dev_tier2->Close();
 	os.close();
-
-	delete dev;
 
 	return 0;
 }

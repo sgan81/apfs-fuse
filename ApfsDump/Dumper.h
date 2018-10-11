@@ -12,7 +12,7 @@ class Device;
 class Dumper
 {
 public:
-	Dumper(Device &dev);
+	Dumper(Device *dev_main, Device *dev_tier2);
 	~Dumper();
 
 	bool Initialize();
@@ -27,9 +27,12 @@ private:
 
 	uint64_t cpm_lookup(const checkpoint_map_phys_t *cpm, uint64_t oid);
 
-	Device &m_dev;
-	uint64_t m_partbase;
-	uint64_t m_partsize;
+	Device *m_dev_main;
+	Device *m_dev_tier2;
+	uint64_t m_base_main;
+	uint64_t m_size_main;
+	uint64_t m_base_tier2;
+	uint64_t m_size_tier2;
 	uint32_t m_blocksize;
 
 	AesXts m_aes;

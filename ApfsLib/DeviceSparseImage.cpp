@@ -32,6 +32,7 @@ struct SectionHeader
 #pragma pack(pop)
 
 constexpr int SECTOR_SIZE = 0x200;
+constexpr uint32_t SPRS_MAGIC = 0x73707273;
 
 DeviceSparseImage::DeviceSparseImage()
 {
@@ -66,7 +67,7 @@ bool DeviceSparseImage::Open(const char * name)
 
 	m_img.Read(0, &ihdr, sizeof(ihdr));
 
-	if (ihdr.magic != 'sprs')
+	if (ihdr.magic != SPRS_MAGIC)
 	{
 		m_img.Close();
 		m_img.Reset();
@@ -94,7 +95,7 @@ bool DeviceSparseImage::Open(const char * name)
 	{
 		m_img.Read(next, &shdr, sizeof(shdr));
 
-		if (ihdr.magic != 'sprs')
+		if (ihdr.magic != SPRS_MAGIC)
 		{
 			m_img.Close();
 			m_img.Reset();
