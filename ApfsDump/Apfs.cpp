@@ -17,6 +17,7 @@
 	along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <memory>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
