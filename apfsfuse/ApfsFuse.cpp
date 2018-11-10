@@ -69,7 +69,7 @@ struct File
 	File() {}
 	~File() {}
 
-	bool IsCompressed() const { return (ino.bsd_flags & 0x20) != 0; }
+	bool IsCompressed() const { return (ino.bsd_flags & APFS_UF_COMPRESSED) != 0; }
 
 	ApfsDir::Inode ino;
 	std::vector<uint8_t> decomp_data;
@@ -121,7 +121,7 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 
 		if (S_ISREG(st.st_mode))
 		{
-			if (rec.bsd_flags & 0x20) // Compressed
+			if (rec.bsd_flags & APFS_UF_COMPRESSED) // Compressed
 			{
 				std::vector<uint8_t> data;
 				rc = dir.GetAttribute(data, ino, "com.apple.decmpfs");
