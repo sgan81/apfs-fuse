@@ -595,7 +595,10 @@ bool ApfsDir::ListAttributes(std::vector<std::string>& names, uint64_t inode)
 			break;
 
 		if ((ekey->hdr.obj_id_and_type >> OBJ_TYPE_SHIFT) < APFS_TYPE_XATTR)
+		{
+			it.next();
 			continue;
+		}
 
 		if ((ekey->hdr.obj_id_and_type >> OBJ_TYPE_SHIFT) > APFS_TYPE_XATTR)
 			break;
