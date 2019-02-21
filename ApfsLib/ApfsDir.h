@@ -69,7 +69,7 @@ public:
 		uint64_t ds_total_bytes_written;
 		uint64_t ds_total_bytes_read;
 		// j_dir_stats_val_t dir_stats;
-		uuid_t fs_uuid;
+		apfs_uuid_t fs_uuid;
 		uint64_t sparse_bytes;
 		uint32_t document_id;
 		uint32_t rdev;

@@ -124,7 +124,7 @@ ApfsDir::Inode::Inode(const ApfsDir::Inode& o)
 	ds_total_bytes_written = o.ds_total_bytes_written;
 	ds_total_bytes_read = o.ds_total_bytes_read;
 	// j_dir_stats_val_t dir_stats;
-	memcpy(fs_uuid, o.fs_uuid, sizeof(uuid_t));
+	memcpy(fs_uuid, o.fs_uuid, sizeof(apfs_uuid_t));
 	sparse_bytes = o.sparse_bytes;
 	document_id = o.document_id;;
 	rdev = o.rdev;
@@ -276,8 +276,8 @@ bool ApfsDir::GetInode(ApfsDir::Inode& res, uint64_t inode)
 				// TODO
 				break;
 			case INO_EXT_TYPE_FS_UUID:
-				assert(xf[n].x_size == sizeof(uuid_t));
-				memcpy(res.fs_uuid, xdata, sizeof(uuid_t));
+				assert(xf[n].x_size == sizeof(apfs_uuid_t));
+				memcpy(res.fs_uuid, xdata, sizeof(apfs_uuid_t));
 				res.optional_present_flags |= Inode::INO_HAS_FS_UUID;
 				break;
 			case INO_EXT_TYPE_SPARSE_BYTES:

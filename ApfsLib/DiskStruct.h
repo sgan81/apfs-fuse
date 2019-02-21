@@ -40,7 +40,7 @@ struct prange_t {
 	le<uint64_t> pr_block_count;
 };
 
-typedef unsigned char uuid_t[16];
+typedef unsigned char apfs_uuid_t[16];
 
 
 typedef uint32_t crypto_flags_t;
@@ -198,7 +198,7 @@ struct nx_superblock_t {
 	le<uint64_t> nx_readonly_compatible_features;
 	le<uint64_t> nx_incompatible_features;
 
-	uuid_t nx_uuid;
+	apfs_uuid_t nx_uuid;
 
 	le<oid_t> nx_next_oid;
 	le<xid_t> nx_next_xid;
@@ -227,7 +227,7 @@ struct nx_superblock_t {
 	le<oid_t> nx_evict_mapping_tree_oid;
 	le<uint64_t> nx_flags;
 	le<paddr_t> nx_efi_jumpstart;
-	uuid_t nx_fusion_uuid;
+	apfs_uuid_t nx_fusion_uuid;
 	prange_t nx_keylocker;
 	le<uint64_t> nx_ephemeral_info[NX_EPH_INFO_COUNT];
 
@@ -400,7 +400,7 @@ struct apfs_superblock_t {
 	le<uint64_t> apfs_total_blocks_alloced;
 	le<uint64_t> apfs_total_blocks_freed;
 
-	uuid_t apfs_vol_uuid;
+	apfs_uuid_t apfs_vol_uuid;
 	le<uint64_t> apfs_last_mod_time;
 
 	le<uint64_t> apfs_fs_flags;
@@ -1095,7 +1095,7 @@ constexpr int CRYPTO_VOLKEY_ID = 5;
 
 
 struct keybag_entry_t {
-	uuid_t ke_uuid;
+	apfs_uuid_t ke_uuid;
 	le<uint16_t> ke_tag;
 	le<uint16_t> ke_keylen;
 	uint8_t _padding_[4];
