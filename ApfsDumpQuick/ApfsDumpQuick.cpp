@@ -99,7 +99,10 @@ int main(int argc, char *argv[])
 	main_size = main_disk->GetSize();
 
 	tier2_offset = 0;
-	tier2_size = tier2_disk->GetSize();
+	if (tier2_disk)
+		tier2_size = tier2_disk->GetSize();
+	else
+		tier2_size = 0;
 
 	GptPartitionMap gpt;
 	if (gpt.LoadAndVerify(*main_disk.get()))
