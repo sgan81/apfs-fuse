@@ -425,14 +425,15 @@ int main(int argc, const char *argv[])
 	if (use_fusion)
 		dev_tier2.reset(Device::OpenDevice(name_dev_tier2));
 
-	if (!dev_main || !dev_tier2)
+	if (!dev_main)
 	{
-		if (!dev_main)
-			std::cerr << "Device " << name_dev_main << " not found." << std::endl;
+		std::cerr << "Device " << name_dev_main << " not found." << std::endl;
+		return 2;
+	}
 
-		if (!dev_tier2)
-			std::cerr << "Device " << name_dev_tier2 << " not found." << std::endl;
-
+	if (use_fusion && !dev_tier2)
+	{
+		std::cerr << "Device " << name_dev_tier2 << " not found." << std::endl;
 		return 2;
 	}
 
