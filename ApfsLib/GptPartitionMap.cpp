@@ -81,9 +81,6 @@ bool GptPartitionMap::LoadAndVerify(Device & dev)
 	if (hdr->SizeOfPartitionEntry != 0x80)
 		return false;
 
-	if (hdr->PartitionEntryLBA != 2)
-		return false;
-
 	uint32_t hdr_crc;
 	uint32_t calc_crc;
 
