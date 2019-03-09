@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <cstring>
+#include <cinttypes>
 
 #include "Device.h"
 #include "GptPartitionMap.h"
@@ -43,7 +44,6 @@ static_assert(sizeof(PMAP_Entry) == 128, "PMAP Entry wrong size");
 
 static const PM_GUID partitiontype_apfs = { 0xEF, 0x57, 0x34, 0x7C, 0x00, 0x00, 0xAA, 0x11, 0xAA, 0x11, 0x00, 0x30, 0x65, 0x43, 0xEC, 0xAC };
 
-/*
 static void PrintGUID(const PM_GUID &guid)
 {
 	printf("%02X%02X%02X%02X-", guid[3], guid[2], guid[1], guid[0]);
@@ -52,7 +52,6 @@ static void PrintGUID(const PM_GUID &guid)
 	printf("%02X%02X-", guid[9], guid[8]);
 	printf("%02X%02X%02X%02X%02X%02X", guid[10], guid[11], guid[12], guid[13], guid[14], guid[15]);
 }
-*/
 
 GptPartitionMap::GptPartitionMap() : m_crc(true)
 {
@@ -160,7 +159,6 @@ bool GptPartitionMap::GetPartitionOffsetAndSize(int partnum, uint64_t & offset, 
 	return true;
 }
 
-/*
 void GptPartitionMap::ListEntries()
 {
 	if (m_gpt_data.size() == 0)
@@ -181,8 +179,8 @@ void GptPartitionMap::ListEntries()
 		PrintGUID(e.PartitionTypeGUID);
 		printf(" ");
 		PrintGUID(e.UniquePartitionGUID);
-		printf(" %016llX %016llX ", e.StartingLBA.get(), e.EndingLBA.get());
-		printf("%016llX ", e.Attributes.get());
+		printf(" %016" PRIX64 " %016" PRIX64 " ", e.StartingLBA.get(), e.EndingLBA.get());
+		printf("%016" PRIX64 " ", e.Attributes.get());
 
 		for (n = 0; (n < 36) && (e.PartitionName[n] != 0); n++)
 			printf("%c", e.PartitionName[n].get());
@@ -190,4 +188,3 @@ void GptPartitionMap::ListEntries()
 		printf("\n");
 	}
 }
-*/

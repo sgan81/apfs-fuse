@@ -41,13 +41,16 @@ public:
 
 	bool Init();
 
-	ApfsVolume *GetVolume(int index, const std::string &passphrase = std::string());
-	int GetVolumeCnt() const;
+	ApfsVolume *GetVolume(unsigned int index, const std::string &passphrase = std::string());
+	unsigned int GetVolumeCnt() const;
+	bool GetVolumeInfo(unsigned int fsid, apfs_superblock_t &apsb);
 
-	bool ReadBlocks(byte_t *data, uint64_t blkid, uint64_t blkcnt = 1) const;
-	bool ReadAndVerifyHeaderBlock(byte_t *data, uint64_t blkid) const;
+	bool ReadBlocks(uint8_t *data, paddr_t paddr, uint64_t blkcnt = 1) const;
+	bool ReadAndVerifyHeaderBlock(uint8_t *data, paddr_t paddr) const;
 
 	uint32_t GetBlocksize() const { return m_nx.nx_block_size; }
+	uint64_t GetBlockCount() const { return m_nx.nx_block_count; }
+	uint64_t GetFreeBlocks() const { return m_sm->sm_dev[SD_MAIN].sm_free_count + m_sm->sm_dev[SD_TIER2].sm_free_count; }
 
 	bool GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password = nullptr);
 	bool GetPasswordHint(std::string &hint, const apfs_uuid_t &vol_uuid);

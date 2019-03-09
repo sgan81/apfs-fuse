@@ -39,7 +39,7 @@ public:
 	~BlockDumper();
 
 	void SetTextFlags(uint32_t flags) { m_text_flags = flags; }
-	void DumpNode(const byte_t *block, uint64_t blk_nr);
+	void DumpNode(const uint8_t *block, uint64_t blk_nr);
 
 	std::ostream &st() { return m_os; }
 
@@ -81,10 +81,10 @@ private:
 
 	void DumpBTEntry_Unk(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
 
-	void Dump_XF(const byte_t *xf_data, size_t xf_size, bool drec);
+	void Dump_XF(const uint8_t *xf_data, size_t xf_size, bool drec);
 
 	void DumpBlockHex();
-	void DumpHex(const byte_t *data, size_t size, size_t line_size = 16);
+	void DumpHex(const uint8_t *data, size_t size, size_t line_size = 16);
 
 	static std::string flagstr(uint64_t flag, const FlagDesc *desc);
 	static std::string enumstr(uint64_t flag, const FlagDesc *desc);
@@ -104,6 +104,6 @@ private:
 	uint32_t m_text_flags; // 00 - Alt, 01 - insensitive, 08 - sensitive
 
 	std::ostream &m_os;
-	const byte_t *m_block;
+	const uint8_t *m_block;
 	const size_t m_blocksize;
 };

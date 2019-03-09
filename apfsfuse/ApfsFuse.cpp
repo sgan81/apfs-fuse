@@ -55,6 +55,11 @@ static Device *g_disk_main = nullptr;
 static Device *g_disk_tier2 = nullptr;
 static ApfsContainer *g_container = nullptr;
 static ApfsVolume *g_volume = nullptr;
+static unsigned int g_vol_id = 0;
+static uid_t g_uid = 0;
+static gid_t g_gid = 0;
+static bool g_set_uid = false;
+static bool g_set_gid = false;
 
 struct Directory
 {
@@ -107,10 +112,8 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 		// st.st_nlink = rec.ino.refcnt;
 		st.st_nlink = 1;
 
-		// st.st_uid = rec.owner;
-		// st.st_gid = rec.group;
-		st.st_uid = geteuid();
-		st.st_gid = getegid();
+		st.st_uid = g_set_uid ? g_uid : rec.owner;
+		st.st_gid = g_set_gid ? g_gid : rec.group;
 
 		if (rec.optional_present_flags & ApfsDir::Inode::INO_HAS_RDEV)
 			st.st_rdev = rec.rdev;
@@ -576,13 +579,30 @@ static void apfs_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
 	fuse_reply_err(req, 0);
 }
 
-/*
 static void apfs_statfs(fuse_req_t req, fuse_ino_t ino)
 {
-	(void)req;
+	struct statvfs st;
+
 	(void)ino;
+
+	memset(&st, 0, sizeof(struct statvfs));
+
+	st.f_bsize = g_container->GetBlocksize();
+	st.f_frsize = st.f_bsize;
+	st.f_blocks = g_container->GetBlockCount();
+	st.f_bfree = g_container->GetFreeBlocks();
+	st.f_bavail = st.f_bfree;
+
+	st.f_files = 0;
+	st.f_ffree = 0;
+	st.f_favail = 0;
+
+	st.f_fsid = 0;
+	st.f_flag = 0;
+	st.f_namemax = 255;
+
+	fuse_reply_statfs(req, &st);
 }
-*/
 
 struct apfs {
 	char *disk;
@@ -604,6 +624,12 @@ void usage(const char *name)
 	std::cout << "-s offset     : Specify offset to the beginning of the container." << std::endl;
 	std::cout << "-p partition  : Specify partition id containing the container." << std::endl;
 	std::cout << "-l            : Allow driver to return potentially corrupt data instead of failing, if it can't handle something." << std::endl;
+	std::cout << std::endl;
+	std::cout << "Additional mount options:" << std::endl;
+	std::cout << "uid=N         : Pretend that all files have UID N." << std::endl;
+	std::cout << "gid=N         : Pretend that all files have GID N." << std::endl;
+	std::cout << "vol=N         : Same as -v, select volume id to mount." << std::endl;
+	std::cout << std::endl;
 }
 
 bool add_option(std::string &optstr, const char *name, const char *value)
@@ -620,6 +646,27 @@ bool add_option(std::string &optstr, const char *name, const char *value)
 	return true;
 }
 
+static int apfs_parse_fuse_opt(void *data, const char *arg, int key, struct fuse_args* outargs)
+{
+	if (key == FUSE_OPT_KEY_OPT) {
+		if (!strncmp(arg, "uid=", 4)) {
+			g_uid = strtol(strchr(arg, '=') + sizeof(char), nullptr, 10);
+			g_set_uid = true;
+			return 0;
+		}
+		if (!strncmp(arg, "gid=", 4)) {
+			g_gid = strtol(strchr(arg, '=') + sizeof(char), nullptr, 10);
+			g_set_gid = true;
+			return 0;
+		}
+		if (!strncmp(arg, "vol=", 4)) {
+			g_vol_id = strtoul(strchr(arg, '=') + sizeof(char), nullptr, 10);
+			return 0;
+		}
+	}
+	return 1;
+}
+
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(0, nullptr);
@@ -631,7 +678,6 @@ int main(int argc, char *argv[])
 	int opt;
 	std::string mount_options;
 	std::string passphrase;
-	unsigned int volume_id = 0;
 	uint64_t main_offset = 0;
 	uint64_t main_size = 0;
 	uint64_t tier2_offset = 0;
@@ -663,7 +709,12 @@ int main(int argc, char *argv[])
 	ops.readlink = apfs_readlink;
 	ops.release = apfs_release;
 	ops.releasedir = apfs_releasedir;
-	// ops.statfs = apfs_statfs;
+	ops.statfs = apfs_statfs;
+
+	g_uid = geteuid();
+	g_gid = getegid();
+	g_set_uid = false;
+	g_set_gid = false;
 
 	while ((opt = getopt(argc, argv, "d:f:o:p:v:r:s:l")) != -1)
 	{
@@ -682,7 +733,7 @@ int main(int argc, char *argv[])
 				partition_id = strtoul(optarg, nullptr, 10);
 				break;
 			case 'v':
-				volume_id = strtoul(optarg, nullptr, 10);
+				g_vol_id = strtoul(optarg, nullptr, 10);
 				break;
 			case 'r':
 				passphrase = optarg;
@@ -710,6 +761,18 @@ int main(int argc, char *argv[])
 	mountpoint = argv[optind + 1];
 
 	add_option(mount_options, "ro", nullptr);
+	add_option(mount_options, "fsname", main_dev_path);
+	// add_option(mount_options, "allow_other", nullptr);
+
+	fuse_opt_add_arg(&args, "apfs-fuse");
+	fuse_opt_add_arg(&args, "-o");
+	fuse_opt_add_arg(&args, mount_options.c_str());
+
+	if (fuse_opt_parse(&args, NULL, NULL, apfs_parse_fuse_opt) != 0)
+	{
+		std::cerr << "Unable to parse mount options!" << std::endl;
+	}
+
 
 	g_disk_main = Device::OpenDevice(main_dev_path);
 	if (tier2_dev_path)
@@ -778,7 +841,7 @@ int main(int argc, char *argv[])
 
 	g_container = new ApfsContainer(g_disk_main, main_offset, main_size, g_disk_tier2, tier2_offset, tier2_size);
 	g_container->Init();
-	g_volume = g_container->GetVolume(volume_id, passphrase);
+	g_volume = g_container->GetVolume(g_vol_id, passphrase);
 	if (!g_volume)
 	{
 		std::cerr << "Unable to get volume!" << std::endl;
@@ -787,13 +850,6 @@ int main(int argc, char *argv[])
 		delete g_disk_main;
 		return 1;
 	}
-
-	add_option(mount_options, "fsname", main_dev_path);
-	add_option(mount_options, "allow_other", nullptr);
-
-	fuse_opt_add_arg(&args, "apfs-fuse");
-	fuse_opt_add_arg(&args, "-o");
-	fuse_opt_add_arg(&args, mount_options.c_str());
 
 	if ((ch = fuse_mount(mountpoint, &args)) != NULL)
 	{

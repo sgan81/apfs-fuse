@@ -251,7 +251,7 @@ BlockDumper::~BlockDumper()
 {
 }
 
-void BlockDumper::DumpNode(const byte_t *block, uint64_t blk_nr)
+void BlockDumper::DumpNode(const uint8_t *block, uint64_t blk_nr)
 {
 	using namespace std;
 
@@ -375,8 +375,8 @@ void BlockDumper::DumpBTNode(DumpFunc func, uint16_t keys_size, uint16_t values_
 {
 	const btree_node_phys_t * const btn = reinterpret_cast<const btree_node_phys_t *>(m_block);
 
-	const byte_t *key_ptr = nullptr;
-	const byte_t *val_ptr = nullptr;
+	const uint8_t *key_ptr = nullptr;
+	const uint8_t *val_ptr = nullptr;
 	size_t key_len = 0;
 	size_t val_len = 0;
 
@@ -1197,13 +1197,13 @@ void BlockDumper::DumpBTEntry_Unk(const void *key_ptr, size_t key_len, const voi
 	m_os << std::endl;
 }
 
-void BlockDumper::Dump_XF(const byte_t * xf_data, size_t xf_size, bool drec)
+void BlockDumper::Dump_XF(const uint8_t * xf_data, size_t xf_size, bool drec)
 {
 	const xf_blob_t *h = reinterpret_cast<const xf_blob_t *>(xf_data);
 	const x_field_t *e = reinterpret_cast<const x_field_t *>(h->xf_data);
 	uint16_t entry_base = h->xf_num_exts * sizeof(x_field_t) + sizeof(xf_blob_t);
 	uint16_t k;
-	const byte_t *data;
+	const uint8_t *data;
 
 	if (xf_size < 4)
 	{
@@ -1513,6 +1513,9 @@ void BlockDumper::DumpBlk_NXSB()
 
 	m_os << endl;
 
+	for (k = 0; k < NX_NUM_COUNTERS; k++)
+		dumpm("nx_counter      ", nx, nx->nx_counters[k]);
+
 	dumpm("blocked_out_base", nx, nx->nx_blocked_out_prange.pr_start_addr);
 	dumpm("blocked_out_blks", nx, nx->nx_blocked_out_prange.pr_block_count);
 	dumpm("evict_map_tree  ", nx, nx->nx_evict_mapping_tree_oid);
@@ -1601,6 +1604,19 @@ void BlockDumper::DumpBlk_SM()
 	dumpm("version             ", b, b->sm_version);
 	dumpm("struct_size         ", b, b->sm_struct_size);
 	m_os << endl;
+
+	for (k = 0; k < SD_COUNT; k++) {
+		for (d = 0; d < SM_DATAZONE_ALLOCZONE_COUNT; d++) {
+			const spaceman_allocation_zone_info_phys_t &azip = b->sm_datazone.sdz_allocation_zones[k][d];
+			m_os << "sdz_allocation_zones[" << k << "][" << d << "]:" << endl;
+			m_os << "  saz_current_boundaries : " << setw(16) << azip.saz_current_boundaries.saz_zone_start << " " << setw(16) << azip.saz_current_boundaries.saz_zone_end << endl;
+			for (int n = 0; n < SM_ALLOCZONE_NUM_PREVIOUS_BOUNDARIES; n++)
+				m_os << "  saz_previous_boundaries: " << setw(16) << azip.saz_previous_boundaries[n].saz_zone_start << " " << setw(16) << azip.saz_previous_boundaries[n].saz_zone_end << endl;
+			m_os << "  saz_zone_id            : " << setw(4) << azip.saz_zone_id << endl;
+			m_os << "  saz_prev_boundary_idx  : " << setw(4) << azip.saz_previous_boundary_index << endl;
+			m_os << "  saz_reserved           : " << setw(4) << azip.saz_reserved << endl;
+		}
+	}
 
 	/*
 	for (k = 0; k < 0x10; k++)
@@ -1745,21 +1761,42 @@ void BlockDumper::DumpBlk_ER()
 {
 	const er_state_phys_t *er = reinterpret_cast<const er_state_phys_t *>(m_block);
 
-	dumpm("magic            ", er, er->ersb_magic);
-	dumpm("version          ", er, er->ersb_version);
-	dumpm("flags            ", er, er->ersb_flags);
-	dumpm("snap_xid         ", er, er->ersb_snap_xid);
-	dumpm("cur_fext_obj_id  ", er, er->ersb_current_fext_obj_id);
-	dumpm("file_offset      ", er, er->ersb_file_offset);
-	dumpm("fext_pbn         ", er, er->ersb_fext_pbn);
-	dumpm("paddr            ", er, er->ersb_paddr);
-	dumpm("progress         ", er, er->ersb_progress);
-	dumpm("total_blk_to_encr", er, er->ersb_total_blk_to_encrypt);
-	dumpm("blockmap_oid     ", er, er->ersb_blockmap_oid);
-	dumpm("checksum_count   ", er, er->ersb_checksum_count);
-	dumpm("reserved         ", er, er->ersb_reserved);
-	dumpm("fext_cid         ", er, er->ersb_fext_cid);
-	m_os << "checksum : " << hexstr(er->ersb_checksum, 8) << std::endl;
+	dumpm("magic            ", er, er->ersb_header.ersb_magic);
+	dumpm("version          ", er, er->ersb_header.ersb_version);
+
+	if (er->ersb_header.ersb_version == 1)
+	{
+		const er_state_phys_v1_t *er1 = reinterpret_cast<const er_state_phys_v1_t *>(m_block);
+
+		dumpm("flags            ", er1, er1->ersb_flags);
+		dumpm("snap_xid         ", er1, er1->ersb_snap_xid);
+		dumpm("cur_fext_obj_id  ", er1, er1->ersb_current_fext_obj_id);
+		dumpm("file_offset      ", er1, er1->ersb_file_offset);
+		dumpm("fext_pbn         ", er1, er1->ersb_fext_pbn);
+		dumpm("paddr            ", er1, er1->ersb_paddr);
+		dumpm("progress         ", er1, er1->ersb_progress);
+		dumpm("total_blk_to_encr", er1, er1->ersb_total_blk_to_encrypt);
+		dumpm("blockmap_oid     ", er1, er1->ersb_blockmap_oid);
+		dumpm("checksum_count   ", er1, er1->ersb_checksum_count);
+		dumpm("reserved         ", er1, er1->ersb_reserved);
+		dumpm("fext_cid         ", er1, er1->ersb_fext_cid);
+		m_os << "checksum : " << hexstr(er1->ersb_checksum, 8) << std::endl;
+	}
+	else
+	{
+		dumpm("flags            ", er, er->ersb_flags);
+		dumpm("snap_xid         ", er, er->ersb_snap_xid);
+		dumpm("cur_fext_obj_id  ", er, er->ersb_current_fext_obj_id);
+		dumpm("file_offset      ", er, er->ersb_file_offset);
+		dumpm("progress         ", er, er->ersb_progress);
+		dumpm("total_blk_to_encr", er, er->ersb_total_blk_to_encrypt);
+		dumpm("blockmap_oid     ", er, er->ersb_blockmap_oid);
+		dumpm("tidemark_obj_id  ", er, er->ersb_tidemark_obj_id);
+		dumpm("rec_extents_count", er, er->ersb_recovery_extents_count);
+		dumpm("recovery_list_oid", er, er->ersb_recovery_list_oid);
+		dumpm("recovery_length  ", er, er->ersb_recovery_length);
+	}
+
 	// dumpm("                 ", er, er->ersb_checksum);
 
 	DumpBlockHex();
@@ -1864,7 +1901,7 @@ void BlockDumper::DumpBlockHex()
 	::DumpHex(m_os, m_block, sz);
 }
 
-void BlockDumper::DumpHex(const byte_t * data, size_t size, size_t line_size)
+void BlockDumper::DumpHex(const uint8_t * data, size_t size, size_t line_size)
 {
 	::DumpHex(m_os, data, size, line_size);
 }

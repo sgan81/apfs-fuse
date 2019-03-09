@@ -53,7 +53,7 @@ ApfsContainer::~ApfsContainer()
 
 bool ApfsContainer::Init()
 {
-	std::vector<byte_t> blk;
+	std::vector<uint8_t> blk;
 
 	blk.resize(0x1000);
 
@@ -84,15 +84,15 @@ bool ApfsContainer::Init()
 
 #if 1 // Scan container for most recent superblock (might fix segfaults)
 	uint64_t max_xid = 0;
-	uint64_t max_bid = 0;
-	paddr_t bid;
-	std::vector<byte_t> tmp;
+	paddr_t max_paddr = 0;
+	paddr_t paddr;
+	std::vector<uint8_t> tmp;
 
 	tmp.resize(m_nx.nx_block_size);
 
-	for (bid = m_nx.nx_xp_desc_base; bid < (m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_blocks); bid++)
+	for (paddr = m_nx.nx_xp_desc_base; paddr < (m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_blocks); paddr++)
 	{
-		if (!ReadBlocks(tmp.data(), bid, 1))
+		if (!ReadBlocks(tmp.data(), paddr, 1))
 			return false;
 
 		if (!VerifyBlock(tmp.data(), tmp.size()))
@@ -105,7 +105,7 @@ bool ApfsContainer::Init()
 		if (sb->nx_o.o_xid > max_xid)
 		{
 			max_xid = sb->nx_o.o_xid;
-			max_bid = bid;
+			max_paddr = paddr;
 		}
 	}
 
@@ -114,7 +114,7 @@ bool ApfsContainer::Init()
 		if (g_debug & Dbg_Errors)
 			std::cout << "Found more recent xid " << max_xid << " than superblock 0 contained (" << m_nx.nx_o.o_xid << ")." << std::endl;
 
-		ReadBlocks(tmp.data(), max_bid, 1);
+		ReadBlocks(tmp.data(), max_paddr, 1);
 
 		memcpy(&m_nx, tmp.data(), sizeof(nx_superblock_t));
 	}
@@ -138,15 +138,15 @@ bool ApfsContainer::Init()
 		return false;
 	}
 
-	node_info_t ni;
-	if (!m_cpm.GetBlockID(ni, m_nx.nx_spaceman_oid, m_nx.nx_o.o_xid))
+	omap_res_t omr;
+	if (!m_cpm.Lookup(omr, m_nx.nx_spaceman_oid, m_nx.nx_o.o_xid))
 	{
 		std::cerr << "Failed to map spaceman oid" << std::endl;
 		return false;
 	}
 
 	m_sm_data.resize(GetBlocksize());
-	ReadBlocks(m_sm_data.data(), ni.bid, 1);
+	ReadBlocks(m_sm_data.data(), omr.paddr, 1);
 	m_sm = reinterpret_cast<const spaceman_phys_t *>(m_sm_data.data());
 
 	if ((m_sm->sm_o.o_type & OBJECT_TYPE_MASK) != OBJECT_TYPE_SPACEMAN)
@@ -177,11 +177,11 @@ bool ApfsContainer::Init()
 	return true;
 }
 
-ApfsVolume *ApfsContainer::GetVolume(int index, const std::string &passphrase)
+ApfsVolume *ApfsContainer::GetVolume(unsigned int index, const std::string &passphrase)
 {
 	ApfsVolume *vol = nullptr;
-	uint64_t nodeid;
-	node_info_t ni;
+	oid_t oid;
+	omap_res_t omr;
 	bool rc;
 
 	if (index >= 100)
@@ -189,21 +189,21 @@ ApfsVolume *ApfsContainer::GetVolume(int index, const std::string &passphrase)
 
 	m_passphrase = passphrase;
 
-	nodeid = m_nx.nx_fs_oid[index];
+	oid = m_nx.nx_fs_oid[index];
 
-	if (nodeid == 0)
+	if (oid == 0)
 		return nullptr;
 
-	if (!m_omap.GetBlockID(ni, nodeid, m_nx.nx_o.o_xid))
+	if (!m_omap.Lookup(omr, oid, m_nx.nx_o.o_xid))
 		return nullptr;
 
 	// std::cout << std::hex << "Loading Volume " << index << ", nodeid = " << nodeid << ", version = " << m_sb.hdr.version << ", blkid = " << blkid << std::endl;
 
-	if (ni.bid == 0)
+	if (omr.paddr == 0)
 		return nullptr;
 
 	vol = new ApfsVolume(*this);
-	rc = vol->Init(ni.bid);
+	rc = vol->Init(omr.paddr);
 
 	if (rc == false)
 	{
@@ -214,9 +214,9 @@ ApfsVolume *ApfsContainer::GetVolume(int index, const std::string &passphrase)
 	return vol;
 }
 
-int ApfsContainer::GetVolumeCnt() const
+unsigned int ApfsContainer::GetVolumeCnt() const
 {
-	int k;
+	unsigned int k;
 
 	for (k = 0; k < 100; k++)
 	{
@@ -227,15 +227,46 @@ int ApfsContainer::GetVolumeCnt() const
 	return k;
 }
 
-bool ApfsContainer::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt) const
+bool ApfsContainer::GetVolumeInfo(unsigned int fsid, apfs_superblock_t& apsb)
+{
+	oid_t oid;
+	omap_res_t omr;
+	std::vector<uint8_t> apsb_raw;
+
+	if (fsid >= 100)
+		return false;
+
+	oid = m_nx.nx_fs_oid[fsid];
+
+	if (oid == 0)
+		return false;
+
+	if (!m_omap.Lookup(omr, oid, m_nx.nx_o.o_xid))
+		return false;
+
+	if (omr.paddr == 0)
+		return false;
+
+	apsb_raw.resize(GetBlocksize());
+
+	if (!ReadAndVerifyHeaderBlock(apsb_raw.data(), omr.paddr))
+		return false;
+
+	memcpy(&apsb, apsb_raw.data(), sizeof(apfs_superblock_t));
+
+	return true;
+}
+
+
+bool ApfsContainer::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt) const
 {
 	uint64_t offs;
 	uint64_t size;
 
-	//if ((blkid + blkcnt) > m_nx.nx_block_count)
+	//if ((paddr + blkcnt) > m_nx.nx_block_count)
 	//	return false;
 
-	offs = m_nx.nx_block_size * blkid;
+	offs = m_nx.nx_block_size * paddr;
 	size = m_nx.nx_block_size * blkcnt;
 
 	if (offs & FUSION_TIER2_DEVICE_BYTE_ADDR)
@@ -256,9 +287,9 @@ bool ApfsContainer::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt) c
 	}
 }
 
-bool ApfsContainer::ReadAndVerifyHeaderBlock(byte_t * data, uint64_t blkid) const
+bool ApfsContainer::ReadAndVerifyHeaderBlock(uint8_t * data, paddr_t paddr) const
 {
-	if (!ReadBlocks(data, blkid))
+	if (!ReadBlocks(data, paddr))
 		return false;
 
 	if (!VerifyBlock(data, m_nx.nx_block_size))
@@ -292,8 +323,8 @@ bool ApfsContainer::GetPasswordHint(std::string & hint, const apfs_uuid_t & vol_
 
 void ApfsContainer::dump(BlockDumper& bd)
 {
-	std::vector<byte_t> blk;
-	uint64_t blkid;
+	std::vector<uint8_t> blk;
+	paddr_t paddr;
 
 	bd.st() << "Dumping Container" << std::endl;
 	bd.st() << "-----------------" << std::endl;
@@ -331,17 +362,17 @@ void ApfsContainer::dump(BlockDumper& bd)
 
 #if 1
 	bd.st() << std::endl << "Dumping XP desc area (current SB):" << std::endl;
-	for (blkid = m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_index; blkid < (m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_index + m_nx.nx_xp_desc_len); blkid++)
+	for (paddr = m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_index; paddr < (m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_index + m_nx.nx_xp_desc_len); paddr++)
 	{
-		ReadAndVerifyHeaderBlock(blk.data(), blkid);
-		bd.DumpNode(blk.data(), blkid);
+		ReadAndVerifyHeaderBlock(blk.data(), paddr);
+		bd.DumpNode(blk.data(), paddr);
 	}
 
 	bd.st() << std::endl << "Dumping XP data area (current SB):" << std::endl;
-	for (blkid = m_nx.nx_xp_data_base + m_nx.nx_xp_data_index; blkid < (m_nx.nx_xp_data_base + m_nx.nx_xp_data_index + m_nx.nx_xp_data_len); blkid++)
+	for (paddr = m_nx.nx_xp_data_base + m_nx.nx_xp_data_index; paddr < (m_nx.nx_xp_data_base + m_nx.nx_xp_data_index + m_nx.nx_xp_data_len); paddr++)
 	{
-		ReadAndVerifyHeaderBlock(blk.data(), blkid);
-		bd.DumpNode(blk.data(), blkid);
+		ReadAndVerifyHeaderBlock(blk.data(), paddr);
+		bd.DumpNode(blk.data(), paddr);
 	}
 #endif
 

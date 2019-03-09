@@ -3,6 +3,7 @@
 #include <vector>
 #include <iostream>
 
+#include "Global.h"
 #include "Endian.h"
 #include "Crypto.h"
 #include "TripleDes.h"

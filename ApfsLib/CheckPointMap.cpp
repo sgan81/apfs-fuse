@@ -15,12 +15,12 @@ CheckPointMap::~CheckPointMap()
 {
 }
 
-bool CheckPointMap::Init(uint64_t root_oid, uint32_t blk_count)
+bool CheckPointMap::Init(oid_t root_oid, uint32_t blk_count)
 {
 	uint32_t n;
-	m_blksize = m_container.GetBlocksize();
 	const checkpoint_map_phys_t *cpm;
 
+	m_blksize = m_container.GetBlocksize();
 	m_cpm_data.resize(m_blksize * blk_count);
 
 	for (n = 0; n < blk_count; n++)
@@ -47,7 +47,7 @@ bool CheckPointMap::Init(uint64_t root_oid, uint32_t blk_count)
 	return true;
 }
 
-bool CheckPointMap::GetBlockID(node_info_t& info, uint64_t oid, uint64_t xid)
+bool CheckPointMap::Lookup(omap_res_t & res, oid_t oid, xid_t xid)
 {
 	uint32_t blk_offs;
 	uint32_t k;
@@ -66,9 +66,9 @@ bool CheckPointMap::GetBlockID(node_info_t& info, uint64_t oid, uint64_t xid)
 		{
 			if (oid == cpm->cpm_map[k].cpm_oid)
 			{
-				info.bid = cpm->cpm_map[k].cpm_paddr;
-				info.flags = 0;
-				info.size = cpm->cpm_map[k].cpm_size;
+				res.flags = 0;
+				res.size = cpm->cpm_map[k].cpm_size;
+				res.paddr = cpm->cpm_map[k].cpm_paddr;
 
 				return true;
 			}

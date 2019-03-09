@@ -24,7 +24,7 @@
 #include "ApfsNodeMapperBTree.h"
 #include "ApfsContainer.h"
 
-static int CompareNodeMapKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context)
+static int CompareOMapKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context)
 {
 	(void)context;
 	(void)skey_len;
@@ -57,30 +57,30 @@ ApfsNodeMapperBTree::~ApfsNodeMapperBTree()
 {
 }
 
-bool ApfsNodeMapperBTree::Init(uint64_t bid_root, uint64_t xid)
+bool ApfsNodeMapperBTree::Init(oid_t omap_oid, xid_t xid)
 {
-	std::vector<byte_t> blk;
+	std::vector<uint8_t> blk;
 
 	blk.resize(m_container.GetBlocksize());
 
-	if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), bid_root))
+	if (!m_container.ReadAndVerifyHeaderBlock(blk.data(), omap_oid))
 	{
-		std::cerr << "ERROR: Invalid header block 0x" << std::hex << bid_root << std::endl;
+		std::cerr << "ERROR: Invalid omap block @ oid 0x" << std::hex << omap_oid << std::endl;
 		return false;
 	}
 
-	memcpy(&m_root_ptr, blk.data(), sizeof(omap_phys_t));
+	memcpy(&m_omap, blk.data(), sizeof(omap_phys_t));
 
-	if ((m_root_ptr.om_o.o_type & OBJECT_TYPE_MASK) == OBJECT_TYPE_BTREE)
+	if ((m_omap.om_o.o_type & OBJECT_TYPE_MASK) == OBJECT_TYPE_BTREE)
 	{
-		std::cerr << "ERROR: Wrong header type 0x" << std::hex << m_root_ptr.om_o.o_type << std::endl;
+		std::cerr << "ERROR: Wrong omap type 0x" << std::hex << m_omap.om_o.o_type << std::endl;
 		return false;
 	}
 
-	return m_tree.Init(m_root_ptr.om_tree_oid, xid);
+	return m_tree.Init(m_omap.om_tree_oid, xid);
 }
 
-bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t xid)
+bool ApfsNodeMapperBTree::Lookup(omap_res_t &omr, oid_t oid, xid_t xid)
 {
 	omap_key_t key;
 
@@ -89,15 +89,15 @@ bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t x
 
 	BTreeEntry res;
 
-	key.ok_oid = nid;
+	key.ok_oid = oid;
 	key.ok_xid = xid;
 
 	// std::cout << std::hex << "GetBlockID: nodeid = " << nodeid << ", version = " << version << " => blockid = ";
 
-	if (!m_tree.Lookup(res, &key, sizeof(key), CompareNodeMapKey, this, false))
+	if (!m_tree.Lookup(res, &key, sizeof(key), CompareOMapKey, this, false))
 	{
 		// std::cout << "NOT FOUND" << std::endl;
-		std::cerr << std::hex << "nid " << nid << " xid " << xid << " NOT FOUND!!!" << std::endl;
+		std::cerr << std::hex << "oid " << oid << " xid " << xid << " NOT FOUND!!!" << std::endl;
 		return false;
 	}
 
@@ -109,15 +109,15 @@ bool ApfsNodeMapperBTree::GetBlockID(node_info_t &info, uint64_t nid, uint64_t x
 	if (key.ok_oid != res_key->ok_oid)
 	{
 		// std::cout << "NOT FOUND" << std::endl;
-		std::cerr << std::hex << "nid " << nid << " xid " << xid << " NOT FOUND!!!" << std::endl;
+		std::cerr << std::hex << "oid " << oid << " xid " << xid << " NOT FOUND!!!" << std::endl;
 		return false;
 	}
 
 	// std::cout << val->blockid << std::endl;
 
-	info.flags = res_val->ov_flags;
-	info.size = res_val->ov_size;
-	info.bid = res_val->ov_paddr;
+	omr.flags = res_val->ov_flags;
+	omr.size = res_val->ov_size;
+	omr.paddr = res_val->ov_paddr;
 
 	return true;
 }

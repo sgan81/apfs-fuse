@@ -19,13 +19,13 @@
 
 #pragma once
 
-#include <cstdint>
+#include "ApfsTypes.h"
 
-struct node_info_t
+struct omap_res_t
 {
 	uint32_t flags;
 	uint32_t size;
-	uint64_t bid;
+	paddr_t paddr;
 };
 
 class ApfsNodeMapper
@@ -34,5 +34,5 @@ public:
 	ApfsNodeMapper();
 	virtual ~ApfsNodeMapper();
 
-	virtual bool GetBlockID(node_info_t &res, uint64_t nid, uint64_t xid) = 0;
+	virtual bool Lookup(omap_res_t &res, oid_t oid, xid_t xid) = 0;
 };

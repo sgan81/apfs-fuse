@@ -65,7 +65,7 @@ Crc32::~Crc32()
 
 }
 
-void Crc32::Calc(const byte_t *data, size_t size)
+void Crc32::Calc(const uint8_t *data, size_t size)
 {
 	size_t i;
 
@@ -79,17 +79,17 @@ void Crc32::Calc(const byte_t *data, size_t size)
 	}
 }
 
-void Crc32::CalcLE(byte_t b)
+void Crc32::CalcLE(uint8_t b)
 {
 	m_crc = m_table[b ^ (m_crc & 0xFF)] ^ (m_crc >> 8);
 }
 
-void Crc32::CalcBE(byte_t b)
+void Crc32::CalcBE(uint8_t b)
 {
 	m_crc = m_table[b ^ ((m_crc >> 24) & 0xFF)] ^ (m_crc << 8);
 }
 
-uint32_t Crc32::GetDataCRC(const byte_t *data, size_t size, uint32_t initialXor, uint32_t finalXor)
+uint32_t Crc32::GetDataCRC(const uint8_t *data, size_t size, uint32_t initialXor, uint32_t finalXor)
 {
 	m_crc = initialXor;
 	Calc(data, size);

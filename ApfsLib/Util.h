@@ -25,13 +25,13 @@
 #include <ostream>
 #include <vector>
 
-#include "Global.h"
+#include "ApfsTypes.h"
 
 uint64_t Fletcher64(const uint32_t *data, size_t cnt, uint64_t init);
 bool VerifyBlock(const void *block, size_t size);
-bool IsZero(const byte_t *data, size_t size);
+bool IsZero(const uint8_t *data, size_t size);
 bool IsEmptyBlock(const void *data, size_t blksize);
-void DumpHex(std::ostream &os, const byte_t *data, size_t size, size_t line_size = 16);
+void DumpHex(std::ostream &os, const uint8_t *data, size_t size, size_t line_size = 16);
 void DumpBuffer(const uint8_t *data, size_t len, const char *label);
 
 std::string uuidstr(const apfs_uuid_t &uuid);

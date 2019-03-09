@@ -30,12 +30,12 @@
 
 ApfsVolume::ApfsVolume(ApfsContainer &container) :
 	m_container(container),
-	m_nodemap_dir(container),
-	m_bt_directory(container, this),
-	m_bt_blockmap(container, this),
-	m_bt_snapshots(container, this)
+	m_omap(container),
+	m_root_tree(container, this),
+	m_extentref_tree(container, this),
+	m_snap_meta_tree(container, this)
 {
-	m_blockid_sb = 0;
+	m_apsb_paddr = 0;
 	m_is_encrypted = false;
 }
 
@@ -43,15 +43,15 @@ ApfsVolume::~ApfsVolume()
 {
 }
 
-bool ApfsVolume::Init(uint64_t blkid_volhdr)
+bool ApfsVolume::Init(paddr_t apsb_paddr)
 {
-	std::vector<byte_t> blk;
+	std::vector<uint8_t> blk;
 
-	m_blockid_sb = blkid_volhdr;
+	m_apsb_paddr = apsb_paddr;
 
 	blk.resize(m_container.GetBlocksize());
 
-	if (!ReadBlocks(blk.data(), blkid_volhdr, 1, false, 0)) // crypto_id is unused
+	if (!ReadBlocks(blk.data(), apsb_paddr, 1, 0))
 		return false;
 
 	if (!VerifyBlock(blk.data(), blk.size()))
@@ -59,13 +59,15 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 
 	memcpy(&m_sb, blk.data(), sizeof(m_sb));
 
-	if (m_sb.apfs_magic != 0x42535041)
+	if (m_sb.apfs_magic != APFS_MAGIC)
 		return false;
 
-	if (!m_nodemap_dir.Init(m_sb.apfs_omap_oid, m_sb.apfs_o.o_xid))
-		std::cerr << "WARNING: Volume node id mapper btree init failed." << std::endl;
+	if (!m_omap.Init(m_sb.apfs_omap_oid, m_sb.apfs_o.o_xid)) {
+		std::cerr << "WARNING: Volume omap tree init failed." << std::endl;
+		return false;
+	}
 
-	if ((m_sb.apfs_fs_flags & 3) != 1)
+	if ((m_sb.apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED)
 	{
 		uint8_t vek[0x20];
 		std::string str;
@@ -91,25 +93,25 @@ bool ApfsVolume::Init(uint64_t blkid_volhdr)
 		m_is_encrypted = true;
 	}
 
-	if (!m_bt_directory.Init(m_sb.apfs_root_tree_oid, m_sb.apfs_o.o_xid, &m_nodemap_dir))
-		std::cerr << "WARNING: Directory btree init failed" << std::endl;
+	if (!m_root_tree.Init(m_sb.apfs_root_tree_oid, m_sb.apfs_o.o_xid, &m_omap))
+		std::cerr << "WARNING: root tree init failed" << std::endl;
 
-	if (!m_bt_blockmap.Init(m_sb.apfs_extentref_tree_oid, m_sb.apfs_o.o_xid))
-		std::cerr << "WARNING: Block map btree init failed" << std::endl;
+	if (!m_extentref_tree.Init(m_sb.apfs_extentref_tree_oid, m_sb.apfs_o.o_xid))
+		std::cerr << "WARNING: extentref tree init failed" << std::endl;
 
-	if (!m_bt_snapshots.Init(m_sb.apfs_snap_meta_tree_oid, m_sb.apfs_o.o_xid))
-		std::cerr << "WARNING: Snapshots btree init failed" << std::endl;
+	if (!m_snap_meta_tree.Init(m_sb.apfs_snap_meta_tree_oid, m_sb.apfs_o.o_xid))
+		std::cerr << "WARNING: snap meta tree init failed" << std::endl;
 
 	return true;
 }
 
 void ApfsVolume::dump(BlockDumper& bd)
 {
-	std::vector<byte_t> blk;
+	std::vector<uint8_t> blk;
 
 	blk.resize(m_container.GetBlocksize());
 
-	if (!ReadBlocks(blk.data(), m_blockid_sb, 1, false, 0))
+	if (!ReadBlocks(blk.data(), m_apsb_paddr, 1, 0))
 		return;
 
 	if (!VerifyBlock(blk.data(), blk.size()))
@@ -117,30 +119,32 @@ void ApfsVolume::dump(BlockDumper& bd)
 
 	bd.SetTextFlags(m_sb.apfs_incompatible_features & 0xFF);
 
-	bd.DumpNode(blk.data(), m_blockid_sb);
+	bd.DumpNode(blk.data(), m_apsb_paddr);
 
-	m_nodemap_dir.dump(bd);
-	m_bt_directory.dump(bd);
-	m_bt_blockmap.dump(bd);
-	m_bt_snapshots.dump(bd);
+	m_omap.dump(bd);
+	m_root_tree.dump(bd);
+	m_extentref_tree.dump(bd);
+	m_snap_meta_tree.dump(bd);
 }
 
-bool ApfsVolume::ReadBlocks(byte_t * data, uint64_t blkid, uint64_t blkcnt, bool decrypt, uint64_t xts_blkid)
+bool ApfsVolume::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt, uint64_t xts_tweak)
 {
-	if (!m_container.ReadBlocks(data, blkid, blkcnt))
+	constexpr int encryption_block_size = 0x200;
+
+	if (!m_container.ReadBlocks(data, paddr, blkcnt))
 		return false;
 
-	if (!decrypt || !m_is_encrypted)
+	if (!m_is_encrypted || (xts_tweak == 0))
 		return true;
 
-	uint64_t cs_factor = m_container.GetBlocksize() / 0x200;
-	uint64_t uno = xts_blkid * cs_factor;
+	uint64_t cs_factor = m_container.GetBlocksize() / encryption_block_size;
+	uint64_t uno = xts_tweak * cs_factor;
 	size_t size = blkcnt * m_container.GetBlocksize();
 	size_t k;
 
-	for (k = 0; k < size; k += 0x200)
+	for (k = 0; k < size; k += encryption_block_size)
 	{
-		m_aes.Decrypt(data + k, data + k, 0x200, uno);
+		m_aes.Decrypt(data + k, data + k, encryption_block_size, uno);
 		uno++;
 	}
 

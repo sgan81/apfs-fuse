@@ -32,13 +32,13 @@ public:
 	ApfsNodeMapperBTree(ApfsContainer &container);
 	virtual ~ApfsNodeMapperBTree();
 
-	bool Init(uint64_t bid_root, uint64_t xid);
-	bool GetBlockID(node_info_t &info, uint64_t nid, uint64_t xid) override;
+	bool Init(oid_t omap_oid, xid_t xid);
+	bool Lookup(omap_res_t & omr, oid_t oid, xid_t xid) override;
 
 	void dump(BlockDumper &bd) { m_tree.dump(bd); }
 
 private:
-	omap_phys_t m_root_ptr;
+	omap_phys_t m_omap;
 	BTree m_tree;
 
 	ApfsContainer &m_container;

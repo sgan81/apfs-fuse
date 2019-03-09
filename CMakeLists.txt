@@ -121,4 +121,8 @@ else()
 target_link_libraries(apfs-fuse apfs fuse)
 endif()
 
+add_executable(apfsutil ApfsUtil/ApfsUtil.cpp)
+target_link_libraries(apfsutil apfs)
+
+# include(GNUInstallDirs)
 # install(TARGETS apfs-fuse RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

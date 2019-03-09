@@ -81,7 +81,7 @@ bool VerifyBlock(const void *block, size_t size)
 	return cs == 0;
 }
 
-bool IsZero(const byte_t *data, size_t size)
+bool IsZero(const uint8_t* data, long unsigned int size)
 {
 	for (size_t k = 0; k < size; k++)
 	{
@@ -104,12 +104,12 @@ bool IsEmptyBlock(const void *data, size_t blksize)
 	return true;
 }
 
-void DumpHex(std::ostream &os, const byte_t *data, size_t size, size_t lineSize)
+void DumpHex(std::ostream &os, const uint8_t *data, size_t size, size_t lineSize)
 {
 	using namespace std;
 
 	size_t i, j;
-	byte_t b;
+	uint8_t b;
 
 	if (size == 0)
 		return;
@@ -270,7 +270,7 @@ uint32_t HashFilename(const uint8_t* utf8str, uint16_t name_len, bool case_fold)
 #endif
 
 	g_crc.SetCRC(0xFFFFFFFF);
-	g_crc.Calc(reinterpret_cast<const byte_t *>(utf32_nfd.data()), utf32_nfd.size() * sizeof(char32_t));
+	g_crc.Calc(reinterpret_cast<const uint8_t *>(utf32_nfd.data()), utf32_nfd.size() * sizeof(char32_t));
 
 	hash = g_crc.GetCRC();
 

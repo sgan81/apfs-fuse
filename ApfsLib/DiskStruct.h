@@ -21,7 +21,7 @@
 
 #include <cstdint>
 
-#include "Global.h"
+#include "ApfsTypes.h"
 #include "Endian.h"
 
 #pragma pack(push)
@@ -31,17 +31,10 @@
 #pragma warning(disable: 4200)
 #endif
 
-typedef uint64_t paddr_t; // Apple: int64_t
-typedef uint64_t oid_t;
-typedef uint64_t xid_t;
-
 struct prange_t {
 	le<paddr_t> pr_start_addr;
 	le<uint64_t> pr_block_count;
 };
-
-typedef unsigned char apfs_uuid_t[16];
-
 
 typedef uint32_t crypto_flags_t;
 typedef uint32_t cp_key_class_t;
@@ -322,15 +315,32 @@ constexpr int APFS_VOLNAME_LEN = 256;
 
 
 constexpr uint64_t APFS_FS_UNENCRYPTED = 0x01;
-constexpr uint64_t APFS_FS_EFFACEABLE = 0x02;
+constexpr uint64_t APFS_FS_EFFACEABLE = 0x02; // APFS_FS_RESERVED_2 in newer specs
 constexpr uint64_t APFS_FS_RESERVED_4 = 0x04;
 constexpr uint64_t APFS_FS_ONEKEY = 0x08;
 constexpr uint64_t APFS_FS_SPILLEDOVER = 0x10;
 constexpr uint64_t APFS_FS_RUN_SPILLOVER_CLEANER = 0x20;
+constexpr uint64_t APFS_FS_ALWAYS_CHECK_EXTENTREF = 0x40;
 
-constexpr uint64_t APFS_FS_FLAGS_VALID_MASK = APFS_FS_UNENCRYPTED | APFS_FS_EFFACEABLE | APFS_FS_RESERVED_4 | APFS_FS_ONEKEY | APFS_FS_SPILLEDOVER | APFS_FS_RUN_SPILLOVER_CLEANER;
+
+constexpr uint64_t APFS_FS_FLAGS_VALID_MASK = APFS_FS_UNENCRYPTED | APFS_FS_EFFACEABLE | APFS_FS_RESERVED_4 | APFS_FS_ONEKEY | APFS_FS_SPILLEDOVER | APFS_FS_RUN_SPILLOVER_CLEANER | APFS_FS_ALWAYS_CHECK_EXTENTREF;
 
 constexpr uint64_t APFS_FS_CRYPTOFLAGS = APFS_FS_UNENCRYPTED | APFS_FS_EFFACEABLE | APFS_FS_ONEKEY;
+
+
+constexpr uint16_t APFS_VOL_ROLE_NONE = 0x0000;
+
+constexpr uint16_t APFS_VOL_ROLE_SYSTEM = 0x0001;
+constexpr uint16_t APFS_VOL_ROLE_USER = 0x0002;
+constexpr uint16_t APFS_VOL_ROLE_RECOVERY = 0x0004;
+constexpr uint16_t APFS_VOL_ROLE_VM = 0x0008;
+
+constexpr uint16_t APFS_VOL_ROLE_PREBOOT = 0x0010;
+constexpr uint16_t APFS_VOL_ROLE_INSTALLER = 0x0020;
+constexpr uint16_t APFS_VOL_ROLE_DATA = 0x0040;
+constexpr uint16_t APFS_VOL_ROLE_BASEBAND = 0x0080;
+
+constexpr uint16_t APFS_VOL_ROLE_RESERVED_200 = 0x0200;
 
 
 constexpr uint64_t APFS_FEATURE_DEFRAG_PRERELEASE = 1;
@@ -923,6 +933,10 @@ struct spaceman_device_t {
 	le<uint64_t> sm_reserved2;
 };
 
+constexpr int SM_ALLOCZONE_INVALID_END_BOUNDARY = 0;
+constexpr int SM_ALLOCZONE_NUM_PREVIOUS_BOUNDARIES = 7;
+constexpr int SM_DATAZONE_ALLOCZONE_COUNT = 8;
+
 enum sfq {
 	SFQ_IP = 0,
 	SFQ_MAIN = 1,
@@ -934,6 +948,23 @@ enum smdev {
 	SD_MAIN = 0,
 	SD_TIER2 = 1,
 	SD_COUNT = 2
+};
+
+struct spaceman_allocation_zone_boundaries_t {
+	le<uint64_t> saz_zone_start;
+	le<uint64_t> saz_zone_end;
+};
+
+struct spaceman_allocation_zone_info_phys_t {
+	spaceman_allocation_zone_boundaries_t saz_current_boundaries;
+	spaceman_allocation_zone_boundaries_t saz_previous_boundaries[SM_ALLOCZONE_NUM_PREVIOUS_BOUNDARIES];
+	le<uint16_t> saz_zone_id;
+	le<uint16_t> saz_previous_boundary_index;
+	le<uint32_t> saz_reserved;
+};
+
+struct spaceman_datazone_info_phys_t {
+	spaceman_allocation_zone_info_phys_t sdz_allocation_zones[SD_COUNT][SM_DATAZONE_ALLOCZONE_COUNT];
 };
 
 struct spaceman_phys_t {
@@ -960,7 +991,7 @@ struct spaceman_phys_t {
 	le<uint32_t> sm_ip_bm_free_next_offset;
 	le<uint32_t> sm_version;
 	le<uint32_t> sm_struct_size;
-	// spaceman_datazone_info_phys_t sm_datazone;
+	spaceman_datazone_info_phys_t sm_datazone;
 };
 
 constexpr uint32_t SM_FLAG_VERSIONED = 0x00000001;
@@ -1138,11 +1169,29 @@ enum {
 	KB_TAG_USER_PAYLOAD
 };
 
-
-struct er_state_phys_t {
+struct er_state_phys_header_t {
 	obj_phys_t ersb_o;
 	le<uint32_t> ersb_magic;
 	le<uint32_t> ersb_version;
+};
+
+struct er_state_phys_t {
+	er_state_phys_header_t ersb_header;
+	le<uint64_t> ersb_flags;
+	le<uint64_t> ersb_snap_xid;
+	le<uint64_t> ersb_current_fext_obj_id;
+	le<uint64_t> ersb_file_offset;
+	le<uint64_t> ersb_progress;
+	le<uint64_t> ersb_total_blk_to_encrypt;
+	le<oid_t> ersb_blockmap_oid;
+	le<uint64_t> ersb_tidemark_obj_id;
+	le<uint64_t> ersb_recovery_extents_count;
+	le<oid_t> ersb_recovery_list_oid;
+	le<uint64_t> ersb_recovery_length;
+};
+
+struct er_state_phys_v1_t {
+	er_state_phys_header_t ersb_header;
 	le<uint64_t> ersb_flags;
 	le<uint64_t> ersb_snap_xid;
 	le<uint64_t> ersb_current_fext_obj_id;
@@ -1162,6 +1211,13 @@ enum er_phase_t {
 	ER_PHASE_OMAP_ROLL = 1,
 	ER_PHASE_DATA_ROLL = 2,
 	ER_PHASE_SNAP_ROLL = 3
+};
+
+struct er_recovery_block_phys_t {
+	obj_phys_t erb_o;
+	le<uint64_t> erb_offset;
+	le<oid_t> erb_next_oid;
+	uint8_t erb_data[0];
 };
 
 struct gbitmap_block_phys_t {

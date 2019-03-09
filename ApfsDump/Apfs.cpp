@@ -42,7 +42,7 @@ constexpr size_t BLOCKSIZE = 0x1000;
 
 volatile bool g_abort = 0;
 
-void DumpBlockTrunc(std::ostream &os, const byte_t *data)
+void DumpBlockTrunc(std::ostream &os, const uint8_t *data)
 {
 	unsigned int sz = BLOCKSIZE - 1;
 

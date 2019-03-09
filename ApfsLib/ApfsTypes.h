@@ -19,29 +19,11 @@
 
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
-#include "Global.h"
 
-class Crc32
-{
-public:
-	Crc32(bool reflect, uint32_t poly = 0x04C11DB7);
-	~Crc32();
-
-	void SetCRC(uint32_t crc) { m_crc = crc; }
-	uint32_t GetCRC() const { return m_crc; }
-	void Calc(const uint8_t *data, size_t size);
-
-	uint32_t GetDataCRC(const uint8_t *data, size_t size, uint32_t initialXor, uint32_t finalXor);
-
-private:
-	void CalcLE(uint8_t b);
-	void CalcBE(uint8_t b);
-
-	uint32_t m_table[256];
-	uint32_t m_crc;
-
-	bool m_reflect;
-};
+// Commonly used FS types
+typedef unsigned char apfs_uuid_t[16];
+typedef uint64_t paddr_t; // Apple: int64_t
+typedef uint64_t oid_t;
+typedef uint64_t xid_t;
 
