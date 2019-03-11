@@ -48,6 +48,8 @@
 
 #include <iostream>
 
+static_assert(sizeof(fuse_ino_t) == 8, "Sorry, apfs-fuse will currently not run on a 32 bit system. Try a 64 bit system instead.");
+
 constexpr double FUSE_TIMEOUT = 86400.0;
 
 static struct fuse_lowlevel_ops ops;

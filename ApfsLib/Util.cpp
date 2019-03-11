@@ -81,7 +81,7 @@ bool VerifyBlock(const void *block, size_t size)
 	return cs == 0;
 }
 
-bool IsZero(const uint8_t* data, long unsigned int size)
+bool IsZero(const uint8_t* data, size_t size)
 {
 	for (size_t k = 0; k < size; k++)
 	{
