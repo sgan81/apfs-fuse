@@ -18,7 +18,7 @@ public:
 
 	void Read(uint64_t off, void *data, size_t size);
 
-	size_t GetContentSize() const { return m_crypt_size; }
+	uint64_t GetContentSize() const { return m_crypt_size; }
 
 	bool CheckSetupEncryption();
 
