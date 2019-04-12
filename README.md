@@ -26,7 +26,7 @@ should just report an error.
 ### Compile the source code
 The following libraries are needed (including the -dev/-devel packages):
 
-* FUSE 2.6 or greater
+* FUSE 2.6 or greater (on 32-bit systems, FUSE 3.0 or greater)
 * zlib
 * bzip2
 * libattr (on some Linux distributions)
@@ -39,7 +39,7 @@ Development tools:
 Example for Linux:
 ```
 sudo apt update
-sudo apt install fuse libfuse-dev libicu-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev
+sudo apt install fuse libfuse-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev
 ```
 Clone the repository:
 ```
@@ -55,9 +55,14 @@ Compile the driver:
 mkdir build
 cd build
 cmake ..
+ccmake . # Only if you want to change build options
 make
 ```
 After compilation, the binaries are located in `bin`.
+
+Note that the driver uses FUSE 3.0 by default (required on 32-bit systems). If
+you want do compile using FUSE 2.6, use `ccmake .` to change the option
+`USE_FUSE3` to `OFF`.
 
 ### Mount a drive
 ```
@@ -104,6 +109,10 @@ In addition to the mount options supported by fuse, the following mount options 
 * uid=n: Pretend that all files have UID n.
 * gid=n: Pretend that all files have GID n.
 * vol=n: Same as -v, specify the volume number to mount if you don't want volume 0.
+* blksize=n: Set the physical block size (default: 512 bytes).
+
+The blksize parameter is required for proper partition table parsing on some newer
+macs.
 
 If you mount a volume as root and want some user to be able to access it, use:
 ```

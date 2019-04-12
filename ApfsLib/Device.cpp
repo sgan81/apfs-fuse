@@ -31,6 +31,7 @@
 
 Device::Device()
 {
+	m_sector_size = 0x200;
 }
 
 Device::~Device()

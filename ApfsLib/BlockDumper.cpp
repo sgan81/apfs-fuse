@@ -748,7 +748,7 @@ void BlockDumper::DumpBTEntry_APFS_Root(const void *key_ptr, size_t key_len, con
 						else
 							m_os << " : [!!! Compression Header Invalid !!!]";
 #ifdef DUMP_COMPRESSED
-						if (attr->xdata_len > sizeof(CompressionHeader))
+						if (xv->xdata_len > sizeof(CompressionHeader))
 						{
 							m_os << endl;
 							DumpHex(xv->xdata + sizeof(CompressionHeader), xv->xdata_len - sizeof(CompressionHeader));

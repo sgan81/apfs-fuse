@@ -35,5 +35,11 @@ public:
 	virtual bool Read(void *data, uint64_t offs, uint64_t len) = 0;
 	virtual uint64_t GetSize() const = 0;
 
+	unsigned int GetSectorSize() const { return m_sector_size; }
+	void SetSectorSize(unsigned int size) { m_sector_size = size; }
+
 	static Device *OpenDevice(const char *name);
+
+private:
+	unsigned int m_sector_size;
 };

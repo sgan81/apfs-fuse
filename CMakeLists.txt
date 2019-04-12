@@ -1,8 +1,10 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 2.8)
 # set(CMAKE_C_COMPILER "clang")
 # set(CMAKE_CXX_COMPILER "clang++")
 
 project(Apfs)
+
+option(USE_FUSE3 "Use the FUSE 3 library (required on 32-bit systems)" ON)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 11)
@@ -99,6 +101,7 @@ add_library(apfs
 	ApfsLib/Unicode.cpp
 	ApfsLib/Unicode.h)
 target_link_libraries(apfs z bz2 lzfse)
+target_compile_definitions(apfs PUBLIC _FILE_OFFSET_BITS=64 _DARWIN_USE_64_BIT_INODE)
 
 add_executable(apfs-dump
 	ApfsDump/Dumper.cpp
@@ -118,7 +121,12 @@ target_include_directories(apfs-fuse PRIVATE /usr/local/include/osxfuse/)
 # link_directories(/usr/local/lib/)
 target_link_libraries(apfs-fuse apfs /usr/local/lib/libosxfuse.dylib)
 else()
+if (USE_FUSE3)
+target_link_libraries(apfs-fuse apfs fuse3)
+else()
 target_link_libraries(apfs-fuse apfs fuse)
+target_compile_definitions(apfs-fuse PRIVATE USE_FUSE2)
+endif()
 endif()
 
 add_executable(apfsutil ApfsUtil/ApfsUtil.cpp)
