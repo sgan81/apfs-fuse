@@ -77,8 +77,17 @@ bool GptPartitionMap::LoadAndVerify(Device & dev)
 
 	hdr = reinterpret_cast<PMAP_GptHeader *>(m_hdr_data.data());
 
-	if (hdr->Signature != 0x5452415020494645)
-		return false;
+	if (hdr->Signature != 0x5452415020494645) {
+		m_hdr_data.resize(0x1000);
+		dev.Read(m_hdr_data.data(), 0x1000, 0x1000);
+
+		hdr = reinterpret_cast<PMAP_GptHeader *>(m_hdr_data.data());
+
+		if (hdr->Signature != 0x5452415020494645)
+			return false;
+
+		m_sector_size = 0x1000;
+	}
 
 	if (hdr->Revision != 0x00010000)
 		return false;

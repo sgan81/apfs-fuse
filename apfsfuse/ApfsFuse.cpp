@@ -72,6 +72,7 @@ static gid_t g_gid = 0;
 static bool g_set_uid = false;
 static bool g_set_gid = false;
 static int g_physblksize = 512;
+static std::string g_password;
 
 struct Directory
 {
@@ -645,6 +646,7 @@ void usage(const char *name)
 	std::cout << "vol=N         : Same as -v, select volume id to mount." << std::endl;
 	std::cout << "blksize=N     : Set physical block size. Only needed if a partition table needs" << std::endl;
 	std::cout << "                to be parsed and the sector size is not 512 bytes." << std::endl;
+	std::cout << "pass=...      : Specify volume passphrase (same as -r)." << std::endl;
 	std::cout << std::endl;
 }
 
@@ -683,6 +685,10 @@ static int apfs_parse_fuse_opt(void *data, const char *arg, int key, struct fuse
 			g_physblksize = strtoul(strchr(arg, '=') + sizeof(char), nullptr, 10);
 			return 0;
 		}
+		if (!strncmp(arg, "pass=", 5)) {
+			g_password = strchr(arg, '=') + sizeof(char);
+			return 0;
+		}
 	}
 	return 1;
 }
@@ -701,7 +707,6 @@ int main(int argc, char *argv[])
 	int err = -1;
 	int opt;
 	std::string mount_options;
-	std::string passphrase;
 	uint64_t main_offset = 0;
 	uint64_t main_size = 0;
 	uint64_t tier2_offset = 0;
@@ -760,7 +765,7 @@ int main(int argc, char *argv[])
 				g_vol_id = strtoul(optarg, nullptr, 10);
 				break;
 			case 'r':
-				passphrase = optarg;
+				g_password = optarg;
 				break;
 			case 's':
 				main_offset = strtoul(optarg, nullptr, 10);
@@ -873,7 +878,7 @@ int main(int argc, char *argv[])
 
 	g_container = new ApfsContainer(g_disk_main, main_offset, main_size, g_disk_tier2, tier2_offset, tier2_size);
 	g_container->Init();
-	g_volume = g_container->GetVolume(g_vol_id, passphrase);
+	g_volume = g_container->GetVolume(g_vol_id, g_password);
 	if (!g_volume)
 	{
 		std::cerr << "Unable to get volume!" << std::endl;

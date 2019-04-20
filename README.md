@@ -110,6 +110,7 @@ In addition to the mount options supported by fuse, the following mount options 
 * gid=n: Pretend that all files have GID n.
 * vol=n: Same as -v, specify the volume number to mount if you don't want volume 0.
 * blksize=n: Set the physical block size (default: 512 bytes).
+* pass=...: Specify volume passphrase (same as -r).
 
 The blksize parameter is required for proper partition table parsing on some newer
 macs.
