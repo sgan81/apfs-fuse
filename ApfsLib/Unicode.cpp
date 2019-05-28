@@ -7,20 +7,21 @@
 
 int normalizeJimdo(char32_t ch, char32_t *nfd, uint8_t *ccc)
 {
-	constexpr int SBase = 0xAC00;
-	constexpr int LBase = 0x1100;
-	constexpr int VBase = 0x1161;
-	constexpr int TBase = 0x11A7;
+	constexpr uint32_t SBase = 0xAC00;
+	constexpr uint32_t LBase = 0x1100;
+	constexpr uint32_t VBase = 0x1161;
+	constexpr uint32_t TBase = 0x11A7;
 	// constexpr int LCount = 19;
-	constexpr int VCount = 21;
-	constexpr int TCount = 28;
-	constexpr int NCount = VCount * TCount;
+	constexpr unsigned int VCount = 21;
+	constexpr unsigned int TCount = 28;
+	constexpr unsigned int NCount = VCount * TCount;
 	// constexpr int SCount = LCount * NCount;
 
-	int SIndex = ch - SBase;
-	int LIndex = SIndex / NCount;
-	int VIndex = (SIndex % NCount) / TCount;
-	int TIndex = SIndex % TCount;
+	assert(ch > SBase);
+	uint32_t SIndex = ch - SBase;
+	uint32_t LIndex = SIndex / NCount;
+	uint32_t VIndex = (SIndex % NCount) / TCount;
+	uint32_t TIndex = SIndex % TCount;
 
 	nfd[0] = LBase + LIndex;
 	ccc[0] = 0;
@@ -81,7 +82,7 @@ int normalizeOptFoldU32Char(char32_t ch, bool case_fold, char32_t *nfd, uint8_t 
 	if (hi_res == 0xAC00) // Naja, fast ... sollte funktionieren
 		return normalizeJimdo(ch, nfd, ccc);
 
-	mi_res = nf_trie_mid[((hi_res & 0xFFF) << 4) | ((ch_idx >> 4) & 0xF)];
+	mi_res = nf_trie_mid[((hi_res & 0xFFFU) << 4) | ((ch_idx >> 4) & 0xF)];
 
 	if (mi_res == 0xFFFF)
 		return -1;
@@ -111,7 +112,7 @@ int normalizeOptFoldU32Char(char32_t ch, bool case_fold, char32_t *nfd, uint8_t 
 		return 1;
 	}
 
-	lo_res = nf_trie_lo[((mi_res & 0xFFF) << 4) | (ch_idx & 0xF)];
+	lo_res = nf_trie_lo[((mi_res & 0xFFFU) << 4) | (ch_idx & 0xF)];
 
 	if (lo_res == 0xFFFF)
 		return -1;
@@ -186,6 +187,7 @@ int normalizeOptFoldU32Char(char32_t ch, bool case_fold, char32_t *nfd, uint8_t 
 			return 0;
 		break;
 	}
+	// seq_len can't be > 4.
 
 	for (cnt = 0; cnt < seq_len; cnt++)
 	{
@@ -219,7 +221,7 @@ int normalizeOptFoldU32Char(char32_t ch, bool case_fold, char32_t *nfd, uint8_t 
 				continue;
 			}
 
-			mi_res = nf_trie_mid[((hi_res & 0xFFF) << 4) | ((ch_idx >> 4) & 0xF)];
+			mi_res = nf_trie_mid[((hi_res & 0xFFFU) << 4) | ((ch_idx >> 4) & 0xF)];
 
 			if (mi_res == 0 || ((mi_res & 0xFF00) == 0xAE00))
 			{
@@ -232,7 +234,7 @@ int normalizeOptFoldU32Char(char32_t ch, bool case_fold, char32_t *nfd, uint8_t 
 				continue;
 			}
 
-			lo_res = nf_trie_lo[((mi_res & 0xFFF) << 4) | (ch_idx & 0xF)];
+			lo_res = nf_trie_lo[((mi_res & 0xFFFU) << 4) | (ch_idx & 0xF)];
 
 			if ((lo_res & 0xFF00) == 0xAD00)
 				ccc[cnt] = lo_res & 0xFF;
@@ -252,8 +254,8 @@ int normalizeOptFoldU32Char(char32_t ch, bool case_fold, char32_t *nfd, uint8_t 
 				nfd[cnt - 1] = 0x3B9;
 		}
 	}
-
-	return cnt;
+	// here, cnt == seq_len, which is < 4. We can therefore assume that the cast to int safe :-)
+	return (int)cnt;
 }
 
 void CanonicalReorder(char32_t *nfd, uint8_t *ccc, size_t len)
@@ -313,10 +315,10 @@ bool NormalizeFoldString(std::vector<char32_t> &nfd, const std::vector<char32_t>
 		ch = in[k];
 		rc = normalizeOptFoldU32Char(ch, case_fold, nfd.data() + out_size, ccc.data() + out_size);
 
-		if (rc == -1)
+		if (rc < 0 )
 			return false;
 
-		out_size += rc;
+		out_size += (unsigned int)rc; // safe cast, as rc is >=0
 	}
 
 	nfd.resize(out_size);

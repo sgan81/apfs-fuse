@@ -45,10 +45,10 @@ int StrCmpUtf8NormalizedFolded(const uint8_t *s1, const uint8_t *s2, bool case_f
 
 bool Utf8toUtf32(std::vector<char32_t> &str32, const uint8_t * str);
 
-size_t DecompressZLib(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
+size_t DecompressZLib(uint8_t *dst, unsigned int dst_size, const uint8_t *src, unsigned int src_size); // zstream can't take more than unsigned int for src and dst size
 size_t DecompressADC(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 size_t DecompressLZVN(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
-size_t DecompressBZ2(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
+size_t DecompressBZ2(uint8_t *dst, unsigned int dst_size, const uint8_t *src, unsigned int src_size); // bz_stream can't take more than unsigned int for src and dst size
 size_t DecompressLZFSE(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 
 bool GetPassword(std::string &pw);

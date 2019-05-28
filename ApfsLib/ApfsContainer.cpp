@@ -388,7 +388,6 @@ void ApfsContainer::dump(BlockDumper& bd)
 	bd.DumpNode(m_sm_data.data(), m_nx.nx_spaceman_oid);
 
 	uint64_t oid;
-	size_t k;
 
 	for (size_t k = 0; k < m_sm->sm_ip_bm_block_count; k++)
 	{

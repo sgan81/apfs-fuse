@@ -57,9 +57,9 @@ inline uint16_t bswap_le(const uint16_t &x) { return x; }
 inline uint32_t bswap_le(const uint32_t &x) { return x; }
 inline uint64_t bswap_le(const uint64_t &x) { return x; }
 // Swap to/from big endian.
-inline int16_t bswap_be(const int16_t &x) { return bswap_16(x); }
-inline int32_t bswap_be(const int32_t &x) { return bswap_32(x); }
-inline int64_t bswap_be(const int64_t &x) { return bswap_64(x); }
+inline int16_t bswap_be(const int16_t &x) { return (int16_t)bswap_16((uint16_t)x); }
+inline int32_t bswap_be(const int32_t &x) { return (int32_t)bswap_32((uint32_t)x); }
+inline int64_t bswap_be(const int64_t &x) { return (int64_t)bswap_64((uint64_t)x); }
 inline uint16_t bswap_be(const uint16_t &x) { return bswap_16(x); }
 inline uint32_t bswap_be(const uint32_t &x) { return bswap_32(x); }
 inline uint64_t bswap_be(const uint64_t &x) { return bswap_64(x); }

@@ -48,7 +48,7 @@ public:
 
 		uint64_t internal_flags;
 
-		uint64_t nchildren_nlink;
+		int32_t nchildren_nlink;
 
 		cp_key_class_t default_protection_class;
 		uint32_t write_generation_counter;
