@@ -877,7 +877,14 @@ int main(int argc, char *argv[])
 	}
 
 	g_container = new ApfsContainer(g_disk_main, main_offset, main_size, g_disk_tier2, tier2_offset, tier2_size);
-	g_container->Init();
+	if (!g_container->Init())
+	{
+		std::cerr << "Unable to load container." << std::endl;
+		delete g_container;
+		g_disk_main->Close();
+		delete g_disk_main;
+		return EINVAL;
+	}
 	g_volume = g_container->GetVolume(g_vol_id, g_password);
 	if (!g_volume)
 	{

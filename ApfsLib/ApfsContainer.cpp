@@ -145,9 +145,15 @@ bool ApfsContainer::Init()
 		return false;
 	}
 
-	m_sm_data.resize(GetBlocksize());
-	ReadBlocks(m_sm_data.data(), omr.paddr, 1);
+	m_sm_data.resize(omr.size);
+	ReadBlocks(m_sm_data.data(), omr.paddr, omr.size / GetBlocksize());
 	m_sm = reinterpret_cast<const spaceman_phys_t *>(m_sm_data.data());
+
+	if (!VerifyBlock(m_sm_data.data(), m_sm_data.size()))
+	{
+		std::cerr << "Checksum error in spaceman" << std::endl;
+		return false;
+	}
 
 	if ((m_sm->sm_o.o_type & OBJECT_TYPE_MASK) != OBJECT_TYPE_SPACEMAN)
 	{
