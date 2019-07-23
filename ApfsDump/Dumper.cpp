@@ -122,6 +122,7 @@ bool Dumper::DumpContainer(std::ostream &os)
 	const spaceman_phys_t *sm = nullptr;
 	const chunk_info_block_t *cib = nullptr;
 	const cib_addr_block_t *cab = nullptr;
+	const checkpoint_mapping_t *cm = nullptr;
 
 	uint64_t paddr;
 
@@ -177,17 +178,17 @@ bool Dumper::DumpContainer(std::ostream &os)
 
 	cpm = reinterpret_cast<const checkpoint_map_phys_t *>(cpm_data.data());
 
-	paddr = cpm_lookup(cpm, nx->nx_spaceman_oid);
+	cm = cpm_lookup(cpm, nx->nx_spaceman_oid);
 
-	if (paddr == 0)
+	if (cm == 0)
 		return false;
 
 	// Get Spaceman
 
-	if (!Read(sm_data, paddr, 1))
+	if (!Read(sm_data, cm->cpm_paddr, cm->cpm_size / nx->nx_block_size))
 		return false;
 
-	bd.DumpNode(sm_data.data(), sm_data.size());
+	bd.DumpNode(sm_data.data(), cm->cpm_paddr);
 
 	if (!VerifyBlock(sm_data.data(), sm_data.size()))
 		return false;
@@ -458,7 +459,7 @@ void Dumper::Decrypt(uint8_t* data, size_t size, uint64_t paddr)
 	}
 }
 
-uint64_t Dumper::cpm_lookup(const checkpoint_map_phys_t* cpm, uint64_t oid)
+const checkpoint_mapping_t *Dumper::cpm_lookup(const checkpoint_map_phys_t* cpm, uint64_t oid)
 {
 	uint32_t k;
 	uint32_t cnt;
@@ -468,8 +469,8 @@ uint64_t Dumper::cpm_lookup(const checkpoint_map_phys_t* cpm, uint64_t oid)
 	for (k = 0; k < cnt; k++)
 	{
 		if (cpm->cpm_map[k].cpm_oid == oid)
-			return cpm->cpm_map[k].cpm_paddr;
+			return &cpm->cpm_map[k];
 	}
 
-	return 0;
+	return nullptr;
 }
