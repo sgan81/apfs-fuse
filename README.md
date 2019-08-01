@@ -36,10 +36,10 @@ Development tools:
 * gcc-c++ (or clang++)
 * git (for cloning)
 
-Example for Linux:
+Example for Debian based Linux:
 ```
 sudo apt update
-sudo apt install fuse libfuse-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev
+sudo apt install fuse libfuse-dev libfuse3-dev bzip2 libbz2-dev cmake gcc g++ git libattr1-dev
 ```
 Clone the repository:
 ```
