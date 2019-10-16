@@ -28,18 +28,20 @@ The following libraries are needed (including the -dev/-devel packages):
 
 * FUSE 2.6 or greater (on 32-bit systems, FUSE 3.0 or greater)
 * zlib
+  (`zlib1g-dev` or old name: `libz-dev`)
 * bzip2
 * libattr (on some Linux distributions)
 
 Development tools:
 * cmake
-* gcc-c++ (or clang++)
-* git (for cloning)
+* gcc (`g++`) or LLVM/Clang (`clang++`)
+* git (for cloning/download)
 
-Example for Linux:
+#### Example for Linux:
+
 ```
 sudo apt update
-sudo apt install fuse libfuse-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev
+sudo apt install gcc cmake  bzip2 zlib1g-dev libbz2-dev  fuse libfuse-dev libattr1-dev
 ```
 Clone the repository:
 ```
