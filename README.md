@@ -28,18 +28,24 @@ The following libraries are needed (including the -dev/-devel packages):
 
 * FUSE 2.6 or greater (on 32-bit systems, FUSE 3.0 or greater)
 * zlib
+  (`zlib1g-dev` or old name: `libz-dev`)
 * bzip2
 * libattr (on some Linux distributions)
 
 Development tools:
-* cmake
-* gcc-c++ (or clang++)
-* git (for cloning)
+* cmake, ccmake
+* gcc (`g++`) or LLVM/Clang (`clang++`)
+* git (for cloning/download)
 
-Example for Linux:
+#### Example for Linux:
+
 ```
 sudo apt update
-sudo apt install fuse libfuse-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev
+sudo apt install  gcc cmake ccmakeryan@ADATA-PC:~/apfs-fuse/build$ ccmake .
+
+Command 'ccmake' not found, but can be installed with:
+
+sudo apt install cmake-curses-gui git  bzip2 zlib1g-dev libbz2-dev  fuse libfuse-dev libattr1-dev
 ```
 Clone the repository:
 ```
@@ -58,7 +64,7 @@ cmake ..
 ccmake . # Only if you want to change build options
 make
 ```
-After compilation, the binaries are located in `bin`.
+After compilation, the binaries are located in the current directory (build).
 
 Note that the driver uses FUSE 3.0 by default (required on 32-bit systems). If
 you want do compile using FUSE 2.6, use `ccmake .` to change the option
