@@ -33,7 +33,7 @@ The following libraries are needed (including the -dev/-devel packages):
 * libattr (on some Linux distributions)
 
 Development tools:
-* cmake
+* cmake, ccmake
 * gcc (`g++`) or LLVM/Clang (`clang++`)
 * git (for cloning/download)
 
@@ -41,7 +41,11 @@ Development tools:
 
 ```
 sudo apt update
-sudo apt install  gcc cmake git  bzip2 zlib1g-dev libbz2-dev  fuse libfuse-dev libattr1-dev
+sudo apt install  gcc cmake ccmakeryan@ADATA-PC:~/apfs-fuse/build$ ccmake .
+
+Command 'ccmake' not found, but can be installed with:
+
+sudo apt install cmake-curses-gui git  bzip2 zlib1g-dev libbz2-dev  fuse libfuse-dev libattr1-dev
 ```
 Clone the repository:
 ```
