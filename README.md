@@ -41,7 +41,7 @@ Development tools:
 
 ```
 sudo apt update
-sudo apt install gcc cmake  bzip2 zlib1g-dev libbz2-dev  fuse libfuse-dev libattr1-dev
+sudo apt install  gcc cmake git  bzip2 zlib1g-dev libbz2-dev  fuse libfuse-dev libattr1-dev
 ```
 Clone the repository:
 ```
