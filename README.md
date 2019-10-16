@@ -64,7 +64,7 @@ cmake ..
 ccmake . # Only if you want to change build options
 make
 ```
-After compilation, the binaries are located in `bin`.
+After compilation, the binaries are located in the current directory (build).
 
 Note that the driver uses FUSE 3.0 by default (required on 32-bit systems). If
 you want do compile using FUSE 2.6, use `ccmake .` to change the option
