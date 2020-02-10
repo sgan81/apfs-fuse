@@ -39,7 +39,7 @@ Development tools:
 Example for Linux:
 ```
 sudo apt update
-sudo apt install fuse libfuse-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev
+sudo apt install fuse libfuse-dev bzip2 libbz2-dev zlib1g-dev cmake gcc-c++ git libattr1-dev
 ```
 Clone the repository:
 ```
