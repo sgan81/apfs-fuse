@@ -1,10 +1,8 @@
 
 # APFS FUSE Driver for Linux
 
-This project is a read-only FUSE driver for the new Apple File System. Since Apple didn't yet document
-the disk format of APFS, this driver should be considered experimental. It may not be able to read all
-files, it may return wrong data, or it may simply crash. Use at your own risk. But since it's read-only,
-at least the data on your apfs drive should be safe.
+This project is a read-only FUSE driver for the new Apple File System. It also supports software
+encrypted volumes and fusion drives. Firmlinks are not supported yet.
 
 Be aware that not all compression methods are supported yet (only the ones I have encountered so far).
 Thus, the driver may return compressed files instead of uncompressed ones. Although most of the time it
@@ -39,8 +37,10 @@ Development tools:
 Example for Linux:
 ```
 sudo apt update
-sudo apt install fuse libfuse-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev
+sudo apt install fuse libfuse3-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev zlib1g-dev
 ```
+Of course these commands depend on the Linux distribution.
+
 Clone the repository:
 ```
 git clone https://github.com/sgan81/apfs-fuse.git
