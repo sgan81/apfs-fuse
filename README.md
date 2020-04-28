@@ -58,7 +58,6 @@ cmake ..
 ccmake . # Only if you want to change build options
 make
 ```
-After compilation, the binaries are located in `bin`.
 
 Note that the driver uses FUSE 3.0 by default (required on 32-bit systems). If
 you want do compile using FUSE 2.6, use `ccmake .` to change the option
@@ -73,7 +72,7 @@ apfs-fuse <device> <mount-directory>
 * `-f device`: Specify secondary device for Fusion drive.
 * `-o opts`: Comma-separated list of mount options.
 * `-l`: Lax mode: when unexpected data is encountered, try to continue, even if this means
-  data returning potentially incorrect data.
+  returning potentially incorrect data.
 * `-v n`: Instead of mounting the first volume in a container, mount volume n (starting at 0).
 * `-r recovery_key`: Mount an encrypted volume by supplying a password or Personal Recovery Key (PRK).
 * `-s n`: Find the container at offset n inside the device. This is useful when using an image file
@@ -113,7 +112,7 @@ In addition to the mount options supported by fuse, the following mount options 
 * pass=...: Specify volume passphrase (same as -r).
 
 The blksize parameter is required for proper partition table parsing on some newer
-macs.
+macs. However the current driver should be able to detect the block size automatically.
 
 If you mount a volume as root and want some user to be able to access it, use:
 ```
@@ -142,7 +141,7 @@ The following features are implemented:
 * Symlinks
 * Hardlinks (it seems ...)
 * Extended attributes
-* Encryption (at least full-disk encryption)
+* Software encryption (at least full-disk encryption)
 * Automatic detection of GPT partition tables
 * Direct mounting of DMG images (supports zlib/adc compression and encryption)
 
@@ -151,7 +150,7 @@ These things are not supported (yet):
 
 * Transparent decompression of LZFSE
 * Writing
-* Mounting of hardware-encrypted volumes (internal drives of MacBook Pro's with T2 chip)
+* Hardware-encrypted volumes (internal drives of Macs with T2 chip)
 
 ## Debugging
 
