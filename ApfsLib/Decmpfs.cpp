@@ -162,7 +162,10 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 
 				if (src[0] == 0x78)
 				{
-					decoded_bytes = DecompressZLib(dst, 0x10000, src, src_len);
+#ifdef DEBUG
+					assert(src_len <= UINT_MAX);
+#endif
+					decoded_bytes = DecompressZLib(dst, 0x10000, src, (unsigned int)src_len);
 				}
 				else if ((src[0] & 0x0F) == 0x0F)
 				{
@@ -236,7 +239,11 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		{
 			if (cdata[0] == 0x78)
 			{
-				decoded_bytes = DecompressZLib(decompressed.data(), decompressed.size(), cdata, csize);
+#ifdef DEBUG
+				assert(decompressed.size() <= UINT_MAX);
+				assert(csize <= UINT_MAX);
+#endif
+				decoded_bytes = DecompressZLib(decompressed.data(), (unsigned int)decompressed.size(), cdata, (unsigned int)csize);
 			}
 			else if (cdata[0] == 0xFF) // cdata[0] & 0x0F == 0x0F ?
 			{

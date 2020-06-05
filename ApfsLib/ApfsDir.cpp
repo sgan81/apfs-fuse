@@ -627,7 +627,7 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 		return false;
 
 	skey->hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_XATTR, inode);
-	skey->name_len = static_cast<int16_t>(name_len);
+	skey->name_len = static_cast<uint16_t>(name_len); // safe cast : name_len is >= 0 && <= 0x400
 	memcpy(skey->name, name, skey->name_len);
 
 	rc = m_bt.Lookup(res, skey, sizeof(j_xattr_key_t) + skey->name_len, CompareStdDirKey, this, true);
@@ -693,7 +693,7 @@ bool ApfsDir::GetAttributeInfo(ApfsDir::XAttr& attr, uint64_t inode, const char*
 		return false;
 
 	skey->hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_XATTR, inode);
-	skey->name_len = static_cast<int16_t>(name_len);
+	skey->name_len = static_cast<uint16_t>(name_len); // safe cast : name_len is >= 0 && <= 0x400
 	memcpy(skey->name, name, skey->name_len);
 
 	rc = m_bt.Lookup(res, skey, sizeof(j_xattr_key_t) + skey->name_len, CompareStdDirKey, this, true);

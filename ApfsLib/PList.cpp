@@ -336,11 +336,11 @@ void PListXmlParser::Base64Decode(std::vector<uint8_t>& bin, const char * str, s
 		ch = str[ip];
 
 		if (ch >= 'A' && ch <= 'Z')
-			dec = ch - 'A';
+			dec = (unsigned char)ch - 'A'; // safe cast, we know that ch >= 'A'
 		else if (ch >= 'a' && ch <= 'z')
-			dec = ch - 'a' + 0x1A;
+			dec = (unsigned char)ch - 'a' + 0x1A; // safe cast, we know that ch >= 'a'
 		else if (ch >= '0' && ch <= '9')
-			dec = ch - '0' + 0x34;
+			dec = (unsigned char)ch - '0' + 0x34; // safe cast, we know that ch >= '0'
 		else if (ch == '+')
 			dec = 0x3E;
 		else if (ch == '/')

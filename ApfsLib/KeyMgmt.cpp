@@ -175,7 +175,10 @@ bool KeyParser::GetTagAndLen(uint8_t & tag, size_t & len)
 void KeyParser::GetRemaining(bagdata_t &data)
 {
 	data.data = m_ptr;
-	data.size = m_end - m_ptr;
+#ifdef DEBUG
+	assert(m_ptr >= m_end);
+#endif
+	data.size = (size_t)(m_end - m_ptr);
 }
 
 Keybag::Keybag()
@@ -229,7 +232,7 @@ const keybag_entry_t * Keybag::GetKey(size_t nr)
 	{
 		kb = reinterpret_cast<const keybag_entry_t *>(ptr);
 
-		len = (kb->ke_keylen + sizeof(keybag_entry_t) + 0x0F) & ~0xF;
+		len = (kb->ke_keylen + sizeof(keybag_entry_t) + 0x0F) & ~0xFU;
 		ptr += len;
 	}
 
@@ -257,7 +260,7 @@ const keybag_entry_t * Keybag::FindKey(const apfs_uuid_t & uuid, uint16_t type)
 		if (memcmp(uuid, kb->ke_uuid, sizeof(apfs_uuid_t)) == 0 && kb->ke_tag == type)
 			return kb;
 
-		len = (kb->ke_keylen + sizeof(keybag_entry_t) + 0x0F) & ~0xF;
+		len = (kb->ke_keylen + sizeof(keybag_entry_t) + 0x0F) & ~0xFU;
 		ptr += len;
 	}
 
@@ -598,8 +601,8 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	const keybag_entry_t *ke_vek;
 	bagdata_t bd;
 
-	int cnt = recs_bag.GetKeyCnt();
-	int k;
+	auto cnt = recs_bag.GetKeyCnt();
+	decltype(cnt) k;
 
 	// Check all KEKs for any valid KEK.
 	for (k = 0; k < cnt; k++)
@@ -619,8 +622,10 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 
 		if (!DecodeKEKBlob(kek_blob, kek_data))
 			continue;
-
-		PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(password), strlen(password), kek_blob.salt, sizeof(kek_blob.salt), kek_blob.iterations, dk, sizeof(dk));
+#ifdef DEBUG
+		assert(kek_blob.iterations <= INT_MAX);
+#endif
+		PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(password), strlen(password), kek_blob.salt, sizeof(kek_blob.salt), int(kek_blob.iterations), dk, sizeof(dk));
 
 		switch (kek_blob.unk_82.unk_00)
 		{
@@ -634,6 +639,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		default:
 			std::cerr << "Unknown KEK key flags 82/00 = " << std::hex << kek_blob.unk_82.unk_00 << ". Please file a bug report." << std::endl;
 			rc = false;
+			iv = 0; // to silence warning about iv being used uninitialized.
 			break;
 		}
 
@@ -702,6 +708,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		// Unknown method.
 		std::cerr << "Unknown VEK key flags 82/00 = " << std::hex << vek_blob.unk_82.unk_00 << ". Please file a bug report." << std::endl;
 		rc = false;
+		iv = 0; // to silence the uninitialized warning
 	}
 
 	if (g_debug & Dbg_Crypto)

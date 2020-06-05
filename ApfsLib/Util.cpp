@@ -390,7 +390,7 @@ bool GetPassword(std::string &pw)
 	if (tcgetattr (fileno (stream), &told) != 0)
 		return false;
 	tnew = told;
-	tnew.c_lflag &= ~ECHO;
+	tnew.c_lflag &= ~((unsigned long)ECHO);
 	if (tcsetattr (fileno (stream), TCSAFLUSH, &tnew) != 0)
 		return false;
 
@@ -411,7 +411,7 @@ bool GetPassword(std::string &pw)
 #endif
 }
 
-size_t DecompressZLib(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size)
+size_t DecompressZLib(uint8_t *dst, unsigned int dst_size, const uint8_t *src, unsigned int src_size) // zstream can't take more than unsigned int for src and dst size
 {
 	// size_t nwr = 0;
 	int ret;
@@ -453,7 +453,7 @@ size_t DecompressADC(uint8_t * dst, size_t dst_size, const uint8_t * src, size_t
 	size_t out_idx = 0;
 	uint8_t ctl;
 	int len;
-	int dist;
+	uint16_t dist;
 	int cnt;
 
 	for (;;)
@@ -519,7 +519,7 @@ size_t DecompressLZVN(uint8_t * dst, size_t dst_size, const uint8_t * src, size_
 	return static_cast<size_t>(state.dst - dst);
 }
 
-size_t DecompressBZ2(uint8_t * dst, size_t dst_size, const uint8_t * src, size_t src_size)
+size_t DecompressBZ2(uint8_t * dst, unsigned int dst_size, const uint8_t * src, unsigned int src_size) // zstream can't take more than unsigned int for src and dst size
 {
 	bz_stream strm;
 

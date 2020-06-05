@@ -321,7 +321,7 @@ void BTree::dump(BlockDumper& out)
 
 void BTree::DumpTreeInternal(BlockDumper& out, const std::shared_ptr<BTreeNode> &node)
 {
-	size_t k;
+	uint32_t k;
 	size_t cnt;
 	BTreeEntry e;
 	std::shared_ptr<BTreeNode> child;
@@ -491,7 +491,7 @@ int BTree::FindBin(const std::shared_ptr<BTreeNode>& node, const void* key, size
 	int res;
 
 	BTreeEntry e;
-	int rc;
+	int rc = -1; // to silence warning about ch being used uninitialized.
 
 	if (cnt <= 0)
 		return -1;
