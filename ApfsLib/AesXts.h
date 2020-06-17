@@ -18,8 +18,8 @@ public:
 	void Decrypt(uint8_t *plain, const uint8_t *cipher, size_t size, uint64_t unit_no);
 
 private:
-	void Xor(uint8_t *out, const uint8_t *op1, const uint8_t *op2);
-	void MultiplyTweak(uint8_t *tweak);
+	void Xor128(void *out, const void *op1, const void *op2);
+	void MultiplyTweak(uint64_t *tweak);
 
 	AES m_aes_1;
 	AES m_aes_2;
