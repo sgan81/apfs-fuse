@@ -69,6 +69,7 @@ static ApfsVolume *g_volume = nullptr;
 static unsigned int g_vol_id = 0;
 static uid_t g_uid = 0;
 static gid_t g_gid = 0;
+static xid_t g_xid = 0;
 static bool g_set_uid = false;
 static bool g_set_gid = false;
 static int g_physblksize = 512;
@@ -647,6 +648,7 @@ void usage(const char *name)
 	std::cout << "blksize=N     : Set physical block size. Only needed if a partition table needs" << std::endl;
 	std::cout << "                to be parsed and the sector size is not 512 bytes." << std::endl;
 	std::cout << "pass=...      : Specify volume passphrase (same as -r)." << std::endl;
+	std::cout << "xid=...       : Mount specific xid." << std::endl;
 	std::cout << std::endl;
 }
 
@@ -672,21 +674,25 @@ static int apfs_parse_fuse_opt(void *data, const char *arg, int key, struct fuse
 			g_set_uid = true;
 			return 0;
 		}
-		if (!strncmp(arg, "gid=", 4)) {
+		else if (!strncmp(arg, "gid=", 4)) {
 			g_gid = strtol(strchr(arg, '=') + sizeof(char), nullptr, 10);
 			g_set_gid = true;
 			return 0;
 		}
-		if (!strncmp(arg, "vol=", 4)) {
+		else if (!strncmp(arg, "vol=", 4)) {
 			g_vol_id = strtoul(strchr(arg, '=') + sizeof(char), nullptr, 10);
 			return 0;
 		}
-		if (!strncmp(arg, "blksize=", 8)) {
+		else if (!strncmp(arg, "blksize=", 8)) {
 			g_physblksize = strtoul(strchr(arg, '=') + sizeof(char), nullptr, 10);
 			return 0;
 		}
-		if (!strncmp(arg, "pass=", 5)) {
+		else if (!strncmp(arg, "pass=", 5)) {
 			g_password = strchr(arg, '=') + sizeof(char);
+			return 0;
+		}
+		else if (!strncmp(arg, "xid=", 4)) {
+			g_xid = strtoul(strchr(arg, '=') + sizeof(char), nullptr, 10);
 			return 0;
 		}
 	}
@@ -712,11 +718,6 @@ int main(int argc, char *argv[])
 	uint64_t tier2_offset = 0;
 	uint64_t tier2_size = 0;
 	int partition_id = -1;
-
-	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/ios_11_0_1.img";
-	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/apfs_2vol_test_rw.dmg";
-	// static const char *dev_path = "/dev/sdd2";
-	// static const char *dev_path = "/mnt/data/Projekte/VS17/Apfs/Data/apfs_clone_test.img";
 
 	memset(&ops, 0, sizeof(ops));
 
@@ -877,7 +878,7 @@ int main(int argc, char *argv[])
 	}
 
 	g_container = new ApfsContainer(g_disk_main, main_offset, main_size, g_disk_tier2, tier2_offset, tier2_size);
-	if (!g_container->Init())
+	if (!g_container->Init(g_xid))
 	{
 		std::cerr << "Unable to load container." << std::endl;
 		delete g_container;

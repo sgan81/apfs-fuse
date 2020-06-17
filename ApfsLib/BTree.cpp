@@ -410,6 +410,8 @@ std::shared_ptr<BTreeNode> BTree::GetNode(oid_t oid, const std::shared_ptr<BTree
 			if (!VerifyBlock(blk.data(), blk.size()))
 			{
 				std::cerr << "ERROR: GetNode: VerifyBlock failed!" << std::endl;
+				if (g_debug & Dbg_Errors)
+					DumpHex(std::cerr, blk.data(), blk.size());
 				return node;
 			}
 		}

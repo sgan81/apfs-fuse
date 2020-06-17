@@ -51,7 +51,7 @@ ApfsContainer::~ApfsContainer()
 {
 }
 
-bool ApfsContainer::Init()
+bool ApfsContainer::Init(xid_t req_xid)
 {
 	std::vector<uint8_t> blk;
 
@@ -82,7 +82,7 @@ bool ApfsContainer::Init()
 
 	memcpy(&m_nx, blk.data(), sizeof(nx_superblock_t));
 
-#if 1 // Scan container for most recent superblock (might fix segfaults)
+	// Scan container for most recent superblock (might fix segfaults)
 	uint64_t max_xid = 0;
 	paddr_t max_paddr = 0;
 	paddr_t paddr;
@@ -102,23 +102,35 @@ bool ApfsContainer::Init()
 		if ((sb->nx_o.o_type & OBJECT_TYPE_MASK) != OBJECT_TYPE_NX_SUPERBLOCK)
 			continue;
 
-		if (sb->nx_o.o_xid > max_xid)
-		{
-			max_xid = sb->nx_o.o_xid;
-			max_paddr = paddr;
+		if (req_xid) {
+			if (req_xid == sb->nx_o.o_xid) {
+				max_xid = req_xid;
+				max_paddr = paddr;
+				break;
+			}
+		} else {
+			if (sb->nx_o.o_xid > max_xid)
+			{
+				max_xid = sb->nx_o.o_xid;
+				max_paddr = paddr;
+			}
 		}
 	}
 
-	if (max_xid > m_nx.nx_o.o_xid)
+	if (max_paddr)
 	{
-		if (g_debug & Dbg_Errors)
-			std::cout << "Found more recent xid " << max_xid << " than superblock 0 contained (" << m_nx.nx_o.o_xid << ")." << std::endl;
+		// if (g_debug & Dbg_Errors)
+		//	std::cout << "Found more recent xid " << max_xid << " than superblock 0 contained (" << m_nx.nx_o.o_xid << ")." << std::endl;
+		if (g_debug & Dbg_Info)
+			std::cout << "Mounting xid different from NXSB at 0 (xid = " << m_nx.nx_o.o_xid << "). xid = " << max_xid << std::endl;
 
 		ReadBlocks(tmp.data(), max_paddr, 1);
 
 		memcpy(&m_nx, tmp.data(), sizeof(nx_superblock_t));
 	}
-#endif
+
+	if (g_debug & Dbg_Info)
+		std::cout << "Mounting xid " << m_nx.nx_o.o_xid.get() << std::endl;
 
 	if ((m_nx.nx_incompatible_features & NX_INCOMPAT_FUSION) && !m_tier2_disk)
 	{
@@ -298,8 +310,13 @@ bool ApfsContainer::ReadAndVerifyHeaderBlock(uint8_t * data, paddr_t paddr) cons
 	if (!ReadBlocks(data, paddr))
 		return false;
 
-	if (!VerifyBlock(data, m_nx.nx_block_size))
+	if (!VerifyBlock(data, m_nx.nx_block_size)) {
+		if (g_debug & Dbg_Errors) {
+			std::cerr << "ReadAndVerifyHeaderBlock checksum error." << std::endl;
+			DumpHex(std::cerr, data, m_nx.nx_block_size);
+		}
 		return false;
+	}
 
 	return true;
 }
@@ -396,7 +413,7 @@ void ApfsContainer::dump(BlockDumper& bd)
 	uint64_t oid;
 	size_t k;
 
-	for (size_t k = 0; k < m_sm->sm_ip_bm_block_count; k++)
+	for (k = 0; k < m_sm->sm_ip_bm_block_count; k++)
 	{
 		oid = m_sm->sm_ip_bm_base + k;
 

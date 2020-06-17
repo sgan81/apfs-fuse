@@ -403,8 +403,6 @@ int main(int argc, const char *argv[])
 		}
 	}
 
-	printf("main: %s\n", name_dev_main);
-
 	if ((name_output == 0) || (use_fusion && name_dev_tier2 == 0))
 	{
 		usage();
