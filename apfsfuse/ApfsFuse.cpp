@@ -74,6 +74,7 @@ static bool g_set_uid = false;
 static bool g_set_gid = false;
 static int g_physblksize = 512;
 static std::string g_password;
+static xid_t g_snap_xid = 0;
 
 struct Directory
 {
@@ -692,7 +693,11 @@ static int apfs_parse_fuse_opt(void *data, const char *arg, int key, struct fuse
 			return 0;
 		}
 		else if (!strncmp(arg, "xid=", 4)) {
-			g_xid = strtoul(strchr(arg, '=') + sizeof(char), nullptr, 10);
+			g_xid = strtoull(strchr(arg, '=') + sizeof(char), nullptr, 10);
+			return 0;
+		}
+		else if (!strncmp(arg, "snap=", 5)) {
+			g_snap_xid = strtoull(strchr(arg, '=') + sizeof(char), nullptr, 10);
 			return 0;
 		}
 	}
@@ -886,7 +891,7 @@ int main(int argc, char *argv[])
 		delete g_disk_main;
 		return EINVAL;
 	}
-	g_volume = g_container->GetVolume(g_vol_id, g_password);
+	g_volume = g_container->GetVolume(g_vol_id, g_password, g_snap_xid);
 	if (!g_volume)
 	{
 		std::cerr << "Unable to get volume!" << std::endl;

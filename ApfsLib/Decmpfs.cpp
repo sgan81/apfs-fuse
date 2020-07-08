@@ -31,22 +31,22 @@
 
 struct RsrcForkHeader
 {
-	be<uint32_t> data_offset;
-	be<uint32_t> mgmt_offset;
-	be<uint32_t> data_size;
-	be<uint32_t> mgmt_size;
+	be_uint32_t data_offset;
+	be_uint32_t mgmt_offset;
+	be_uint32_t data_size;
+	be_uint32_t mgmt_size;
 };
 
 struct CmpfRsrcEntry
 {
 	// 1 64K-Block
-	le<uint32_t> off;
-	le<uint32_t> size;
+	le_uint32_t off;
+	le_uint32_t size;
 };
 
 struct CmpfRsrc
 {
-	le<uint32_t> entries;
+	le_uint32_t entries;
 	CmpfRsrcEntry entry[32];
 };
 

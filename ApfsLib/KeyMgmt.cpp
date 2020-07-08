@@ -332,7 +332,10 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 		/* Skip the ke->_padding_ */
 
 		// DumpHex(st, kd.data.data, kd.data.size);
+#ifdef DUMP_RAW_KEYS
+		DumpHex(st, ke->ke_keydata, ke->ke_keylen);
 		st << endl;
+#endif
 
 		if (!cbag)
 		{

@@ -16,38 +16,38 @@
 struct DmgCryptHeaderV1
 {
 	uint8_t uuid[0x10];
-	be<uint32_t> block_size;
-	be<uint32_t> unk_14;
-	be<uint32_t> unk_18;
-	be<uint32_t> unk_1C;
-	be<uint32_t> unk_20;
-	be<uint32_t> unk_24;
-	be<uint32_t> kdf_algorithm;
-	be<uint32_t> kdf_prng_algorithm;
-	be<uint32_t> kdf_iteration_count;
-	be<uint32_t> kdf_salt_len;
+	be_uint32_t block_size;
+	be_uint32_t unk_14;
+	be_uint32_t unk_18;
+	be_uint32_t unk_1C;
+	be_uint32_t unk_20;
+	be_uint32_t unk_24;
+	be_uint32_t kdf_algorithm;
+	be_uint32_t kdf_prng_algorithm;
+	be_uint32_t kdf_iteration_count;
+	be_uint32_t kdf_salt_len;
 	uint8_t kdf_salt[0x20];
-	be<uint32_t> unk_58;
-	be<uint32_t> unk_5C;
-	be<uint32_t> unk_60;
-	be<uint32_t> unk_64;
+	be_uint32_t unk_58;
+	be_uint32_t unk_5C;
+	be_uint32_t unk_60;
+	be_uint32_t unk_64;
 	uint8_t unwrap_iv[0x20];
-	be<uint32_t> wrapped_aes_key_len;
+	be_uint32_t wrapped_aes_key_len;
 	uint8_t wrapped_aes_key[0x100];
-	be<uint32_t> unk_18C;
-	be<uint32_t> unk_190;
+	be_uint32_t unk_18C;
+	be_uint32_t unk_190;
 	uint8_t unk_194[0x20];
-	be<uint32_t> wrapped_hmac_sha1_key_len;
+	be_uint32_t wrapped_hmac_sha1_key_len;
 	uint8_t wrapped_hmac_sha1_key[0x100];
-	be<uint32_t> unk_2B8;
-	be<uint32_t> unk_2BC;
+	be_uint32_t unk_2B8;
+	be_uint32_t unk_2BC;
 	uint8_t unk_2C0[0x20];
-	be<uint32_t> wrapped_integrity_key_len;
+	be_uint32_t wrapped_integrity_key_len;
 	uint8_t wrapped_integrity_key[0x100];
-	be<uint32_t> unk_3E8_len;
+	be_uint32_t unk_3E8_len;
 	uint8_t unk_3E8[0x100];
-	be<uint64_t> decrypted_data_length;
-	be<uint32_t> unk_4F0;
+	be_uint64_t decrypted_data_length;
+	be_uint32_t unk_4F0;
 	char signature[8];
 };
 
@@ -56,41 +56,41 @@ static_assert(sizeof(DmgCryptHeaderV1) == 0x4FC, "DmgCryptHeaderV1 invalid lengt
 struct DmgCryptHeaderV2
 {
 	char signature[8];
-	be<uint32_t> maybe_version;
-	be<uint32_t> unk_0C;
-	be<uint32_t> unk_10;
-	be<uint32_t> unk_14;
-	be<uint32_t> key_bits;
-	be<uint32_t> unk_1C;
-	be<uint32_t> unk_20;
+	be_uint32_t maybe_version;
+	be_uint32_t unk_0C;
+	be_uint32_t unk_10;
+	be_uint32_t unk_14;
+	be_uint32_t key_bits;
+	be_uint32_t unk_1C;
+	be_uint32_t unk_20;
 	uint8_t uuid[0x10];
-	be<uint32_t> block_size;
-	be<uint64_t> encrypted_data_length;
-	be<uint64_t> encrypted_data_offset;
-	be<uint32_t> no_of_keys;
+	be_uint32_t block_size;
+	be_uint64_t encrypted_data_length;
+	be_uint64_t encrypted_data_offset;
+	be_uint32_t no_of_keys;
 };
 
 struct DmgKeyPointer
 {
-	be<uint32_t> key_type;
-	be<uint64_t> key_offset;
-	be<uint64_t> key_length;
+	be_uint32_t key_type;
+	be_uint64_t key_offset;
+	be_uint64_t key_length;
 };
 
 struct DmgKeyData
 {
-	be<uint32_t> kdf_algorithm;
-	be<uint32_t> prng_algorithm;
-	be<uint32_t> iteration_count;
-	be<uint32_t> salt_len;
+	be_uint32_t kdf_algorithm;
+	be_uint32_t prng_algorithm;
+	be_uint32_t iteration_count;
+	be_uint32_t salt_len;
 	uint8_t salt[0x20];
-	be<uint32_t> blob_enc_iv_size;
+	be_uint32_t blob_enc_iv_size;
 	uint8_t blob_enc_iv[0x20];
-	be<uint32_t> blob_enc_key_bits;
-	be<uint32_t> blob_enc_algorithm;
-	be<uint32_t> blob_unk_5C;
-	be<uint32_t> blob_enc_mode;
-	be<uint32_t> encr_key_blob_size;
+	be_uint32_t blob_enc_key_bits;
+	be_uint32_t blob_enc_algorithm;
+	be_uint32_t blob_unk_5C;
+	be_uint32_t blob_enc_mode;
+	be_uint32_t encr_key_blob_size;
 	uint8_t encr_key_blob[0x200];
 };
 

@@ -23,6 +23,8 @@
 
 struct omap_res_t
 {
+	oid_t oid;
+	xid_t xid;
 	uint32_t flags;
 	uint32_t size;
 	paddr_t paddr;

@@ -25,9 +25,9 @@
 
 struct CompressionHeader
 {
-	le<uint32_t> signature;
-	le<uint32_t> algo;
-	le<uint64_t> size;
+	le_uint32_t signature;
+	le_uint32_t algo;
+	le_uint64_t size;
 };
 
 bool IsDecompAlgoSupported(uint16_t algo);

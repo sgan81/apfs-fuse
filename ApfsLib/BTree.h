@@ -1,4 +1,4 @@
-﻿/*
+/*
 	This file is part of apfs-fuse, a read-only implementation of APFS
 	(Apple File System) for FUSE.
 	Copyright (C) 2017 Simon Gander
@@ -82,6 +82,7 @@ public:
 	uint64_t nodeid() const { return m_btn->btn_o.o_oid; }
 	uint32_t entries_cnt() const { return m_btn->btn_nkeys; }
 	uint16_t level() const { return m_btn->btn_level; }
+	uint16_t flags() const { return m_btn->btn_flags; }
 	paddr_t paddr() const { return m_paddr; }
 
 	const std::shared_ptr<BTreeNode> &parent() const { return m_parent; }
@@ -151,6 +152,7 @@ public:
 
 	bool Lookup(BTreeEntry &result, const void *key, size_t key_size, BTCompareFunc func, void *context, bool exact);
 	bool GetIterator(BTreeIterator &it, const void *key, size_t key_size, BTCompareFunc func, void *context);
+	bool GetIteratorBegin(BTreeIterator &it);
 
 	uint16_t GetKeyLen() const { return m_treeinfo.bt_fixed.bt_key_size; }
 	uint16_t GetValLen() const { return m_treeinfo.bt_fixed.bt_val_size; }
@@ -174,7 +176,8 @@ private:
 
 	btree_info_t m_treeinfo;
 
-	uint64_t m_xid;
+	oid_t m_oid;
+	xid_t m_xid;
 	bool m_debug;
 
 #ifdef BTREE_USE_MAP
@@ -191,6 +194,7 @@ public:
 	~BTreeIterator();
 
 	bool next();
+	void reset();
 
 	bool GetEntry(BTreeEntry &res) const;
 

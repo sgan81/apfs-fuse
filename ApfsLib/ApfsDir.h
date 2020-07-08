@@ -134,9 +134,10 @@ public:
 
 private:
 	static int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context);
+	static int CompareFextKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context);
 
 	ApfsVolume &m_vol;
-	BTree &m_bt;
+	BTree &m_fs_tree;
 	uint32_t m_txt_fmt;
 	uint32_t m_blksize;
 	uint64_t m_blksize_mask_hi;

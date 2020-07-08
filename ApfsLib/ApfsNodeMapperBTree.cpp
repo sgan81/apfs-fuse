@@ -92,7 +92,7 @@ bool ApfsNodeMapperBTree::Lookup(omap_res_t &omr, oid_t oid, xid_t xid)
 	key.ok_oid = oid;
 	key.ok_xid = xid;
 
-	// std::cout << std::hex << "GetBlockID: nodeid = " << nodeid << ", version = " << version << " => blockid = ";
+	// std::cout << std::hex << "Omap Lookup: oid = " << oid << ", xid = " << xid << " => ";
 
 	if (!m_tree.Lookup(res, &key, sizeof(key), CompareOMapKey, this, false))
 	{
@@ -106,6 +106,11 @@ bool ApfsNodeMapperBTree::Lookup(omap_res_t &omr, oid_t oid, xid_t xid)
 	res_key = reinterpret_cast<const omap_key_t *>(res.key);
 	res_val = reinterpret_cast<const omap_val_t *>(res.val);
 
+	if (g_debug & Dbg_Info) {
+		std::cout << std::hex << "Omap Lookup: oid=" << oid << " xid=" << xid << ": ";
+		std::cout << "oid=" << res_key->ok_oid << " xid=" << res_key->ok_xid << " => flags=" << res_val->ov_flags << " size=" << res_val->ov_size << " paddr=" << res_val->ov_paddr << std::endl;
+	}
+
 	if (key.ok_oid != res_key->ok_oid)
 	{
 		// std::cout << "NOT FOUND" << std::endl;
@@ -115,6 +120,8 @@ bool ApfsNodeMapperBTree::Lookup(omap_res_t &omr, oid_t oid, xid_t xid)
 
 	// std::cout << val->blockid << std::endl;
 
+	omr.oid = res_key->ok_oid;
+	omr.xid = res_key->ok_xid;
 	omr.flags = res_val->ov_flags;
 	omr.size = res_val->ov_size;
 	omr.paddr = res_val->ov_paddr;

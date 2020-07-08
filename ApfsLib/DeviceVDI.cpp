@@ -4,34 +4,34 @@
 
 struct VdiDiskGeometry
 {
-	le<uint32_t> cylinders;
-	le<uint32_t> heads;
-	le<uint32_t> sectors;
-	le<uint32_t> sector_size;
+	le_uint32_t cylinders;
+	le_uint32_t heads;
+	le_uint32_t sectors;
+	le_uint32_t sector_size;
 };
 
 struct VdiPreHeader
 {
 	char file_info[0x40];
-	le<uint32_t> signature; // 0xBEDA107F
-	le<uint32_t> version; // 0x00010001
+	le_uint32_t signature; // 0xBEDA107F
+	le_uint32_t version; // 0x00010001
 };
 
 struct VdiHeader1Plus
 {
-	le<uint32_t> struct_size;
-	le<uint32_t> image_type;
-	le<uint32_t> flags;
+	le_uint32_t struct_size;
+	le_uint32_t image_type;
+	le_uint32_t flags;
 	char comment[0x100];
-	le<uint32_t> off_blocks;
-	le<uint32_t> off_data;
+	le_uint32_t off_blocks;
+	le_uint32_t off_data;
 	VdiDiskGeometry legacy_geometry;
-	le<uint32_t> dummy;
-	le<uint64_t> disk_size;
-	le<uint32_t> block_size;
-	le<uint32_t> block_extra;
-	le<uint32_t> blocks_total;
-	le<uint32_t> blocks_allocated;
+	le_uint32_t dummy;
+	le_uint64_t disk_size;
+	le_uint32_t block_size;
+	le_uint32_t block_extra;
+	le_uint32_t blocks_total;
+	le_uint32_t blocks_allocated;
 	char uuid_create[0x10];
 	char uuid_modify[0x10];
 	char uuid_linkage[0x10];

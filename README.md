@@ -12,6 +12,7 @@ should just report an error.
 
 | Date | Comment |
 |------|---------|
+| 2020-07-08 | Added support for mounting snapshots and sealed volumes |
 | 2018-04-20 | Added support for mounting DMGs |
 | 2018-04-14 | Added support for partition tables (GPT only) |
 | 2018-04-10 | Fixed and extended FileVault encryption support |
@@ -110,6 +111,8 @@ In addition to the mount options supported by fuse, the following mount options 
 * vol=n: Same as -v, specify the volume number to mount if you don't want volume 0.
 * blksize=n: Set the physical block size (default: 512 bytes).
 * pass=...: Specify volume passphrase (same as -r).
+* xid=...: Try to mount older XID. May be useful if the container is corrupt.
+* snap=...: Mount snapshot with given XID. Use apfsutil to display snapshot ids.
 
 The blksize parameter is required for proper partition table parsing on some newer
 macs. However the current driver should be able to detect the block size automatically.
@@ -208,4 +211,4 @@ take a very long time to run on big volumes, and create huge log files. So using
 apfsutil <device>
 ```
 This is a new tool that just displays some information from a container. For now, it lists the volumes a container
-contains. This tool might be extended in the future.
+contains, and snapshots if there are some. This tool might be extended in the future.

@@ -19,6 +19,8 @@
 
 #include <cassert>
 #include <cstring>
+#include <cstdio>
+#include <cinttypes>
 
 #include <iostream>
 #include <iomanip>
@@ -82,10 +84,10 @@ BTreeNode::BTreeNode(BTree &tree, const uint8_t *block, size_t blocksize, paddr_
 	assert(m_btn->btn_table_space.off == 0);
 
 	m_keys_start = sizeof(btree_node_phys_t) + m_btn->btn_table_space.len;
-	if (parent)
-		m_vals_start = blocksize;
-	else
+	if (m_btn->btn_flags & BTNODE_ROOT)
 		m_vals_start = blocksize - sizeof(btree_info_t);
+	else
+		m_vals_start = blocksize;
 }
 
 std::shared_ptr<BTreeNode> BTreeNode::CreateNode(BTree & tree, const uint8_t * block, size_t blocksize, paddr_t paddr, const std::shared_ptr<BTreeNode> &parent, uint32_t parent_index)
@@ -185,7 +187,10 @@ bool BTree::Init(oid_t oid_root, xid_t xid, ApfsNodeMapper *omap)
 	std::shared_ptr<BTreeNode> dummy;
 
 	m_omap = omap;
+	m_oid = oid_root;
 	m_xid = xid;
+
+	if (oid_root == 0) return false;
 
 	m_root_node = GetNode(oid_root, dummy, 0);
 
@@ -228,11 +233,17 @@ bool BTree::Lookup(BTreeEntry &result, const void *key, size_t key_size, BTCompa
 			return false;
 
 		node->GetEntry(e, index);
+		// DumpHex(std::cout, reinterpret_cast<const uint8_t*>(e.val), e.val_len, 32);
 
-		assert(e.val_len == sizeof(oid_t));
-
-		oid = *reinterpret_cast<const oid_t *>(e.val);
 		oid_parent = node->nodeid();
+
+		if (node->flags() & BTNODE_HASHED) {
+			const btn_index_node_val_t *binv = reinterpret_cast<const btn_index_node_val_t*>(e.val);
+			oid = binv->binv_child_oid + m_oid;
+		} else {
+			assert(e.val_len == sizeof(oid_t));
+			oid = *reinterpret_cast<const oid_t *>(e.val);
+		}
 
 		node = GetNode(oid, node, index);
 
@@ -277,9 +288,13 @@ bool BTree::GetIterator(BTreeIterator& it, const void* key, size_t key_size, BTC
 
 		node->GetEntry(e, index);
 
-		assert(e.val_len == sizeof(oid_t));
-
-		oid = *reinterpret_cast<const oid_t *>(e.val);
+		if (node->flags() & BTNODE_HASHED) {
+			const btn_index_node_val_t *binv = reinterpret_cast<const btn_index_node_val_t*>(e.val);
+			oid = binv->binv_child_oid + m_oid;
+		} else {
+			assert(e.val_len == sizeof(oid_t));
+			oid = *reinterpret_cast<const oid_t *>(e.val);
+		}
 
 		node = GetNode(oid, node, index);
 	}
@@ -312,6 +327,31 @@ bool BTree::GetIterator(BTreeIterator& it, const void* key, size_t key_size, BTC
 	return true;
 }
 
+bool BTree::GetIteratorBegin(BTreeIterator& it)
+{
+	oid_t oid;
+
+	std::shared_ptr<BTreeNode> node(m_root_node);
+	BTreeEntry e;
+
+	while (node->level() > 0)
+	{
+		if (!node->GetEntry(e, 0))
+			return false;
+
+		if (node->flags() & BTNODE_HASHED) {
+			const btn_index_node_val_t *binv = reinterpret_cast<const btn_index_node_val_t*>(e.val);
+			oid = binv->binv_child_oid + m_oid;
+		} else {
+			oid = *reinterpret_cast<const oid_t *>(e.val);
+		}
+		node = GetNode(oid, node, 0);
+	}
+
+	it.Setup(this, node, 0);
+
+	return true;
+}
 
 void BTree::dump(BlockDumper& out)
 {
@@ -341,11 +381,30 @@ void BTree::DumpTreeInternal(BlockDumper& out, const std::shared_ptr<BTreeNode> 
 		{
 			node->GetEntry(e, k);
 
+			/*
 			if (e.val_len != sizeof(uint64_t))
 				continue; // assert ...
+				*/
 
 			oid_parent = node->nodeid();
-			oid_child = *reinterpret_cast<const uint64_t *>(e.val);
+
+			if (node->flags() & BTNODE_HASHED) {
+				const btn_index_node_val_t *binv = reinterpret_cast<const btn_index_node_val_t *>(e.val);
+				oid_child = binv->binv_child_oid + m_oid;
+			} else {
+				oid_child = *reinterpret_cast<const uint64_t *>(e.val);
+			}
+
+			if (m_omap) {
+				omap_res_t omr;
+				m_omap->Lookup(omr, oid_child, m_xid);
+				out.st() << "omap: " << omr.oid << " " << omr.xid << " => " << omr.flags << " " << omr.size << " " << omr.paddr << std::endl;
+
+				if (omr.flags & OMAP_VAL_DELETED) {
+					out.st() << "Omap val " << oid_child << " deleted." << std::endl;
+					continue;
+				}
+			}
 
 			child = GetNode(oid_child, node, k);
 
@@ -361,6 +420,8 @@ std::shared_ptr<BTreeNode> BTree::GetNode(oid_t oid, const std::shared_ptr<BTree
 {
 	std::shared_ptr<BTreeNode> node;
 
+	// printf("GetNode oid=%" PRIx64 "\n", oid);
+
 #ifdef BTREE_USE_MAP
 	m_mutex.lock();
 	auto it = m_nodes.find(oid);
@@ -375,6 +436,8 @@ std::shared_ptr<BTreeNode> BTree::GetNode(oid_t oid, const std::shared_ptr<BTree
 	{
 		omap_res_t omr;
 
+		omr.oid = oid;
+		omr.xid = m_xid;
 		omr.flags = 0;
 		omr.size = m_treeinfo.bt_fixed.bt_node_size;
 		omr.paddr = oid;
@@ -383,6 +446,10 @@ std::shared_ptr<BTreeNode> BTree::GetNode(oid_t oid, const std::shared_ptr<BTree
 
 		if (m_omap)
 		{
+			if (g_debug & Dbg_Info) {
+				std::cout << "omap: oid=" << omr.oid << " xid=" << omr.xid << " flags=" << omr.flags << " size=" << omr.size << " paddr=" << omr.paddr << std::endl;
+			}
+
 			if (!m_omap->Lookup(omr, oid, m_xid))
 			{
 				std::cerr << "ERROR: GetNode: omap entry oid " << std::hex << oid << " xid " << m_xid << " not found." << std::endl;
@@ -407,12 +474,20 @@ std::shared_ptr<BTreeNode> BTree::GetNode(oid_t oid, const std::shared_ptr<BTree
 				return node;
 			}
 
-			if (!VerifyBlock(blk.data(), blk.size()))
-			{
-				std::cerr << "ERROR: GetNode: VerifyBlock failed!" << std::endl;
-				if (g_debug & Dbg_Errors)
-					DumpHex(std::cerr, blk.data(), blk.size());
-				return node;
+			if (!(omr.flags & OMAP_VAL_NOHEADER)) {
+				if (!VerifyBlock(blk.data(), blk.size()))
+				{
+					std::cerr << "ERROR: GetNode: VerifyBlock failed!" << std::endl;
+					if (g_debug & Dbg_Errors)
+						DumpHex(std::cerr, blk.data(), blk.size());
+					return node;
+				}
+			} else {
+				/*
+				std::cout << "BTNode @ " << omr.paddr << ":" << std::endl;
+				DumpHex(std::cout, blk.data(), blk.size());
+				std::cout << std::endl;
+				*/
 			}
 		}
 		else
@@ -613,6 +688,13 @@ bool BTreeIterator::next()
 	return false;
 }
 
+void BTreeIterator::reset()
+{
+	m_tree = nullptr;
+	m_node.reset();
+	m_index = 0;
+}
+
 bool BTreeIterator::GetEntry(BTreeEntry& res) const
 {
 	if (!m_node)
@@ -651,10 +733,14 @@ std::shared_ptr<BTreeNode> BTreeIterator::next_node()
 
 	while (node->level() > 0) {
 		node->GetEntry(e, pidx);
-		assert(e.val_len == sizeof(oid_t));
-		if (e.val_len != sizeof(oid_t))
-			std::cerr << "BTreeIterator next_node val_len != sizeof(oid_t)" << std::endl;
-		oid = *reinterpret_cast<const le<oid_t>*>(e.val);
+
+		if (node->flags() & BTNODE_HASHED) {
+			const btn_index_node_val_t *binv = reinterpret_cast<const btn_index_node_val_t *>(e.val);
+			oid = binv->binv_child_oid + m_tree->m_oid;
+		} else {
+			oid = *reinterpret_cast<const uint64_t *>(e.val);
+		}
+
 #ifdef BTITDBG
 		std::cout << "  Navigating down to node " << oid << std::endl;
 #endif

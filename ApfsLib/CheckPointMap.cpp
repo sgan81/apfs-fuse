@@ -66,6 +66,8 @@ bool CheckPointMap::Lookup(omap_res_t & res, oid_t oid, xid_t xid)
 		{
 			if (oid == cpm->cpm_map[k].cpm_oid)
 			{
+				res.oid = cpm->cpm_map[k].cpm_oid;
+				res.xid = cpm->cpm_o.o_xid;
 				res.flags = 0;
 				res.size = cpm->cpm_map[k].cpm_size;
 				res.paddr = cpm->cpm_map[k].cpm_paddr;

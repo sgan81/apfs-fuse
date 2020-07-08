@@ -17,16 +17,20 @@ static void print_apfs_uuid(const apfs_uuid_t &uuid)
 static void print_role(uint16_t role)
 {
 	static const char *rolestr[] = {
-		"System", "User", "Recovery", "VM", "Preboot", "Installer", "Data", "Baseband",
-		"0x0100", "0x0200", "0x0400", "0x0800", "0x1000", "0x2000", "0x4000", "0x8000"
+		"System", "User", "Recovery", "VM", "Preboot", "Installer"
+	};
+	static const char *rolestr_enum[] = {
+		"", "Data", "Baseband", "Update",
+		"Xart", "Hardware", "Backup", "Reserved-7",
+		"Reserved-8", "Enterprise", "Reserved-10", "Prelogin"
 	};
 	bool first = true;
 	int k;
 
 	if (role == 0)
 		printf("No specific role");
-	else {
-		for (k = 0; k < 16; k++) {
+	else if (role <= 0x20) {
+		for (k = 0; k < 6; k++) {
 			if (role & (1 << k)) {
 				if (!first)
 					printf(", ");
@@ -34,7 +38,10 @@ static void print_role(uint16_t role)
 				first = false;
 			}
 		}
+	} else if (role <= APFS_VOL_ROLE_PRELOGIN) {
+		printf("%s", rolestr_enum[role >> APFS_VOLUME_ENUM_SHIFT]);
 	}
+	// printf(" (%d)", role);
 }
 
 static void print_filevault(uint64_t flags)
@@ -97,19 +104,39 @@ int main(int argc, char *argv[])
 				printf("---------------------------------------------\n");
 
 				printf("Role:               ");
-				print_role(apsb.apfs_role.get());
+				print_role(apsb.apfs_role);
 				printf("\n");
 				printf("Name:               %s", apsb.apfs_volname);
-				if (apsb.apfs_incompatible_features.get() & APFS_INCOMPAT_CASE_INSENSITIVE)
+				if (apsb.apfs_incompatible_features & APFS_INCOMPAT_CASE_INSENSITIVE)
 					printf(" (Case-insensitive)\n");
-				else if (apsb.apfs_incompatible_features.get() & APFS_INCOMPAT_NORMALIZATION_INSENSITIVE)
+				else if (apsb.apfs_incompatible_features & APFS_INCOMPAT_NORMALIZATION_INSENSITIVE)
 					printf(" (Case-sensitive)\n");
 				else
 					printf("\n");
-				printf("Capacity Consumed:  %" PRIu64 " Bytes\n", apsb.apfs_fs_alloc_count.get() * container->GetBlocksize());
+				printf("Capacity Consumed:  %" PRIu64 " Bytes\n", apsb.apfs_fs_alloc_count * container->GetBlocksize());
 				printf("FileVault:          ");
-				print_filevault(apsb.apfs_fs_flags.get() & APFS_FS_CRYPTOFLAGS);
+				print_filevault(apsb.apfs_fs_flags & APFS_FS_CRYPTOFLAGS);
 				printf("\n");
+				if (apsb.apfs_snap_meta_tree_oid) {
+					printf("Snapshots:\n");
+					BTree snap_tree(*container);
+					BTreeIterator it;
+					BTreeEntry bte;
+					const j_snap_metadata_key_t *sme_k;
+					const j_snap_metadata_val_t *sme_v;
+
+					snap_tree.Init(apsb.apfs_snap_meta_tree_oid, apsb.apfs_o.o_xid);
+					if (snap_tree.GetIteratorBegin(it)) {
+						for (;;) {
+							if (!it.GetEntry(bte)) break;
+							sme_k = reinterpret_cast<const j_snap_metadata_key_t*>(bte.key);
+							sme_v = reinterpret_cast<const j_snap_metadata_val_t*>(bte.val);
+							if ((sme_k->hdr.obj_id_and_type >> OBJ_TYPE_SHIFT) != APFS_TYPE_SNAP_METADATA) break;
+							printf("    %" PRIu64 " : '%s'\n", sme_k->hdr.obj_id_and_type & OBJ_ID_MASK, sme_v->name);
+							if (!it.next()) break;
+						}
+					}
+				}
 				printf("\n");
 			}
 		} else {

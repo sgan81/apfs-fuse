@@ -39,6 +39,9 @@ public:
 	~BlockDumper();
 
 	void SetTextFlags(uint32_t flags) { m_text_flags = flags; }
+	size_t GetBlockSize() const { return m_blocksize; }
+	void SetBlockSize(size_t size) { m_blocksize = size; }
+
 	void DumpNode(const uint8_t *block, uint64_t blk_nr);
 
 	std::ostream &st() { return m_os; }
@@ -67,6 +70,8 @@ private:
 	void DumpBlk_WBC();
 	void DumpBlk_WBCL();
 
+	void DumpBlk_SnapMetaExt();
+	void DumpBlk_IntegrityMeta();
 
 	void DumpBTNode_0();
 
@@ -78,8 +83,11 @@ private:
 	void DumpBTEntry_FreeList(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
 	void DumpBTEntry_GBitmap(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
 	void DumpBTEntry_FusionMT(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
+	void DumpBTEntry_FExtTree(const void* key_ptr, size_t key_len, const void* val_ptr, size_t val_len, bool index);
 
 	void DumpBTEntry_Unk(const void *key_ptr, size_t key_len, const void *val_ptr, size_t val_len, bool index);
+
+	void DumpBTIndex(const void* val_ptr, uint16_t val_len);
 
 	void Dump_XF(const uint8_t *xf_data, size_t xf_size, bool drec);
 
@@ -96,14 +104,14 @@ private:
 	static std::string tstamp(uint64_t apfs_time);
 
 	void dumpm(const char *name, const void *base, const uint8_t &v, bool lf = true);
-	void dumpm(const char *name, const void *base, const le<uint16_t> &v, bool lf = true);
-	void dumpm(const char *name, const void *base, const le<uint32_t> &v, bool lf = true);
-	void dumpm(const char *name, const void *base, const le<uint64_t> &v, bool lf = true);
+	void dumpm(const char *name, const void *base, const le_uint16_t &v, bool lf = true);
+	void dumpm(const char *name, const void *base, const le_uint32_t &v, bool lf = true);
+	void dumpm(const char *name, const void *base, const le_uint64_t &v, bool lf = true);
 	void dumpm(const char *name, const void *base, const apfs_uuid_t &uuid);
 
 	uint32_t m_text_flags; // 00 - Alt, 01 - insensitive, 08 - sensitive
 
 	std::ostream &m_os;
 	const uint8_t *m_block;
-	const size_t m_blocksize;
+	size_t m_blocksize;
 };

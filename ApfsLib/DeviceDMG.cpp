@@ -32,37 +32,37 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 struct KolyHeader
 {
 	char         signature[4];
-	be<uint32_t> version;
-	be<uint32_t> headersize;
-	be<uint32_t> flags;
-	be<uint64_t> running_data_fork_offset;
-	be<uint64_t> data_fork_offset;
-	be<uint64_t> data_fork_length;
-	be<uint64_t> rsrc_fork_offset;
-	be<uint64_t> rsrc_fork_length;
-	be<uint32_t> segment_number;
-	be<uint32_t> segment_count;
+	be_uint32_t version;
+	be_uint32_t headersize;
+	be_uint32_t flags;
+	be_uint64_t running_data_fork_offset;
+	be_uint64_t data_fork_offset;
+	be_uint64_t data_fork_length;
+	be_uint64_t rsrc_fork_offset;
+	be_uint64_t rsrc_fork_length;
+	be_uint32_t segment_number;
+	be_uint32_t segment_count;
 	uint8_t      segment_id[0x10];
 	// 0x50
-	be<uint32_t> data_fork_checksum_type;
-	be<uint32_t> data_fork_unknown;
-	be<uint32_t> data_fork_checksum_data;
+	be_uint32_t data_fork_checksum_type;
+	be_uint32_t data_fork_unknown;
+	be_uint32_t data_fork_checksum_data;
 	uint8_t      unk_05C[0x7C];
 	// 0xD8
-	be<uint64_t> xml_offset;
-	be<uint64_t> xml_length;
+	be_uint64_t xml_offset;
+	be_uint64_t xml_length;
 	// ???
 	// uint64_t codesign_offset;
 	// uint64_t codesign_length;
 	uint8_t      unk_0E8[0x78];
 	// 0x160
-	be<uint32_t> master_checksum_type;
-	be<uint32_t> master_checksum_unknown;
-	be<uint32_t> master_checksum_data;
+	be_uint32_t master_checksum_type;
+	be_uint32_t master_checksum_unknown;
+	be_uint32_t master_checksum_data;
 	uint8_t      unk_16C[0x7C];
 	// 0x1E8
-	be<uint32_t> image_variant;
-	be<uint64_t> sector_count;
+	be_uint32_t image_variant;
+	be_uint64_t sector_count;
 	// 0x1F4
 	uint8_t      unk_1F4[12];
 };
@@ -72,30 +72,30 @@ static_assert(sizeof(KolyHeader) == 0x200, "Wrong Koly Header Size");
 struct MishHeader
 {
 	char         signature[4];
-	be<uint32_t> unk;
-	be<uint64_t> sector_start;
-	be<uint64_t> sector_count;
-	be<uint64_t> dmg_offset;
-	be<uint32_t> unk_20;
-	be<uint32_t> part_id;
-	be<uint8_t>  unk_28[0x18];
-	be<uint32_t> checksum_type;
-	be<uint32_t> checksum_unk;
-	be<uint32_t> checksum_data;
-	be<uint8_t>  unk_4C[0x7C];
-	be<uint32_t> entry_count;
+	be_uint32_t unk;
+	be_uint64_t sector_start;
+	be_uint64_t sector_count;
+	be_uint64_t dmg_offset;
+	be_uint32_t unk_20;
+	be_uint32_t part_id;
+	be_uint8_t  unk_28[0x18];
+	be_uint32_t checksum_type;
+	be_uint32_t checksum_unk;
+	be_uint32_t checksum_data;
+	be_uint8_t  unk_4C[0x7C];
+	be_uint32_t entry_count;
 };
 
 static_assert(sizeof(MishHeader) == 0xCC, "Wrong Mish Header Size");
 
 struct MishEntry
 {
-	be<uint32_t> method;
-	be<uint32_t> comment;
-	be<uint64_t> sector_start;
-	be<uint64_t> sector_count;
-	be<uint64_t> dmg_offset;
-	be<uint64_t> dmg_length;
+	be_uint32_t method;
+	be_uint32_t comment;
+	be_uint64_t sector_start;
+	be_uint64_t sector_count;
+	be_uint64_t dmg_offset;
+	be_uint64_t dmg_length;
 };
 
 static_assert(sizeof(MishEntry) == 0x28, "Wrong Mish Entry Size");

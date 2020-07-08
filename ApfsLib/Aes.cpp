@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <algorithm>
 
+#include "Endian.h"
 #include "Aes.h"
 
 const uint32_t AES::Te0[256] = {

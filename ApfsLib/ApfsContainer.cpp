@@ -130,7 +130,7 @@ bool ApfsContainer::Init(xid_t req_xid)
 	}
 
 	if (g_debug & Dbg_Info)
-		std::cout << "Mounting xid " << m_nx.nx_o.o_xid.get() << std::endl;
+		std::cout << "Mounting xid " << m_nx.nx_o.o_xid << std::endl;
 
 	if ((m_nx.nx_incompatible_features & NX_INCOMPAT_FUSION) && !m_tier2_disk)
 	{
@@ -161,8 +161,7 @@ bool ApfsContainer::Init(xid_t req_xid)
 	ReadBlocks(m_sm_data.data(), omr.paddr, omr.size / GetBlocksize());
 	m_sm = reinterpret_cast<const spaceman_phys_t *>(m_sm_data.data());
 
-	if (!VerifyBlock(m_sm_data.data(), m_sm_data.size()))
-	{
+	if (!VerifyBlock(m_sm_data.data(), m_sm_data.size())) {
 		std::cerr << "Checksum error in spaceman" << std::endl;
 		return false;
 	}
@@ -195,7 +194,7 @@ bool ApfsContainer::Init(xid_t req_xid)
 	return true;
 }
 
-ApfsVolume *ApfsContainer::GetVolume(unsigned int index, const std::string &passphrase)
+ApfsVolume *ApfsContainer::GetVolume(unsigned int index, const std::string &passphrase, xid_t snap_xid)
 {
 	ApfsVolume *vol = nullptr;
 	oid_t oid;
@@ -221,7 +220,10 @@ ApfsVolume *ApfsContainer::GetVolume(unsigned int index, const std::string &pass
 		return nullptr;
 
 	vol = new ApfsVolume(*this);
-	rc = vol->Init(omr.paddr);
+	if (snap_xid != 0)
+		rc = vol->MountSnapshot(omr.paddr, snap_xid);
+	else
+		rc = vol->Init(omr.paddr);
 
 	if (rc == false)
 	{
@@ -408,7 +410,12 @@ void ApfsContainer::dump(BlockDumper& bd)
 	ReadAndVerifyHeaderBlock(blk.data(), m_nx.nx_omap_oid);
 	bd.DumpNode(blk.data(), m_nx.nx_omap_oid);
 
-	bd.DumpNode(m_sm_data.data(), m_nx.nx_spaceman_oid);
+	{
+		size_t bs = bd.GetBlockSize();
+		bd.SetBlockSize(m_sm_data.size());
+		bd.DumpNode(m_sm_data.data(), m_nx.nx_spaceman_oid);
+		bd.SetBlockSize(bs);
+	}
 
 	uint64_t oid;
 	size_t k;
@@ -430,7 +437,7 @@ void ApfsContainer::dump(BlockDumper& bd)
 	m_fq_tree_mgr.dump(bd);
 	m_fq_tree_vol.dump(bd);
 
-	const le<uint64_t> *cxb_oid = reinterpret_cast<const le<uint64_t> *>(m_sm_data.data() + m_sm->sm_dev[SD_MAIN].sm_addr_offset);
+	const le_uint64_t *cxb_oid = reinterpret_cast<const le_uint64_t *>(m_sm_data.data() + m_sm->sm_dev[SD_MAIN].sm_addr_offset);
 	uint32_t cib_cnt = m_sm->sm_dev[SD_MAIN].sm_cib_count;
 	uint32_t cab_cnt = m_sm->sm_dev[SD_MAIN].sm_cab_count;
 

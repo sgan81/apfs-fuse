@@ -1,3 +1,4 @@
+#include "Endian.h"
 #include "AesXts.h"
 
 #include <algorithm>

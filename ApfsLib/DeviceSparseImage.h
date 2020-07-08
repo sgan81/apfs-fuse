@@ -18,9 +18,9 @@ public:
 	uint64_t GetSize() const override;
 
 private:
-	std::vector<uint64_t> m_chunk_offs;
+	std::vector<uint64_t> m_band_offset;
 	uint64_t m_size;
-	uint64_t m_chunk_size;
+	uint64_t m_band_size;
 
 	DiskImageFile m_img;
 };

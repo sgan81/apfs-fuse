@@ -11,30 +11,30 @@ typedef uint8_t PM_GUID[0x10];
 
 struct PMAP_GptHeader
 {
-	le<uint64_t> Signature;
-	le<uint32_t> Revision;
-	le<uint32_t> HeaderSize;
-	le<uint32_t> HeaderCRC32;
-	le<uint32_t> Reserved;
-	le<uint64_t> MyLBA;
-	le<uint64_t> AlternateLBA;
-	le<uint64_t> FirstUsableLBA;
-	le<uint64_t> LastUsableLBA;
+	le_uint64_t Signature;
+	le_uint32_t Revision;
+	le_uint32_t HeaderSize;
+	le_uint32_t HeaderCRC32;
+	le_uint32_t Reserved;
+	le_uint64_t MyLBA;
+	le_uint64_t AlternateLBA;
+	le_uint64_t FirstUsableLBA;
+	le_uint64_t LastUsableLBA;
 	PM_GUID      DiskGUID;
-	le<uint64_t> PartitionEntryLBA;
-	le<uint32_t> NumberOfPartitionEntries;
-	le<uint32_t> SizeOfPartitionEntry;
-	le<uint32_t> PartitionEntryArrayCRC32;
+	le_uint64_t PartitionEntryLBA;
+	le_uint32_t NumberOfPartitionEntries;
+	le_uint32_t SizeOfPartitionEntry;
+	le_uint32_t PartitionEntryArrayCRC32;
 };
 
 struct PMAP_Entry
 {
 	PM_GUID      PartitionTypeGUID;
 	PM_GUID      UniquePartitionGUID;
-	le<uint64_t> StartingLBA;
-	le<uint64_t> EndingLBA;
-	le<uint64_t> Attributes;
-	le<uint16_t> PartitionName[36];
+	le_uint64_t StartingLBA;
+	le_uint64_t EndingLBA;
+	le_uint64_t Attributes;
+	le_uint16_t PartitionName[36];
 };
 
 static_assert(sizeof(PMAP_GptHeader) == 92, "PMAP GPT-Header wrong size");
@@ -116,7 +116,7 @@ bool GptPartitionMap::LoadAndVerify(Device & dev)
 	size_t mapsize;
 
 	mapsize = hdr->NumberOfPartitionEntries * hdr->SizeOfPartitionEntry;
-	mapsize = (mapsize + m_sector_size - 1) & ~(m_sector_size - 1);
+	mapsize = (mapsize + m_sector_size - 1) & ~(static_cast<size_t>(m_sector_size) - 1);
 
 	m_entry_data.resize(mapsize);
 	dev.Read(m_entry_data.data(), m_sector_size * hdr->PartitionEntryLBA, m_entry_data.size());
@@ -189,11 +189,11 @@ void GptPartitionMap::ListEntries()
 		PrintGUID(e.PartitionTypeGUID);
 		printf(" ");
 		PrintGUID(e.UniquePartitionGUID);
-		printf(" %016" PRIX64 " %016" PRIX64 " ", e.StartingLBA.get(), e.EndingLBA.get());
-		printf("%016" PRIX64 " ", e.Attributes.get());
+		printf(" %016" PRIX64 " %016" PRIX64 " ", e.StartingLBA, e.EndingLBA);
+		printf("%016" PRIX64 " ", e.Attributes);
 
 		for (n = 0; (n < 36) && (e.PartitionName[n] != 0); n++)
-			printf("%c", e.PartitionName[n].get());
+			printf("%c", e.PartitionName[n]);
 
 		printf("\n");
 	}

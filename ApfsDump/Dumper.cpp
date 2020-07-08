@@ -133,7 +133,7 @@ bool Dumper::DumpContainer(std::ostream &os)
 	uint32_t cibs_per_cab;
 	uint32_t cib_count;
 	uint32_t cab_count;
-	const le<uint64_t> *cxb_oid;
+	const le_uint64_t *cxb_oid;
 
 	uint32_t cab_id;
 	uint32_t cib_id;
@@ -217,7 +217,7 @@ bool Dumper::DumpContainer(std::ostream &os)
 		block_count = sm->sm_dev[devidx].sm_block_count;
 		cib_count = sm->sm_dev[devidx].sm_cib_count;
 		cab_count = sm->sm_dev[devidx].sm_cab_count;
-		cxb_oid = reinterpret_cast<const le<uint64_t> *>(sm_data.data() + sm->sm_dev[devidx].sm_addr_offset);
+		cxb_oid = reinterpret_cast<const le_uint64_t *>(sm_data.data() + sm->sm_dev[devidx].sm_addr_offset);
 
 		paddr = 0;
 
@@ -269,7 +269,7 @@ bool Dumper::DumpContainer(std::ostream &os)
 				if (g_abort)
 					return false;
 
-				std::cout << "  chunk " << chunk_id << " avail=" << cib->cib_chunk_info[chunk_id].ci_free_count.get() << " paddr=" << paddr << std::endl;
+				std::cout << "  chunk " << chunk_id << " avail=" << cib->cib_chunk_info[chunk_id].ci_free_count << " paddr=" << paddr << std::endl;
 
 				if (cib->cib_chunk_info[chunk_id].ci_bitmap_addr == 0)
 				{
