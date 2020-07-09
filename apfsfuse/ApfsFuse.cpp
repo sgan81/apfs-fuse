@@ -649,7 +649,8 @@ void usage(const char *name)
 	std::cout << "blksize=N     : Set physical block size. Only needed if a partition table needs" << std::endl;
 	std::cout << "                to be parsed and the sector size is not 512 bytes." << std::endl;
 	std::cout << "pass=...      : Specify volume passphrase (same as -r)." << std::endl;
-	std::cout << "xid=...       : Mount specific xid." << std::endl;
+	std::cout << "xid=N         : Mount specific xid." << std::endl;
+	std::cout << "snap=N        : Mount snapshot with given id. Use apfsutil for getting the ids." << std::endl;
 	std::cout << std::endl;
 }
 
