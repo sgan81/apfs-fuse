@@ -32,37 +32,37 @@ along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
 struct KolyHeader
 {
 	char         signature[4];
-	be_uint32_t version;
-	be_uint32_t headersize;
-	be_uint32_t flags;
-	be_uint64_t running_data_fork_offset;
-	be_uint64_t data_fork_offset;
-	be_uint64_t data_fork_length;
-	be_uint64_t rsrc_fork_offset;
-	be_uint64_t rsrc_fork_length;
-	be_uint32_t segment_number;
-	be_uint32_t segment_count;
+	be_uint32_t  version;
+	be_uint32_t  headersize;
+	be_uint32_t  flags;
+	be_uint64_t  running_data_fork_offset;
+	be_uint64_t  data_fork_offset;
+	be_uint64_t  data_fork_length;
+	be_uint64_t  rsrc_fork_offset;
+	be_uint64_t  rsrc_fork_length;
+	be_uint32_t  segment_number;
+	be_uint32_t  segment_count;
 	uint8_t      segment_id[0x10];
 	// 0x50
-	be_uint32_t data_fork_checksum_type;
-	be_uint32_t data_fork_unknown;
-	be_uint32_t data_fork_checksum_data;
+	be_uint32_t  data_fork_checksum_type;
+	be_uint32_t  data_fork_unknown;
+	be_uint32_t  data_fork_checksum_data;
 	uint8_t      unk_05C[0x7C];
 	// 0xD8
-	be_uint64_t xml_offset;
-	be_uint64_t xml_length;
+	be_uint64_t  xml_offset;
+	be_uint64_t  xml_length;
 	// ???
-	// uint64_t codesign_offset;
-	// uint64_t codesign_length;
+	// uint64_t  codesign_offset;
+	// uint64_t  codesign_length;
 	uint8_t      unk_0E8[0x78];
 	// 0x160
-	be_uint32_t master_checksum_type;
-	be_uint32_t master_checksum_unknown;
-	be_uint32_t master_checksum_data;
+	be_uint32_t  master_checksum_type;
+	be_uint32_t  master_checksum_unknown;
+	be_uint32_t  master_checksum_data;
 	uint8_t      unk_16C[0x7C];
 	// 0x1E8
-	be_uint32_t image_variant;
-	be_uint64_t sector_count;
+	be_uint32_t  image_variant;
+	be_uint64_t  sector_count;
 	// 0x1F4
 	uint8_t      unk_1F4[12];
 };
@@ -72,30 +72,30 @@ static_assert(sizeof(KolyHeader) == 0x200, "Wrong Koly Header Size");
 struct MishHeader
 {
 	char         signature[4];
-	be_uint32_t unk;
-	be_uint64_t sector_start;
-	be_uint64_t sector_count;
-	be_uint64_t dmg_offset;
-	be_uint32_t unk_20;
-	be_uint32_t part_id;
-	be_uint8_t  unk_28[0x18];
-	be_uint32_t checksum_type;
-	be_uint32_t checksum_unk;
-	be_uint32_t checksum_data;
-	be_uint8_t  unk_4C[0x7C];
-	be_uint32_t entry_count;
+	be_uint32_t  unk;
+	be_uint64_t  sector_start;
+	be_uint64_t  sector_count;
+	be_uint64_t  dmg_offset;
+	be_uint32_t  unk_20;
+	be_uint32_t  part_id;
+	be_uint8_t   unk_28[0x18];
+	be_uint32_t  checksum_type;
+	be_uint32_t  checksum_unk;
+	be_uint32_t  checksum_data;
+	be_uint8_t   unk_4C[0x7C];
+	be_uint32_t  entry_count;
 };
 
 static_assert(sizeof(MishHeader) == 0xCC, "Wrong Mish Header Size");
 
 struct MishEntry
 {
-	be_uint32_t method;
-	be_uint32_t comment;
-	be_uint64_t sector_start;
-	be_uint64_t sector_count;
-	be_uint64_t dmg_offset;
-	be_uint64_t dmg_length;
+	be_uint32_t  method;
+	be_uint32_t  comment;
+	be_uint64_t  sector_start;
+	be_uint64_t  sector_count;
+	be_uint64_t  dmg_offset;
+	be_uint64_t  dmg_length;
 };
 
 static_assert(sizeof(MishEntry) == 0x28, "Wrong Mish Entry Size");
@@ -121,6 +121,7 @@ DeviceDMG::DmgSection::~DmgSection()
 DeviceDMG::DeviceDMG() : m_crc(true)
 {
 	m_size = 0;
+	m_offset = 0;
 
 	m_is_raw = false;
 
@@ -189,6 +190,7 @@ bool DeviceDMG::Open(const char * name)
 #endif
 
 	m_size = koly.sector_count * 0x200;
+	m_offset = koly.data_fork_offset;
 
 	if (koly.xml_offset != 0)
 	{
@@ -245,7 +247,7 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 {
 	if (m_is_raw)
 	{
-		m_img.Read(offs, data, len);
+		m_img.Read(offs + m_offset, data, len);
 		return true;
 		// TODO: Error handling ...
 	}
@@ -299,8 +301,9 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 		switch (sect.method)
 		{
 		case 1: // raw
-			m_img.Read(rd_offs + sect.dmg_offset, bdata, rd_size);
+			m_img.Read(rd_offs + sect.dmg_offset + m_offset, bdata, rd_size);
 			break;
+		case 0: // unsure ...
 		case 2: // ignore
 			memset(bdata, 0, rd_size);
 			break;
@@ -311,6 +314,7 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 			compressed = true;
 			break;
 		default:
+			std::cerr << "DMG: unknown compression method " << sect.method << std::endl;
 			return false;
 		}
 
@@ -328,7 +332,7 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 				m_cache_base = sect.disk_offset;
 				m_cache_size = sect.disk_length;
 
-				m_img.Read(sect.dmg_offset, compr_buf, sect.dmg_length);
+				m_img.Read(sect.dmg_offset + m_offset, compr_buf, sect.dmg_length);
 
 				switch (sect.method)
 				{
@@ -345,6 +349,7 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 					DecompressLZFSE(m_cache_data, sect.disk_length, compr_buf, sect.dmg_length);
 					break;
 				default:
+					std::cerr << "DMG: invalid compression method " << sect.method << std::endl;
 					return false;
 					break;
 				}
@@ -361,7 +366,7 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 
 				sect.cache = new uint8_t[sect.disk_length];
 
-				m_img.Read(sect.dmg_offset, compr_buf, sect.dmg_length);
+				m_img.Read(sect.dmg_offset + m_offset, compr_buf, sect.dmg_length);
 
 				switch (sect.method)
 				{
@@ -378,6 +383,7 @@ bool DeviceDMG::Read(void * data, uint64_t offs, uint64_t len)
 					DecompressLZFSE(sect.cache, sect.disk_length, compr_buf, sect.dmg_length);
 					break;
 				default:
+					std::cerr << "DMG: invalid compression method " << sect.method << std::endl;
 					return false;
 					break;
 				}

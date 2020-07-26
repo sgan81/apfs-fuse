@@ -66,6 +66,7 @@ private:
 
 	DiskImageFile m_img;
 	uint64_t m_size;
+	uint64_t m_offset;
 
 	bool m_is_raw;
 
