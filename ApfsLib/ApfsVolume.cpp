@@ -205,6 +205,12 @@ bool ApfsVolume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 	if (!m_snap_meta_tree.Init(m_sb.apfs_snap_meta_tree_oid, m_sb.apfs_o.o_xid))
 		std::cerr << "WARNING: snap meta tree init failed" << std::endl;
 
+	if (m_sb.apfs_incompatible_features & APFS_INCOMPAT_SEALED_VOLUME)
+	{
+		if (!m_fext_tree.Init(m_sb.apfs_fext_tree_oid, m_sb.apfs_o.o_xid))
+			std::cerr << "ERROR: fext tree init failed" << std::endl;
+	}
+
 	return true;
 }
 
