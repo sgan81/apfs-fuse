@@ -600,6 +600,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	const keybag_entry_t *ke_kek;
 	const keybag_entry_t *ke_vek;
 	bagdata_t bd;
+	AES::Mode kek_mode = AES::AES_256;
 
 	int cnt = recs_bag.GetKeyCnt();
 	int k;
@@ -630,9 +631,11 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		case 0x00:
 		case 0x10:
 			rc = Rfc3394_KeyUnwrap(kek, kek_blob.wrapped_kek, 0x20, dk, AES::AES_256, &iv);
+			kek_mode = AES::AES_256;
 			break;
 		case 0x02:
 			rc = Rfc3394_KeyUnwrap(kek, kek_blob.wrapped_kek, 0x10, dk, AES::AES_128, &iv);
+			kek_mode = AES::AES_128;
 			break;
 		default:
 			std::cerr << "Unknown KEK key flags 82/00 = " << std::hex << kek_blob.unk_82.unk_00 << ". Please file a bug report." << std::endl;
@@ -679,13 +682,13 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	{
 		// AES-256. This method is used for wrapping the whole XTS-AES key,
 		// and applies to non-FileVault encrypted APFS volumes.
-		rc = Rfc3394_KeyUnwrap(vek, vek_blob.wrapped_vek, 0x20, kek, AES::AES_256, &iv);
+		rc = Rfc3394_KeyUnwrap(vek, vek_blob.wrapped_vek, 0x20, kek, kek_mode, &iv);
 	}
 	else if (vek_blob.unk_82.unk_00 == 2)
 	{
 		// AES-128. This method is used for FileVault and CoreStorage encrypted
 		// volumes that have been converted to APFS.
-		rc = Rfc3394_KeyUnwrap(vek, vek_blob.wrapped_vek, 0x10, kek, AES::AES_128, &iv);
+		rc = Rfc3394_KeyUnwrap(vek, vek_blob.wrapped_vek, 0x10, kek, kek_mode, &iv);
 
 		if (rc)
 		{
@@ -767,7 +770,7 @@ bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t
 	const size_t blocksize = m_container.GetBlocksize();
 
 	if (g_debug & Dbg_Crypto)
-		std::cout << "starting LoadKeybag" << std::endl;
+		std::cout << "starting LoadKeybag @ " << std::hex << block << std::endl;
 
 	data.resize(blockcnt * blocksize);
 
