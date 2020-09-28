@@ -779,38 +779,14 @@ int ApfsDir::CompareStdDirKey(const void *skey, size_t skey_len, const void *eke
 				if ((e->name_len_and_hash & J_DREC_HASH_MASK) > (s->name_len_and_hash & J_DREC_HASH_MASK))
 					return 1;
 
-#if 1
-				return StrCmpUtf8NormalizedFolded(e->name, s->name, (dir->m_txt_fmt & APFS_INCOMPAT_CASE_INSENSITIVE) != 0);
-#else
-				// TODO: This is not case insensitive ...
-				for (size_t k = 0; k < (e->hash & 0x3FF); k++)
-				{
-					if (e->name[k] < s->name[k])
-						return -1;
-					if (e->name[k] > s->name[k])
-						return 1;
-				}
-#endif
+				return apfs_strncmp(e->name, e->name_len_and_hash & J_DREC_LEN_MASK, s->name, s->name_len_and_hash & J_DREC_LEN_MASK);
 			}
 			else
 			{
 				const j_drec_key_t *s = reinterpret_cast<const j_drec_key_t *>(skey);
 				const j_drec_key_t *e = reinterpret_cast<const j_drec_key_t *>(ekey);
 
-				size_t cnt = std::min(e->name_len, s->name_len);
-
-				for (size_t k = 0; k < cnt; k++)
-				{
-					if (e->name[k] < s->name[k])
-						return -1;
-					if (e->name[k] > s->name[k])
-						return 1;
-				}
-
-				if (e->name_len < s->name_len)
-					return -1;
-				if (e->name_len > s->name_len)
-					return 1;
+				return apfs_strncmp(e->name, e->name_len, s->name, s->name_len);
 			}
 			break;
 		case APFS_TYPE_FILE_EXTENT:
@@ -832,20 +808,7 @@ int ApfsDir::CompareStdDirKey(const void *skey, size_t skey_len, const void *eke
 			const j_xattr_key_t *s = reinterpret_cast<const j_xattr_key_t *>(skey);
 			const j_xattr_key_t *e = reinterpret_cast<const j_xattr_key_t *>(ekey);
 
-			size_t cnt = std::max(e->name_len, s->name_len);
-
-			for (size_t k = 0; k < cnt; k++)
-			{
-				if (e->name[k] < s->name[k])
-					return -1;
-				if (e->name[k] > s->name[k])
-					return 1;
-			}
-
-			if (e->name_len < s->name_len)
-				return -1;
-			if (e->name_len > s->name_len)
-				return 1;
+			return apfs_strncmp(e->name, e->name_len, s->name, s->name_len);
 		}
 			break;
 		case APFS_TYPE_FILE_INFO:

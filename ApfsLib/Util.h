@@ -41,6 +41,7 @@ void dump_utf32(std::ostream &st, const char32_t *str, size_t size);
 
 uint32_t HashFilename(const uint8_t *utf8str, uint16_t name_len, bool case_fold);
 
+int apfs_strncmp(const uint8_t *s1, size_t s1_len, const uint8_t *s2, size_t s2_len);
 int StrCmpUtf8NormalizedFolded(const uint8_t *s1, const uint8_t *s2, bool case_fold);
 
 bool Utf8toUtf32(std::vector<char32_t> &str32, const uint8_t * str);

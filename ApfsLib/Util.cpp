@@ -279,6 +279,22 @@ uint32_t HashFilename(const uint8_t* utf8str, uint16_t name_len, bool case_fold)
 	return hash;
 }
 
+int apfs_strncmp(const uint8_t *s1, size_t s1_len, const uint8_t *s2, size_t s2_len)
+{
+	while (s1_len > 0 && s2_len > 0) {
+		if (*s1 < *s2) return -1;
+		if (*s1 > *s2) return 1;
+		if (*s1 == 0) return 0;
+		++s1;
+		++s2;
+		--s1_len;
+		--s2_len;
+	}
+	if (s2_len) return -1;
+	if (s1_len) return 1;
+	return 0;
+}
+
 int StrCmpUtf8NormalizedFolded(const uint8_t* s1, const uint8_t* s2, bool case_fold)
 {
 	std::vector<char32_t> s1_u32;

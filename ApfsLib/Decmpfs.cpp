@@ -105,8 +105,10 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 
 	if (!IsDecompAlgoSupported(hdr->algo))
 	{
-		if (g_debug & Dbg_Errors)
+		if (g_debug & Dbg_Errors) {
 			std::cout << "Unsupported decompression algorithm." << std::endl;
+			DumpHex(std::cout, compressed.data(), compressed.size());
+		}
 		return false;
 	}
 

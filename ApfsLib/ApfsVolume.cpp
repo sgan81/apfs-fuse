@@ -368,8 +368,6 @@ int ApfsVolume::CompareSnapMetaKey(const void* skey, size_t skey_len, const void
 	const j_key_t *ke = reinterpret_cast<const j_key_t*>(ekey);
 	const j_snap_name_key_t *sks;
 	const j_snap_name_key_t *ske;
-	uint16_t k;
-	uint16_t name_len;
 
 	if (ke->obj_id_and_type < ks->obj_id_and_type)
 		return -1;
@@ -383,17 +381,7 @@ int ApfsVolume::CompareSnapMetaKey(const void* skey, size_t skey_len, const void
 	case APFS_TYPE_SNAP_NAME:
 		sks = reinterpret_cast<const j_snap_name_key_t*>(skey);
 		ske = reinterpret_cast<const j_snap_name_key_t*>(ekey);
-		name_len = std::max(sks->name_len, ske->name_len);
-		for (k = 0; k < name_len; k++) {
-			if (ske->name[k] < sks->name[k])
-				return -1;
-			if (ske->name[k] > sks->name[k])
-				return 1;
-		}
-		if (ske->name_len < sks->name_len)
-			return -1;
-		if (ske->name_len > sks->name_len)
-			return 1;
+		return apfs_strncmp(ske->name, ske->name_len, sks->name, sks->name_len);
 		break;
 	}
 
