@@ -43,6 +43,58 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#ifdef UF_NODUMP
+#undef UF_NODUMP
+#endif
+
+#ifdef UF_IMMUTABLE
+#undef UF_IMMUTABLE
+#endif
+
+#ifdef UF_APPEND
+#undef UF_APPEND
+#endif
+
+#ifdef UF_OPAQUE
+#undef UF_OPAQUE
+#endif
+
+#ifdef UF_COMPRESSED
+#undef UF_COMPRESSED
+#endif
+
+#ifdef UF_TRACKED
+#undef UF_TRACKED
+#endif
+
+#ifdef UF_DATAVAULT
+#undef UF_DATAVAULT
+#endif
+
+#ifdef UF_HIDDEN
+#undef UF_HIDDEN
+#endif
+
+#ifdef SF_ARCHIVED
+#undef SF_ARCHIVED
+#endif
+
+#ifdef SF_IMMUTABLE
+#undef SF_IMMUTABLE
+#endif
+
+#ifdef SF_APPEND
+#undef SF_APPEND
+#endif
+
+#ifdef SF_RESTRICTED
+#undef SF_RESTRICTED
+#endif
+
+#ifdef SF_NOUNLINK
+#undef SF_NOUNLINK
+#endif
+
 #include <ApfsLib/ApfsContainer.h>
 #include <ApfsLib/ApfsVolume.h>
 #include <ApfsLib/ApfsDir.h>
