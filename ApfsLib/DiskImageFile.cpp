@@ -448,7 +448,7 @@ bool DiskImageFile::SetupEncryptionV2()
 	m_crypt_size = hdr->encrypted_data_length;
 	m_crypt_blocksize = hdr->block_size;
 
-	std::cout << "Encryped DMG detected." << std::endl;
+	std::cout << "Encrypted DMG detected." << std::endl;
 	std::cout << "Password: ";
 	GetPassword(password);
 
