@@ -58,6 +58,14 @@ Also helps making the driver run on big-endian architectures.
 #include <byteswap.h>
 #include <endian.h>
 #endif
+#ifdef __FreeBSD__
+#include <sys/endian.h>
+
+#define bswap_16 bswap16
+#define bswap_32 bswap32
+#define bswap_64 bswap64
+
+#endif
 #ifdef __APPLE__
 // Definitions for macOS
 #include <libkern/OSByteOrder.h>

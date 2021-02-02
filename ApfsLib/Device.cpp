@@ -25,6 +25,7 @@
 #include "DeviceWinPhys.h"
 #include "DeviceLinux.h"
 #include "DeviceMac.h"
+#include "DeviceBSD.h"
 #include "DeviceDMG.h"
 #include "DeviceSparseImage.h"
 #include "DeviceVDI.h"
@@ -97,6 +98,10 @@ Device * Device::OpenDevice(const char * name)
 #ifdef __APPLE__
 		dev = new DeviceMac();
 #endif
+#if defined (__FreeBSD__)
+		dev = new DeviceBSD();
+#endif
+
 		rc = dev->Open(name);
 
 		if (!rc)
