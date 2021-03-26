@@ -58,6 +58,7 @@ bool IsDecompAlgoSupported(uint16_t algo)
 	case 4:
 	case 7:
 	case 8:
+    case 9:
 		return true;
 	default:
 		return false;
@@ -97,6 +98,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		case 4: std::cout << " (Zlib, Rsrc)"; break;
 		case 7: std::cout << " (LZVN, Attr)"; break;
 		case 8: std::cout << " (LZVN, Rsrc)"; break;
+        case 9: std::cout << " (uncompressed, Attr)"; break;
 		default: std::cout << " (Unknown)"; break;
 		}
 
@@ -263,7 +265,12 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 				decoded_bytes = DecompressLZVN(decompressed.data(), decompressed.size(), cdata, csize);
 			}
 		}
-
+        else if (hdr->algo == 9)
+        {
+            assert(hdr->size == csize - 1);
+            decompressed.assign(cdata + 1, cdata + csize);
+            decoded_bytes = decompressed.size();
+        }
 		if (decoded_bytes != hdr->size)
 		{
 			if (g_debug & Dbg_Errors)
