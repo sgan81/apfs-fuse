@@ -129,9 +129,9 @@ target_compile_definitions(apfs-fuse PRIVATE USE_FUSE2)
 endif()
 endif()
 
-add_executable(apfsutil ApfsUtil/ApfsUtil.cpp)
-target_link_libraries(apfsutil apfs)
+add_executable(apfs-util ApfsUtil/ApfsUtil.cpp)
+target_link_libraries(apfs-util apfs)
 
 include(GNUInstallDirs)
 install(TARGETS apfs-fuse RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-install(TARGETS apfsutil RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(TARGETS apfs-util RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

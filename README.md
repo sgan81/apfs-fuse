@@ -112,7 +112,7 @@ In addition to the mount options supported by fuse, the following mount options 
 * blksize=n: Set the physical block size (default: 512 bytes).
 * pass=...: Specify volume passphrase (same as -r).
 * xid=...: Try to mount older XID. May be useful if the container is corrupt.
-* snap=...: Mount snapshot with given XID. Use apfsutil to display snapshot ids.
+* snap=...: Mount snapshot with given XID. Use apfs-util to display snapshot ids.
 
 The blksize parameter is required for proper partition table parsing on some newer
 macs. However the current driver should be able to detect the block size automatically.
@@ -206,9 +206,9 @@ apfs-dump <drive> <logfile.txt>
 This tool was the one I originally used for reverse engineering. It will scan the whole volume for clusters having
 correct checksums (and thus being part of some management structure), and then it will try to dump them. This will
 take a very long time to run on big volumes, and create huge log files. So using the quick version will be much faster.
-#### apfsutil
+#### apfs-util
 ```
-apfsutil <device>
+apfs-util <device>
 ```
 This is a new tool that just displays some information from a container. For now, it lists the volumes a container
 contains, and snapshots if there are some. This tool might be extended in the future.
