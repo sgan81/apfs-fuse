@@ -58,6 +58,7 @@ bool IsDecompAlgoSupported(uint16_t algo)
 	case 4:
 	case 7:
 	case 8:
+	case 9:
 		return true;
 	default:
 		return false;
@@ -261,6 +262,19 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 			else
 			{
 				decoded_bytes = DecompressLZVN(decompressed.data(), decompressed.size(), cdata, csize);
+			}
+		}
+		else if (hdr->algo == 9)
+		{
+			if (cdata[0] == 0xcc)
+			{
+				assert(hdr->size == csize - 1);
+				decompressed.assign(cdata + 1, cdata + csize);
+				decoded_bytes = decompressed.size();
+			}
+			else
+			{
+				decoded_bytes = DecompressLZFSE(decompressed.data(), decompressed.size(), cdata, csize);
 			}
 		}
 
