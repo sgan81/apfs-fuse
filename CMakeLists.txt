@@ -106,7 +106,7 @@ add_library(apfs
 	ApfsLib/Util.h
 	ApfsLib/Unicode.cpp
 	ApfsLib/Unicode.h)
-target_link_libraries(apfs z bz2 lzfse)
+target_link_libraries(apfs z bz2 lzfse libzbitmap)
 target_compile_definitions(apfs PUBLIC _FILE_OFFSET_BITS=64 _DARWIN_USE_64_BIT_INODE)
 
 add_executable(apfs-dump
