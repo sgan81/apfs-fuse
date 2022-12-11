@@ -141,42 +141,46 @@ static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 		{
 			if (rec.bsd_flags & APFS_UF_COMPRESSED) // Compressed
 			{
-				std::vector<uint8_t> data;
-				rc = dir.GetAttribute(data, ino, "com.apple.decmpfs");
-				if (rc)
-				{
-					const CompressionHeader *decmpfs = reinterpret_cast<const CompressionHeader *>(data.data());
-
-					if (IsDecompAlgoSupported(decmpfs->algo))
+				if (rec.internal_flags & INODE_HAS_UNCOMPRESSED_SIZE) {
+					st.st_size = rec.uncompressed_size;
+				} else {
+					std::vector<uint8_t> data;
+					rc = dir.GetAttribute(data, ino, "com.apple.decmpfs");
+					if (rc)
 					{
-						st.st_size = decmpfs->size;
-						// st.st_blocks = data.size() / 512;
-						if (g_debug & Dbg_Cmpfs)
-							std::cout << "Compressed size " << decmpfs->size << " bytes." << std::endl;
-					}
-					else if (IsDecompAlgoInRsrc(decmpfs->algo))
-					{
-						rc = dir.GetAttribute(data, ino, "com.apple.ResourceFork");
+						const CompressionHeader *decmpfs = reinterpret_cast<const CompressionHeader *>(data.data());
 
-						if (!rc)
-							st.st_size = 0;
+						if (IsDecompAlgoSupported(decmpfs->algo))
+						{
+							st.st_size = decmpfs->size;
+							// st.st_blocks = data.size() / 512;
+							if (g_debug & Dbg_Cmpfs)
+								std::cout << "Compressed size " << decmpfs->size << " bytes." << std::endl;
+						}
+						else if (IsDecompAlgoInRsrc(decmpfs->algo))
+						{
+							rc = dir.GetAttribute(data, ino, "com.apple.ResourceFork");
+
+							if (!rc)
+								st.st_size = 0;
+							else
+								// Compressed size
+								st.st_size = data.size();
+						}
 						else
-							// Compressed size
+						{
 							st.st_size = data.size();
+							std::cerr << "Unknown compression algorithm " << decmpfs->algo << std::endl;
+							if (!g_lax)
+								return false;
+						}
 					}
 					else
 					{
-						st.st_size = data.size();
-						std::cerr << "Unknown compression algorithm " << decmpfs->algo << std::endl;
+						std::cerr << "Flag 0x20 set but no com.apple.decmpfs attribute!!!" << std::endl;
 						if (!g_lax)
 							return false;
 					}
-				}
-				else
-				{
-					std::cerr << "Flag 0x20 set but no com.apple.decmpfs attribute!!!" << std::endl;
-					if (!g_lax)
-						return false;
 				}
 			}
 			else if (rec.optional_present_flags & ApfsDir::Inode::INO_HAS_DSTREAM)

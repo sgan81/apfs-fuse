@@ -64,7 +64,7 @@ bool DeviceMac::Open(const char* name)
 	{
 		m_size = st.st_size;
 	}
-	else if (S_ISBLK(st.st_mode))
+	else if (S_ISBLK(st.st_mode) || S_ISCHR(st.st_mode))
 	{
 		uint64_t sector_count = 0;
 		uint32_t sector_size = 0;

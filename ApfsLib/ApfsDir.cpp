@@ -217,6 +217,7 @@ bool ApfsDir::GetInode(ApfsDir::Inode& res, uint64_t inode)
 	res.owner = obj->owner;
 	res.group = obj->group;
 	res.mode = obj->mode;
+	res.uncompressed_size = obj->uncompressed_size;
 
 	// internal_flags & 0x00200000 => pad2 = uncompressed_size ?
 

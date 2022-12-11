@@ -106,15 +106,22 @@ bool ApfsNodeMapperBTree::Lookup(omap_res_t &omr, oid_t oid, xid_t xid)
 	res_key = reinterpret_cast<const omap_key_t *>(res.key);
 	res_val = reinterpret_cast<const omap_val_t *>(res.val);
 
+#if 0
 	if (g_debug & Dbg_Info) {
 		std::cout << std::hex << "Omap Lookup: oid=" << oid << " xid=" << xid << ": ";
 		std::cout << "oid=" << res_key->ok_oid << " xid=" << res_key->ok_xid << " => flags=" << res_val->ov_flags << " size=" << res_val->ov_size << " paddr=" << res_val->ov_paddr << std::endl;
 	}
+#endif
 
 	if (key.ok_oid != res_key->ok_oid)
 	{
 		// std::cout << "NOT FOUND" << std::endl;
 		std::cerr << std::hex << "oid " << oid << " xid " << xid << " NOT FOUND!!!" << std::endl;
+		omr.oid = oid;
+		omr.xid = xid;
+		omr.flags = 0;
+		omr.size = 0;
+		omr.paddr = 0;
 		return false;
 	}
 

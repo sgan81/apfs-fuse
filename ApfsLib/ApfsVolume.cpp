@@ -243,6 +243,11 @@ void ApfsVolume::dump(BlockDumper& bd)
 		bd.DumpNode(blk.data(), omap_snapshot_tree_oid);
 	}
 
+	if (m_sb.apfs_er_state_oid) {
+		ReadBlocks(blk.data(), m_sb.apfs_er_state_oid, 1, 0);
+		bd.DumpNode(blk.data(), m_sb.apfs_er_state_oid);
+	}
+
 	m_omap.dump(bd);
 	m_fs_tree.dump(bd);
 	// m_extentref_tree.dump(bd);

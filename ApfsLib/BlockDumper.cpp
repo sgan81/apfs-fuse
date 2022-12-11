@@ -719,7 +719,7 @@ void BlockDumper::DumpBTEntry_APFS_Root(const void *key_ptr, size_t key_len, con
 			m_os << obj->group << " ";
 			m_os << oct << obj->mode << hex << " ";
 			m_os << obj->pad1 << " ";
-			m_os << obj->pad2;
+			m_os << obj->uncompressed_size;
 
 			if (val_len > sizeof(j_inode_val_t))
 				Dump_XF(obj->xfields, val_len - sizeof(j_inode_val_t), false);
@@ -1594,8 +1594,9 @@ void BlockDumper::DumpBlk_NXSB()
 	dumpm("max_file_systems", nx, nx->nx_max_file_systems);
 	m_os << endl;
 
-	for (k = 0; k < nx->nx_max_file_systems && nx->nx_fs_oid[k] != 0; k++)
-		dumpm("fs_oid          ", nx, nx->nx_fs_oid[k]);
+	for (k = 0; k < nx->nx_max_file_systems; k++)
+		if (nx->nx_fs_oid[k] != 0)
+			dumpm("fs_oid          ", nx, nx->nx_fs_oid[k]);
 
 	m_os << endl;
 

@@ -526,7 +526,7 @@ struct j_inode_val_t {
 	le_uint32_t group;
 	le_uint16_t mode;
 	le_uint16_t pad1;
-	le_uint64_t pad2;
+	le_uint64_t uncompressed_size;
 	uint8_t xfields[];
 };
 

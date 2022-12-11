@@ -32,7 +32,6 @@
 int main(int argc, char *argv[])
 {
 	bool rc;
-	int volumes_cnt;
 	int volume_id;
 	int n;
 	std::unique_ptr<Device> main_disk;
@@ -140,10 +139,8 @@ int main(int argc, char *argv[])
 
 	container->dump(bd);
 
-	volumes_cnt = container->GetVolumeCnt();
-
 #if 1
-	for (volume_id = 0; volume_id < volumes_cnt; volume_id++)
+	for (volume_id = 0; volume_id < NX_MAX_FILE_SYSTEMS; volume_id++)
 	{
 		ApfsVolume *vol;
 
@@ -154,9 +151,9 @@ int main(int argc, char *argv[])
 			std::cout << "Volume " << volume_id << ": " << vol->name() << std::endl;
 
 			vol->dump(bd);
-		}
 
-		delete vol;
+			delete vol;
+		}
 	}
 #endif
 #endif

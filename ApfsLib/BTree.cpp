@@ -398,7 +398,7 @@ void BTree::DumpTreeInternal(BlockDumper& out, const std::shared_ptr<BTreeNode> 
 			if (m_omap) {
 				omap_res_t omr;
 				m_omap->Lookup(omr, oid_child, m_xid);
-				out.st() << "omap: " << omr.oid << " " << omr.xid << " => " << omr.flags << " " << omr.size << " " << omr.paddr << std::endl;
+				// out.st() << "omap: " << omr.oid << " " << omr.xid << " => " << omr.flags << " " << omr.size << " " << omr.paddr << std::endl;
 
 				if (omr.flags & OMAP_VAL_DELETED) {
 					out.st() << "Omap val " << oid_child << " deleted." << std::endl;
@@ -419,6 +419,7 @@ void BTree::DumpTreeInternal(BlockDumper& out, const std::shared_ptr<BTreeNode> 
 std::shared_ptr<BTreeNode> BTree::GetNode(oid_t oid, const std::shared_ptr<BTreeNode> &parent, uint32_t parent_index)
 {
 	std::shared_ptr<BTreeNode> node;
+	bool rc;
 
 	// printf("GetNode oid=%" PRIx64 "\n", oid);
 
@@ -446,11 +447,13 @@ std::shared_ptr<BTreeNode> BTree::GetNode(oid_t oid, const std::shared_ptr<BTree
 
 		if (m_omap)
 		{
+			rc = m_omap->Lookup(omr, oid, m_xid);
+
 			if (g_debug & Dbg_Info) {
 				std::cout << "omap: oid=" << omr.oid << " xid=" << omr.xid << " flags=" << omr.flags << " size=" << omr.size << " paddr=" << omr.paddr << std::endl;
 			}
 
-			if (!m_omap->Lookup(omr, oid, m_xid))
+			if (!rc)
 			{
 				std::cerr << "ERROR: GetNode: omap entry oid " << std::hex << oid << " xid " << m_xid << " not found." << std::endl;
 				return node;

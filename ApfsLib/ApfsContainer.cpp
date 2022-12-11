@@ -237,14 +237,15 @@ ApfsVolume *ApfsContainer::GetVolume(unsigned int index, const std::string &pass
 unsigned int ApfsContainer::GetVolumeCnt() const
 {
 	unsigned int k;
+	unsigned int cnt = 0;
 
 	for (k = 0; k < 100; k++)
 	{
-		if (m_nx.nx_fs_oid[k] == 0)
-			break;
+		if (m_nx.nx_fs_oid[k] != 0)
+			cnt++;
 	}
 
-	return k;
+	return cnt;
 }
 
 bool ApfsContainer::GetVolumeInfo(unsigned int fsid, apfs_superblock_t& apsb)
@@ -350,6 +351,8 @@ void ApfsContainer::dump(BlockDumper& bd)
 {
 	std::vector<uint8_t> blk;
 	paddr_t paddr;
+	uint32_t index;
+	uint32_t last_index;
 
 	bd.st() << "Dumping Container" << std::endl;
 	bd.st() << "-----------------" << std::endl;
@@ -372,32 +375,49 @@ void ApfsContainer::dump(BlockDumper& bd)
 		*/
 
 #if 0
-	for (blkid = m_sb.nx_xp_desc_base; blkid < (m_sb.nx_xp_desc_base + m_sb.nx_xp_desc_blocks); blkid++)
+	for (paddr = m_nx.nx_xp_desc_base; paddr < (m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_blocks); paddr++)
 	{
-		ReadAndVerifyHeaderBlock(blk.data(), blkid);
-		bd.DumpNode(blk.data(), blkid);
+		ReadAndVerifyHeaderBlock(blk.data(), paddr);
+		bd.DumpNode(blk.data(), paddr);
 	}
-
-	for (blkid = m_sb.nx_xp_data_base; blkid < (m_sb.nx_xp_data_base + m_sb.nx_xp_data_blocks); blkid++)
+#endif
+#if 0
+	for (paddr = m_nx.nx_xp_data_base; paddr < (m_nx.nx_xp_data_base + m_nx.nx_xp_data_blocks); paddr++)
 	{
-		ReadAndVerifyHeaderBlock(blk.data(), blkid);
-		bd.DumpNode(blk.data(), blkid);
+		ReadAndVerifyHeaderBlock(blk.data(), paddr);
+		bd.DumpNode(blk.data(), paddr);
 	}
 #endif
 
 #if 1
 	bd.st() << std::endl << "Dumping XP desc area (current SB):" << std::endl;
-	for (paddr = m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_index; paddr < (m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_index + m_nx.nx_xp_desc_len); paddr++)
+	paddr = m_nx.nx_xp_desc_base;
+	last_index = m_nx.nx_xp_desc_index + m_nx.nx_xp_desc_len;
+	if (last_index >= m_nx.nx_xp_desc_blocks)
+		last_index -= m_nx.nx_xp_desc_blocks;
+
+	for (index = m_nx.nx_xp_desc_index; index != last_index;)
 	{
-		ReadAndVerifyHeaderBlock(blk.data(), paddr);
-		bd.DumpNode(blk.data(), paddr);
+		ReadAndVerifyHeaderBlock(blk.data(), paddr + index);
+		bd.DumpNode(blk.data(), paddr + index);
+		index++;
+		if (index >= m_nx.nx_xp_desc_blocks)
+			index -= m_nx.nx_xp_desc_blocks;
 	}
 
 	bd.st() << std::endl << "Dumping XP data area (current SB):" << std::endl;
-	for (paddr = m_nx.nx_xp_data_base + m_nx.nx_xp_data_index; paddr < (m_nx.nx_xp_data_base + m_nx.nx_xp_data_index + m_nx.nx_xp_data_len); paddr++)
+	paddr = m_nx.nx_xp_data_base;
+	last_index = m_nx.nx_xp_data_index + m_nx.nx_xp_data_len;
+	if (last_index >= m_nx.nx_xp_data_blocks)
+		last_index -= m_nx.nx_xp_data_blocks;
+
+	for (index = m_nx.nx_xp_data_index; index != last_index;)
 	{
-		ReadAndVerifyHeaderBlock(blk.data(), paddr);
-		bd.DumpNode(blk.data(), paddr);
+		ReadAndVerifyHeaderBlock(blk.data(), paddr + index);
+		bd.DumpNode(blk.data(), paddr + index);
+		index++;
+		if (index >= m_nx.nx_xp_data_blocks)
+			index -= m_nx.nx_xp_data_blocks;
 	}
 #endif
 
