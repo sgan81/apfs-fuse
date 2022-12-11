@@ -88,6 +88,9 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 	size_t csize = compressed.size() - sizeof(CompressionHeader);
 	size_t decoded_bytes = 0;
 
+	// Reference:
+	// https://opensource.apple.com/source/copyfile/copyfile-173.40.2/copyfile.c.auto.html
+
 #if 1 // Disable to get compressed data
 	if (g_debug & Dbg_Cmpfs)
 	{
@@ -99,7 +102,12 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		case 4: std::cout << " (Zlib, Rsrc)"; break;
 		case 7: std::cout << " (LZVN, Attr)"; break;
 		case 8: std::cout << " (LZVN, Rsrc)"; break;
-		case 14: std::cout << " (LZBITMAP, Rsrc)"; break;
+		case 9: std::cout << " (uncompressed, Attr)"; break; // https://github.com/sgan81/apfs-fuse/pull/145
+		case 10: std::cout << " (uncompressed, Rsrc)"; break; // Not supported yet
+		case 11: std::cout << " (LZFSE, Attr)"; break; // Not supported yet
+		case 12: std::cout << " (LZFSE, Rsrc)"; break; // Not supported yet
+		case 13: std::cout << " (LZBITMAP, Attr)"; break;  // Not supported yet
+		case 14: std::cout << " (LZBITMAP, Rsrc)"; break; // https://github.com/sgan81/apfs-fuse/pull/169
 		default: std::cout << " (Unknown)"; break;
 		}
 
