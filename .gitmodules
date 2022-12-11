@@ -1,7 +1,3 @@
 [submodule "3rdparty/lzfse"]
 	path = 3rdparty/lzfse
 	url = https://github.com/lzfse/lzfse.git
-
-[submodule "3rdparty/libzbitmap"]
-	path = 3rdparty/libzbitmap
-	url = https://github.com/eafer/libzbitmap.git
