@@ -39,6 +39,7 @@
 extern "C" {
 #include <lzfse.h>
 #include <lzvn_decode_base.h>
+#include <libzbitmap/libzbitmap.h>
 }
 
 static Crc32 g_crc(true, 0x1EDC6F41);
@@ -558,6 +559,15 @@ size_t DecompressBZ2(uint8_t * dst, size_t dst_size, const uint8_t * src, size_t
 size_t DecompressLZFSE(uint8_t * dst, size_t dst_size, const uint8_t * src, size_t src_size)
 {
 	return lzfse_decode_buffer(dst, dst_size, src, src_size, nullptr);
+}
+
+size_t DecompressLZBITMAP(uint8_t* dst, size_t dst_size, const uint8_t* src, size_t src_size)
+{
+	size_t out_len = 0;
+	int r = zbm_decompress(dst, dst_size, src, src_size, &out_len);
+	if (r == 0) // success
+		return out_len;
+	return 0; // fail
 }
 
 int log2(uint32_t val)

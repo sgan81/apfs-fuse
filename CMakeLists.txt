@@ -18,6 +18,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 # set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=undefined")
 
 include_directories(. 3rdparty/lzfse/src)
+include_directories(. 3rdparty/libzbitmap)
 
 add_library(lzfse
 	3rdparty/lzfse/src/lzfse.h

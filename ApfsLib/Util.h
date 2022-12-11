@@ -51,6 +51,7 @@ size_t DecompressADC(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t s
 size_t DecompressLZVN(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 size_t DecompressBZ2(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
 size_t DecompressLZFSE(uint8_t *dst, size_t dst_size, const uint8_t *src, size_t src_size);
+size_t DecompressLZBITMAP(uint8_t* dst, size_t dst_size, const uint8_t* src, size_t src_size);
 
 bool GetPassword(std::string &pw);
 

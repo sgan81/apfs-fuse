@@ -58,6 +58,7 @@ bool IsDecompAlgoSupported(uint16_t algo)
 	case 4:
 	case 7:
 	case 8:
+	case 14: // LZBITMAP
 		return true;
 	default:
 		return false;
@@ -70,6 +71,7 @@ bool IsDecompAlgoInRsrc(uint16_t algo)
 	{
 	case 4:
 	case 8:
+	case 14: // LZBITMAP
 		return true;
 	default:
 		return false;
@@ -97,6 +99,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		case 4: std::cout << " (Zlib, Rsrc)"; break;
 		case 7: std::cout << " (LZVN, Attr)"; break;
 		case 8: std::cout << " (LZVN, Rsrc)"; break;
+		case 14: std::cout << " (LZBITMAP, Rsrc)"; break;
 		default: std::cout << " (Unknown)"; break;
 		}
 
@@ -187,7 +190,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 				}
 			}
 		}
-		else if (hdr->algo == 8)
+		else if (hdr->algo == 8 || hdr->algo == 14) // LZFSE or LZBITMAP
 		{
 			const uint32_t *off_list = reinterpret_cast<const uint32_t *>(rsrc.data());
 
@@ -208,15 +211,21 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 					return false;
 				}
 
-				if (src[0] == 0x06)
+				if ((src[0] == 0x06 && hdr->algo == 8) || (src[0] == 0xFF && hdr->algo == 14))
 				{
 					memcpy(decompressed.data() + (k << 16), src + 1, src_len - 1);
 					decoded_bytes = src_len - 1;
 				}
-				else
+				else if (hdr->algo == 14)
+				{
+					decoded_bytes = DecompressLZBITMAP(decompressed.data() + (k << 16), expected_len, src, src_len);
+				}
+				else if (hdr->algo == 8)
 				{
 					decoded_bytes = DecompressLZVN(decompressed.data() + (k << 16), expected_len, src, src_len);
 				}
+				else
+					decoded_bytes = 0;
 
 				if (decoded_bytes != expected_len)
 				{
