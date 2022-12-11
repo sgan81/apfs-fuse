@@ -36,6 +36,11 @@ add_library(lzfse
 	3rdparty/lzfse/src/lzvn_encode_base.h
 	)
 
+add_library(libzbitmap
+	3rdparty/libzbitmap/libzbitmap.c
+	3rdparty/libzbitmap/libzbitmap.h
+	)
+
 add_library(apfs
 	ApfsLib/Aes.cpp
 	ApfsLib/Aes.h
