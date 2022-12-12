@@ -89,7 +89,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 	size_t decoded_bytes = 0;
 
 	// Reference:
-	// https://opensource.apple.com/source/copyfile/copyfile-173.40.2/copyfile.c.auto.html
+	// https://github.com/apple-oss-distributions/copyfile/blob/main/copyfile.c
 
 #if 1 // Disable to get compressed data
 	if (g_debug & Dbg_Cmpfs)
