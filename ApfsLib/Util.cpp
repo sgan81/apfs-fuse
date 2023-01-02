@@ -575,6 +575,7 @@ size_t DecompressLZBITMAP(uint8_t* dst, size_t dst_size, const uint8_t* src, siz
 	const uint8_t* in_end = src + src_size;
 	uint8_t* outp = dst;
 	const uint8_t* out_end = dst + dst_size;
+	const uint8_t* block_end;
 	const uint8_t* bitmaps;
 	const uint8_t* literals;
 	const uint8_t* distances;
@@ -700,6 +701,13 @@ size_t DecompressLZBITMAP(uint8_t* dst, size_t dst_size, const uint8_t* src, siz
 		dp = 0;
 		bp = 0;
 		lp = 0;
+		block_end = outp + uncompressed_size;
+		assert(block_end <= out_end);
+
+		if (block_end > out_end) {
+			log_error("LZBITMAP: Output buffer too small.\n");
+			block_end = out_end;
+		}
 
 		for (n = 0; n < ntoken; n++) {
 			t = scratch[n];
@@ -717,7 +725,7 @@ size_t DecompressLZBITMAP(uint8_t* dst, size_t dst_size, const uint8_t* src, siz
 				dp += 2;
 			}
 
-			for (m = 0; m < 8 && outp < out_end; m++) {
+			for (m = 0; m < 8 && outp < block_end; m++) {
 				if (bmp & 1)
 					*outp = literals[lp++];
 				else
