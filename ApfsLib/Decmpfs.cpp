@@ -58,6 +58,7 @@ bool IsDecompAlgoSupported(uint16_t algo)
 	case 4:
 	case 7:
 	case 8:
+	case 14:
 		return true;
 	default:
 		return false;
@@ -70,6 +71,7 @@ bool IsDecompAlgoInRsrc(uint16_t algo)
 	{
 	case 4:
 	case 8:
+	case 14:
 		return true;
 	default:
 		return false;
@@ -97,6 +99,7 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 		case 4: std::cout << " (Zlib, Rsrc)"; break;
 		case 7: std::cout << " (LZVN, Attr)"; break;
 		case 8: std::cout << " (LZVN, Rsrc)"; break;
+		case 14: std::cout << " (LZBITMAP, Rsrc)"; break;
 		default: std::cout << " (Unknown)"; break;
 		}
 
@@ -220,6 +223,37 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 
 				if (decoded_bytes != expected_len)
 				{
+					if (g_debug & Dbg_Errors)
+						std::cout << "Decmpfs: Expected length != decompressed length: " << expected_len << " != " << decoded_bytes << " [k = " << k << "]" << std::endl;
+
+					return false;
+				}
+			}
+		} else if (hdr->algo == 14) {
+			const uint32_t *off_list = reinterpret_cast<const uint32_t *>(rsrc.data());
+
+			decompressed.resize((hdr->size + 0xFFFF) & 0xFFFF0000);
+
+			for (k = 0; (k << 16) < decompressed.size(); k++) {
+				size_t expected_len = hdr->size - (0x10000 * k);
+				if (expected_len > 0x10000)
+					expected_len = 0x10000;
+				const uint8_t *src = rsrc.data() + off_list[k];
+				size_t src_len = off_list[k + 1] - off_list[k];
+
+				if (src_len > 0x10001) {
+					if (g_debug & Dbg_Errors)
+						std::cout << "Decmpfs: In rsrc, src_len too big (" << src_len << ")" << std::endl;
+					return false;
+				}
+
+				if (src[0] == 0xFF) {
+					memcpy(decompressed.data() + (k << 16), src + 1, src_len - 1);
+					decoded_bytes = src_len - 1;
+				} else
+					decoded_bytes = DecompressLZBITMAP(decompressed.data() + (k << 16), expected_len, src, src_len);
+
+				if (decoded_bytes != expected_len) {
 					if (g_debug & Dbg_Errors)
 						std::cout << "Decmpfs: Expected length != decompressed length: " << expected_len << " != " << decoded_bytes << " [k = " << k << "]" << std::endl;
 

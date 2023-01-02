@@ -560,6 +560,186 @@ size_t DecompressLZFSE(uint8_t * dst, size_t dst_size, const uint8_t * src, size
 	return lzfse_decode_buffer(dst, dst_size, src, src_size, nullptr);
 }
 
+size_t DecompressLZBITMAP(uint8_t* dst, size_t dst_size, const uint8_t* src, size_t src_size)
+{
+	uint8_t scratch[0x2000];
+	uint8_t flags;
+	uint32_t compressed_size;
+	uint32_t uncompressed_size;
+	uint32_t distances_offset;
+	uint32_t bitmap_offset;
+	uint32_t token_offset;
+	uint8_t token_map_bmp[16] = {};
+	uint8_t token_map_tkn[16] = {};
+	const uint8_t* inp = src;
+	const uint8_t* in_end = src + src_size;
+	uint8_t* outp = dst;
+	const uint8_t* out_end = dst + dst_size;
+	const uint8_t* bitmaps;
+	const uint8_t* literals;
+	const uint8_t* distances;
+	unsigned n;
+	unsigned m;
+	unsigned o;
+	const uint8_t* p;
+	uint8_t tkn_split = 3; // TODO is dependent on flag ...
+	uint8_t t;
+	uint32_t rlecnt;
+	uint16_t bitbuf;
+	int nbits;
+	uint32_t ntoken;
+	uint32_t tmp_size;
+	uint8_t bmp;
+	uint8_t tkn;
+	uint32_t dist;
+	uint32_t bp;
+	uint32_t dp;
+	uint32_t lp;
+
+	if (inp[0] != 'Z' || inp[1] != 'B' || inp[2] != 'M' || (inp[3] & 0xF0) != 0)
+		return 0;
+
+	flags = inp[3];
+
+	assert(flags == 9);
+	if (flags != 9) {
+		log_error("LZBITMAP: Flags != 0x09\n");
+		return 0;
+	}
+
+	inp += 4;
+
+	while (true) {
+		compressed_size = inp[0] | inp[1] << 8 | inp[2] << 16;
+		uncompressed_size = inp[3] | inp[4] << 8 | inp[5] << 16;
+
+		if (compressed_size == 6) {
+			if (uncompressed_size != 0)
+				log_error("LZBITMAP: Compressed size = 6, uncompressed size != 0???\n");
+			break;
+		}
+
+		if (compressed_size == uncompressed_size + 6) {
+			if (outp + uncompressed_size > out_end || inp + compressed_size > in_end) {
+				log_error("LZBITMAP: Buffer overrun.\n");
+				break;
+			}
+			memcpy(outp, inp + 6, uncompressed_size);
+			outp += uncompressed_size;
+			inp += compressed_size;
+			continue;
+		}
+
+		distances_offset = inp[6] | inp[7] << 8 | inp[8] << 16;
+		bitmap_offset = inp[9] | inp[10] << 8 | inp[11] << 16;
+		token_offset = inp[12] | inp[13] << 8 | inp[14] << 16;
+
+		literals = inp + 15;
+		distances = inp + distances_offset;
+		bitmaps = inp + bitmap_offset;
+
+		p = inp + compressed_size - 0x11;
+
+		for (n = 0; n < tkn_split; n++) {
+			token_map_bmp[n] = 0;
+			token_map_tkn[n] = n;
+		}
+
+		nbits = 0;
+		bitbuf = 0;
+		for (; n < 15; n++) {
+			while (nbits < 10) {
+				bitbuf |= *p << nbits;
+				nbits += 8;
+				p++;
+			}
+			token_map_bmp[n] = bitbuf & 0xFF;
+			token_map_tkn[n] = bitbuf >> 8 & 3;
+			bitbuf >>= 10;
+			nbits -= 10;
+		}
+
+		ntoken = (uncompressed_size + 7) >> 3;
+
+		tmp_size = compressed_size - token_offset - 0x11;
+
+		for (n = 0; n < tmp_size; n++) {
+			scratch[2 * n + 0x1000] = inp[token_offset + n] & 0xF;
+			scratch[2 * n + 0x1001] = inp[token_offset + n] >> 4;
+		}
+
+		tmp_size *= 2;
+		p = scratch + 0x1000;
+
+		o = 0;
+		for (n = 0; n < tmp_size; n++) {
+			t = p[n];
+			if (t == 0xF) {
+				t = p[n - 1];
+				rlecnt = 3;
+				do {
+					n++;
+					rlecnt += p[n];
+				} while (p[n] == 0xF);
+
+				for (m = 0; m < rlecnt; m++)
+					scratch[o++] = t;
+			}
+			else {
+				scratch[o++] = t;
+			}
+		}
+
+		if (o != ntoken)
+			log_debug("RLE size = %X, ntoken = %X\n", o, ntoken);
+
+		o = 0;
+		m = 0;
+
+		dist = 8;
+		dp = 0;
+		bp = 0;
+		lp = 0;
+
+		for (n = 0; n < ntoken; n++) {
+			t = scratch[n];
+			if (t < tkn_split)
+				bmp = bitmaps[bp++];
+			else
+				bmp = token_map_bmp[t];
+			tkn = token_map_tkn[t];
+
+			if (tkn == 1) {
+				dist = distances[dp++];
+			}
+			else if (tkn == 2) {
+				dist = distances[dp] | distances[dp + 1] << 8;
+				dp += 2;
+			}
+
+			for (m = 0; m < 8 && outp < out_end; m++) {
+				if (bmp & 1)
+					*outp = literals[lp++];
+				else
+					*outp = *(outp - dist);
+				bmp >>= 1;
+				outp++;
+			}
+		}
+
+		if (lp != distances_offset - 15)
+			log_error("lp = %06X (%06X)\n", lp, distances_offset - 15);
+		if (dp != bitmap_offset - distances_offset)
+			log_error("dp = %06X (%06X)\n", dp, bitmap_offset - distances_offset);
+		if (bp != token_offset - bitmap_offset)
+			log_error("bp = %06X (%06X)\n", bp, token_offset - bitmap_offset);
+
+		inp += compressed_size;
+	}
+
+	return outp - dst;
+}
+
 int log2(uint32_t val)
 {
 	int r = 0;
@@ -569,4 +749,36 @@ int log2(uint32_t val)
 	if (val & 0xC) { val >>= 2; r += 2; }
 	if (val & 0x2) { val >>= 1; r += 1; }
 	return r;
+}
+
+FILE *g_log = stderr;
+
+void log_debug(const char *msg, ...)
+{
+	if (g_debug & Dbg_Cmpfs) {
+		va_list va;
+		va_start(va, msg);
+		vfprintf(g_log, msg, va);
+		va_end(va);
+	}
+}
+
+void log_warn(const char *msg, ...)
+{
+	if (g_debug & Dbg_Info) {
+		va_list va;
+		va_start(va, msg);
+		vfprintf(g_log, msg, va);
+		va_end(va);
+	}
+}
+
+void log_error(const char *msg, ...)
+{
+	if (g_debug & Dbg_Errors) {
+		va_list va;
+		va_start(va, msg);
+		vfprintf(g_log, msg, va);
+		va_end(va);
+	}
 }
