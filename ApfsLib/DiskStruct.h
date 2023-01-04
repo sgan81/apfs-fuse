@@ -538,13 +538,13 @@ constexpr int J_DREC_HASH_SHIFT = 10;
 struct j_drec_key_t {
 	j_key_t hdr;
 	le_uint16_t name_len;
-	uint8_t name[0];
+	uint8_t name[];
 };
 
 struct j_drec_hashed_key_t {
 	j_key_t hdr;
 	le_uint32_t name_len_and_hash;
-	uint8_t name[0];
+	uint8_t name[];
 };
 
 struct j_drec_val_t {

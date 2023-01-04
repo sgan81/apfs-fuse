@@ -72,7 +72,7 @@ public:
 	 * @param src Plaintext block (128 bits, 16 bytes)
 	 * @param dst Encrypted block (128 bits, 16 bytes)
 	 */
-	void Encrypt(const void *src, void *dst);
+	void Encrypt(const uint8_t *src, uint8_t *dst);
 
 	/**
 	 * @brief Decrypt Block
@@ -82,7 +82,7 @@ public:
 	 * @param src Encrypted block (128 bits, 16 bytes)
 	 * @param dst Decrypted block (128 bits, 16 bytes)
 	 */
-	void Decrypt(const void *src, void *dst);
+	void Decrypt(const uint8_t *src, uint8_t *dst);
 
 	/**
 	 * @brief Encrypt CBC

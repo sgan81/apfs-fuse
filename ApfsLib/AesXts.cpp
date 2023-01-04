@@ -35,7 +35,7 @@ void AesXts::Encrypt(uint8_t* cipher, const uint8_t* plain, std::size_t size, ui
 	tweak[0] = htole64(unit_no);
 	tweak[1] = 0;
 
-	m_aes_2.Encrypt(tweak, tweak);
+	m_aes_2.Encrypt(reinterpret_cast<const uint8_t *>(tweak), reinterpret_cast<uint8_t *>(tweak));
 
 	for (k = 0; k < size; k += 0x10)
 	{
@@ -56,7 +56,7 @@ void AesXts::Decrypt(uint8_t* plain, const uint8_t* cipher, std::size_t size, ui
 	tweak[0] = htole64(unit_no);
 	tweak[1] = 0;
 
-	m_aes_2.Encrypt(tweak, tweak);
+	m_aes_2.Encrypt(reinterpret_cast<const uint8_t *>(tweak), reinterpret_cast<uint8_t *>(tweak));
 
 	for (k = 0; k < size; k += 0x10)
 	{
@@ -69,12 +69,8 @@ void AesXts::Decrypt(uint8_t* plain, const uint8_t* cipher, std::size_t size, ui
 
 void AesXts::Xor128(void *out, const void *op1, const void *op2)
 {
-	uint64_t *val64 = reinterpret_cast<uint64_t *>(out);
-	const uint64_t *op1_64 = reinterpret_cast<const uint64_t *>(op1);
-	const uint64_t *op2_64 = reinterpret_cast<const uint64_t *>(op2);
-
-	val64[0] = op1_64[0] ^ op2_64[0];
-	val64[1] = op1_64[1] ^ op2_64[1];
+	reinterpret_cast<uint64_t*>(out)[0] = reinterpret_cast<const uint64_t*>(op1)[0] ^ reinterpret_cast<const uint64_t*>(op2)[0];
+	reinterpret_cast<uint64_t*>(out)[1] = reinterpret_cast<const uint64_t*>(op1)[1] ^ reinterpret_cast<const uint64_t*>(op2)[1];
 }
 
 void AesXts::MultiplyTweak(uint64_t* tweak)
