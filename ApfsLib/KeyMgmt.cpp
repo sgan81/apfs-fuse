@@ -4,9 +4,10 @@
 #include <sstream>
 
 #include "ApfsContainer.h"
-#include "AesXts.h"
-#include "Sha256.h"
-#include "Crypto.h"
+#include <Crypto/Asn1Der.h>
+#include <Crypto/AesXts.h>
+#include <Crypto/Sha256.h>
+#include <Crypto/Crypto.h>
 #include "Util.h"
 #include "BlockDumper.h"
 
@@ -18,165 +19,34 @@ struct bagdata_t
 	size_t size;
 };
 
-struct blob_header_t
+struct key_info_t
 {
-	uint64_t unk_80;
-	uint8_t hmac[0x20];
-	uint8_t salt[0x08];
-	bagdata_t blob;
+	uint32_t flags;
+	uint8_t unk_04;
+	uint8_t unk_05;
+	uint8_t uuid[16];
 };
 
-struct key_unk_82_t
+struct key_header_t
 {
-	uint32_t unk_00;
-	uint16_t unk_04;
-	uint8_t unk_06;
-	uint8_t unk_07;
-};
-
-struct kek_blob_t
-{
-	uint64_t unk_80;
+	uint64_t unk_0;
 	apfs_uuid_t uuid;
-	key_unk_82_t unk_82;
+	key_info_t info;
+};
+
+struct kek_entry_t
+{
+	key_header_t hdr;
 	uint8_t wrapped_kek[0x28];
 	uint64_t iterations;
 	uint8_t salt[0x10];
 };
 
-struct vek_blob_t
+struct vek_entry_t
 {
-	uint64_t unk_80;
-	apfs_uuid_t uuid;
-	key_unk_82_t unk_82;
+	key_header_t hdr;
 	uint8_t wrapped_vek[0x28];
 };
-
-KeyParser::KeyParser()
-{
-	m_start = nullptr;
-	m_ptr = nullptr;
-	m_end = nullptr;
-}
-
-void KeyParser::SetData(const uint8_t *data, size_t size)
-{
-	m_start = data;
-	m_end = data + size;
-	m_ptr = m_start;
-}
-
-void KeyParser::SetData(const bagdata_t& data)
-{
-	m_start = data.data;
-	m_end = data.data + data.size;
-	m_ptr = m_start;
-}
-
-void KeyParser::Rewind()
-{
-	m_ptr = m_start;
-}
-
-void KeyParser::Clear()
-{
-	m_start = nullptr;
-	m_ptr = nullptr;
-	m_end = nullptr;
-}
-
-bool KeyParser::GetUInt64(uint8_t expected_tag, uint64_t & result)
-{
-	uint8_t tag;
-	size_t len;
-	size_t k;
-	uint64_t val;
-
-	tag = *m_ptr;
-
-	if (tag != expected_tag)
-		return false;
-
-	GetTagAndLen(tag, len);
-
-	val = 0;
-	for (k = 0; k < len; k++)
-		val = (val << 8) | GetByte();
-
-	result = val;
-
-	return true;
-}
-
-bool KeyParser::GetBytes(uint8_t expected_tag, uint8_t * data, size_t len)
-{
-	uint8_t tag;
-
-	tag = *m_ptr;
-
-	if (tag != expected_tag)
-		return false;
-
-	GetTagAndLen(tag, len);
-
-	if ((m_end - m_ptr) < static_cast<ptrdiff_t>(len))
-		return false;
-
-	memcpy(data, m_ptr, len);
-	m_ptr += len;
-
-	return true;
-}
-
-bool KeyParser::GetAny(uint8_t expected_tag, bagdata_t& data)
-{
-	uint8_t tag;
-	size_t len;
-
-	tag = *m_ptr;
-
-	if (tag != expected_tag)
-		return false;
-
-	GetTagAndLen(tag, len);
-
-	if ((m_end - m_ptr) < static_cast<ptrdiff_t>(len))
-		return false;
-
-	data.data = m_ptr;
-	data.size = len;
-
-	m_ptr += len;
-
-	return true;
-}
-
-bool KeyParser::GetTagAndLen(uint8_t & tag, size_t & len)
-{
-	uint8_t b;
-
-	tag = GetByte();
-	b = GetByte();
-
-	if (b >= 0x80)
-	{
-		len = 0;
-		for (uint8_t k = 0; k < (b & 0x7F); k++)
-		{
-			len = (len << 8) | GetByte();
-		}
-	}
-	else
-		len = b;
-
-	return true;
-}
-
-void KeyParser::GetRemaining(bagdata_t &data)
-{
-	data.data = m_ptr;
-	data.size = m_end - m_ptr;
-}
 
 Keybag::Keybag()
 {
@@ -274,7 +144,6 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 
 	size_t s;
 	size_t k;
-	blob_header_t bhdr;
 	const keybag_entry_t *ke;
 	bagdata_t bd;
 	const char *typestr;
@@ -342,6 +211,8 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 			switch (ke->ke_tag)
 			{
 			case 2:
+				der_dump(ke->ke_keydata, ke->ke_keylen);
+#if 0
 				bd.data = ke->ke_keydata;
 				bd.size = ke->ke_keylen;
 
@@ -378,6 +249,7 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 				{
 					st << "Invalid BLOB Header!!!" << endl;
 				}
+#endif
 				break;
 			case 3:
 				{
@@ -396,6 +268,8 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 			switch (ke->ke_tag)
 			{
 			case 3:
+				der_dump(ke->ke_keydata, ke->ke_keylen);
+#if 0
 				bd.data = ke->ke_keydata;
 				bd.size = ke->ke_keylen;
 
@@ -492,6 +366,7 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 				{
 					st << "Invalid BLOB Header!!!" << endl;
 				}
+#endif
 				break;
 			case 4:
 				st << "Hint    : " << string(reinterpret_cast<const char *>(ke->ke_keydata), ke->ke_keylen) << endl;
@@ -557,15 +432,6 @@ bool KeyManager::GetPasswordHint(std::string& hint, const apfs_uuid_t& volume_uu
 
 bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, const char* password)
 {
-	/*
-	key_data_t recs_block;
-	key_data_t kek_header;
-	key_data_t vek_header;
-	*/
-	bagdata_t kek_data;
-	bagdata_t vek_data;
-	kek_blob_t kek_blob;
-	vek_blob_t vek_blob;
 	const keybag_entry_t *ke_recs;
 
 	if (g_debug & Dbg_Crypto)
@@ -593,13 +459,15 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	if (g_debug & Dbg_Crypto)
 		recs_bag.dump(std::cout, &m_container_bag, volume_uuid);
 
-	uint8_t dk[0x20];
-	uint8_t kek[0x20] = { 0 };
+	uint8_t dk[0x20] = {};
+	uint8_t kek[0x20] = {};
 	uint64_t iv;
 	bool rc = false;
 	const keybag_entry_t *ke_kek;
 	const keybag_entry_t *ke_vek;
 	bagdata_t bd;
+	kek_entry_t keke;
+	vek_entry_t veke;
 	AES::Mode kek_mode = AES::AES_256;
 
 	int cnt = recs_bag.GetKeyCnt();
@@ -615,38 +483,24 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 		if (ke_kek->ke_tag != KB_TAG_VOLUME_UNLOCK_RECORDS)
 			continue;
 
-		bd.data = ke_kek->ke_keydata;
-		bd.size = ke_kek->ke_keylen;
-
-		if (!VerifyBlob(bd, kek_data))
+		if (!DecodeKEK(keke, ke_kek->ke_keydata, ke_kek->ke_keydata + ke_kek->ke_keylen))
 			continue;
 
-		if (!DecodeKEKBlob(kek_blob, kek_data))
-			continue;
+		PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(password), strlen(password), keke.salt, sizeof(keke.salt), keke.iterations, dk, sizeof(dk));
 
-		PBKDF2_HMAC_SHA256(reinterpret_cast<const uint8_t *>(password), strlen(password), kek_blob.salt, sizeof(kek_blob.salt), kek_blob.iterations, dk, sizeof(dk));
-
-		switch (kek_blob.unk_82.unk_00)
-		{
-		case 0x00:
-		case 0x10:
-			rc = Rfc3394_KeyUnwrap(kek, kek_blob.wrapped_kek, 0x20, dk, AES::AES_256, &iv);
-			kek_mode = AES::AES_256;
-			break;
-		case 0x02:
-			rc = Rfc3394_KeyUnwrap(kek, kek_blob.wrapped_kek, 0x10, dk, AES::AES_128, &iv);
+		// There are more variants here ... 1 = hw_crypt
+		if (keke.hdr.info.flags & 2) {
+			rc = Rfc3394_KeyUnwrap(kek, keke.wrapped_kek, 0x10, dk, AES::AES_128, &iv);
 			kek_mode = AES::AES_128;
-			break;
-		default:
-			std::cerr << "Unknown KEK key flags 82/00 = " << std::hex << kek_blob.unk_82.unk_00 << ". Please file a bug report." << std::endl;
-			rc = false;
-			break;
+		} else {
+			rc = Rfc3394_KeyUnwrap(kek, keke.wrapped_kek, 0x20, dk, AES::AES_256, &iv);
+			kek_mode = AES::AES_256;
 		}
 
 		if (g_debug & Dbg_Crypto)
 		{
 			std::cout << "PW Key  : " << hexstr(dk, sizeof(dk)) << std::endl;
-			std::cout << "KEK Wrpd: " << hexstr(kek_blob.wrapped_kek, sizeof(kek_blob.wrapped_kek)) << std::endl;
+			std::cout << "KEK Wrpd: " << hexstr(keke.wrapped_kek, sizeof(keke.wrapped_kek)) << std::endl;
 			std::cout << "KEK     : " << hexstr(kek, 0x20) << std::endl;
 			std::cout << "KEK IV  : " << std::setw(16) << iv << std::endl;
 			std::cout << std::endl;
@@ -667,28 +521,16 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	if (!ke_vek)
 		return false;
 
-	bd.data = ke_vek->ke_keydata;
-	bd.size = ke_vek->ke_keylen;
-
-	if (!VerifyBlob(bd, vek_data))
-		return false;
-
-	if (!DecodeVEKBlob(vek_blob, vek_data))
+	if (!DecodeVEK(veke, ke_vek->ke_keydata, ke_vek->ke_keydata + ke_vek->ke_keylen))
 		return false;
 
 	memset(vek, 0, 0x20);
 
-	if (vek_blob.unk_82.unk_00 == 0)
-	{
-		// AES-256. This method is used for wrapping the whole XTS-AES key,
-		// and applies to non-FileVault encrypted APFS volumes.
-		rc = Rfc3394_KeyUnwrap(vek, vek_blob.wrapped_vek, 0x20, kek, kek_mode, &iv);
-	}
-	else if (vek_blob.unk_82.unk_00 == 2)
-	{
+	// TODO 1
+	if (veke.hdr.info.flags & 2) {
 		// AES-128. This method is used for FileVault and CoreStorage encrypted
 		// volumes that have been converted to APFS.
-		rc = Rfc3394_KeyUnwrap(vek, vek_blob.wrapped_vek, 0x10, kek, kek_mode, &iv);
+		rc = Rfc3394_KeyUnwrap(vek, veke.wrapped_vek, 0x10, kek, kek_mode, &iv);
 
 		if (rc)
 		{
@@ -698,21 +540,19 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 
 			// Use (VEK || vek_blob.uuid), then SHA256, then take the first 16 bytes
 			sha.Update(vek, 0x10);
-			sha.Update(vek_blob.uuid, 0x10);
+			sha.Update(veke.hdr.uuid, 0x10);
 			sha.Final(sha_result);
 			memcpy(vek + 0x10, sha_result, 0x10);
 		}
-	}
-	else
-	{
-		// Unknown method.
-		std::cerr << "Unknown VEK key flags 82/00 = " << std::hex << vek_blob.unk_82.unk_00 << ". Please file a bug report." << std::endl;
-		rc = false;
+	} else {
+		// AES-256. This method is used for wrapping the whole XTS-AES key,
+		// and applies to non-FileVault encrypted APFS volumes.
+		rc = Rfc3394_KeyUnwrap(vek, veke.wrapped_vek, 0x20, kek, kek_mode, &iv);
 	}
 
 	if (g_debug & Dbg_Crypto)
 	{
-		std::cout << "VEK Wrpd: " << hexstr(vek_blob.wrapped_vek, 0x28) << std::endl;
+		std::cout << "VEK Wrpd: " << hexstr(veke.wrapped_vek, 0x28) << std::endl;
 		std::cout << "VEK     : " << hexstr(vek, 0x20) << std::endl;
 		std::cout << "VEK IV  : " << std::setw(16) << iv << std::endl;
 	}
@@ -825,116 +665,72 @@ void KeyManager::DecryptBlocks(uint8_t* data, uint64_t block, uint64_t cnt, cons
 	}
 }
 
-bool KeyManager::VerifyBlob(const bagdata_t & keydata, bagdata_t & contents)
+const uint8_t* KeyManager::DecodeKeyHeader(key_header_t& hdr, const uint8_t*& end, const uint8_t* der, const uint8_t* der_end)
 {
 	static const uint8_t blob_cookie[6] = { 0x01, 0x16, 0x20, 0x17, 0x15, 0x05 };
 
-	KeyParser parser;
-	blob_header_t bhdr;
-	SHA256 sha;
-	uint8_t hmac_key[0x20];
-	uint8_t hmac_calc[0x20];
+	const uint8_t* body_end;
+	uint64_t hmac_0;
+	uint8_t hmac_hash[32];
+	uint8_t hmac_salt[8];
+	size_t info_len;
 
-	if (!DecodeBlobHeader(bhdr, keydata))
-		return false;
+	SHA256 sha256;
+	uint8_t hmac_key[32];
+	uint8_t hmac_res[40];
 
-	sha.Init();
-	sha.Update(blob_cookie, 6);
-	sha.Update(bhdr.salt, 8);
-	sha.Final(hmac_key);
+	der = der_decode_sequence_tl(body_end, der, der_end);
+	if (der == nullptr) return nullptr;
+	der = der_decode_uint64(0x8000000000000000U, hmac_0, der, body_end);
+	der = der_decode_octet_string_copy(0x8000000000000001U, hmac_hash, 32, der, body_end);
+	der = der_decode_octet_string_copy(0x8000000000000002U, hmac_salt, 8, der, body_end);
+	if (der == nullptr) {
+		log_error("Keybag: Parsing key header failed.\n");
+		return nullptr;
+	}
 
-	HMAC_SHA256(hmac_key, 0x20, bhdr.blob.data, bhdr.blob.size, hmac_calc);
+	sha256.Init();
+	sha256.Update(blob_cookie, 6);
+	sha256.Update(hmac_salt, 8);
+	sha256.Final(hmac_key);
 
-	if (memcmp(bhdr.hmac, hmac_calc, 0x20) != 0)
-		return false;
+	HMAC_SHA256(hmac_key, 32, der, body_end - der, hmac_res);
+	if (memcmp(hmac_hash, hmac_res, 32) != 0)
+		log_error("Keybag: HMAC verification failed.\n");
+	// Ignoring for now ...
 
-	contents = bhdr.blob;
-
-	return true;
+	der = der_decode_constructed_tl(0xA000000000000003U, end, der, body_end);
+	der = der_decode_uint64(0x8000000000000000U, hdr.unk_0, der, end);
+	der = der_decode_octet_string_copy(0x8000000000000001U, hdr.uuid, 16, der, end);
+	der = der_decode_tl(0x8000000000000002U, info_len, der, end);
+	if (info_len > 0x16) return nullptr;
+	memcpy(&hdr.info, der, info_len);
+	der += info_len;
+	hdr.info.flags = bswap_le(hdr.info.flags);
+	return der;
 }
 
-bool KeyManager::DecodeBlobHeader(blob_header_t & hdr, const bagdata_t & data)
+bool KeyManager::DecodeKEK(kek_entry_t& kek, const uint8_t* der, const uint8_t* der_end)
 {
-	KeyParser parser;
-	bagdata_t blob_hdr;
+	const uint8_t* end = nullptr;
 
-	parser.SetData(data);
-
-	if (!parser.GetAny(0x30, blob_hdr))
-		return false;
-
-	parser.SetData(blob_hdr);
-
-	if (!parser.GetUInt64(0x80, hdr.unk_80))
-		return false;
-
-	if (!parser.GetBytes(0x81, hdr.hmac, 0x20))
-		return false;
-
-	if (!parser.GetBytes(0x82, hdr.salt, 0x08))
-		return false;
-
-	parser.GetRemaining(hdr.blob);
-
-	return true;
+	memset(&kek, 0, sizeof(kek));
+	der = DecodeKeyHeader(kek.hdr, end, der, der_end);
+	if (der == nullptr) return false;
+	der = der_decode_octet_string_copy(0x8000000000000003U, kek.wrapped_kek, 40, der, end);
+	der = der_decode_uint64(0x8000000000000004U, kek.iterations, der, end);
+	der = der_decode_octet_string_copy(0x8000000000000005U, kek.salt, 16, der, end);
+	return der != nullptr;
 }
 
-bool KeyManager::DecodeKEKBlob(kek_blob_t & kek_blob, const bagdata_t & data)
+bool KeyManager::DecodeVEK(vek_entry_t& vek, const uint8_t* der, const uint8_t* der_end)
 {
-	KeyParser parser;
-	bagdata_t key_hdr;
+	const uint8_t* end = nullptr;
 
-	parser.SetData(data);
-
-	if (!parser.GetAny(0xA3, key_hdr))
-		return false;
-
-	parser.SetData(key_hdr);
-
-	if (!parser.GetUInt64(0x80, kek_blob.unk_80))
-		return false;
-
-	if (!parser.GetBytes(0x81, kek_blob.uuid, 0x10))
-		return false;
-
-	if (!parser.GetBytes(0x82, reinterpret_cast<uint8_t *>(&kek_blob.unk_82), 8))
-		return false;
-
-	if (!parser.GetBytes(0x83, kek_blob.wrapped_kek, 0x28))
-		return false;
-
-	if (!parser.GetUInt64(0x84, kek_blob.iterations))
-		return false;
-
-	if (!parser.GetBytes(0x85, kek_blob.salt, 0x10))
-		return false;
-
-	return true;
-}
-
-bool KeyManager::DecodeVEKBlob(vek_blob_t & vek_blob, const bagdata_t & data)
-{
-	KeyParser parser;
-	bagdata_t key_hdr;
-
-	parser.SetData(data);
-
-	if (!parser.GetAny(0xA3, key_hdr))
-		return false;
-
-	parser.SetData(key_hdr);
-
-	if (!parser.GetUInt64(0x80, vek_blob.unk_80))
-		return false;
-
-	if (!parser.GetBytes(0x81, vek_blob.uuid, 0x10))
-		return false;
-
-	if (!parser.GetBytes(0x82, reinterpret_cast<uint8_t *>(&vek_blob.unk_82), 8))
-		return false;
-
-	if (!parser.GetBytes(0x83, vek_blob.wrapped_vek, 0x28))
-		return false;
-
-	return true;
+	memset(&vek, 0, sizeof(vek));
+	der = DecodeKeyHeader(vek.hdr, end, der, der_end);
+	if (der == nullptr) return false;
+	der = der_decode_octet_string_copy(0x8000000000000003U, vek.wrapped_vek, 40, der, der_end);
+	// HW encrypt has more here ... TODO
+	return der != nullptr;
 }

@@ -5,8 +5,8 @@
 
 #include "Global.h"
 #include "Endian.h"
-#include "Crypto.h"
-#include "TripleDes.h"
+#include <Crypto/Crypto.h>
+#include <Crypto/TripleDes.h>
 #include "Util.h"
 
 #include "DiskImageFile.h"

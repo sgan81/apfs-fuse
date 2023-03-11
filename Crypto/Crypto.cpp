@@ -1,7 +1,7 @@
 #include "Sha1.h"
 #include "Sha256.h"
 #include "Crypto.h"
-#include "Util.h"
+// #include "Util.h"
 
 #include <cstring>
 #include <cassert>
@@ -9,7 +9,7 @@
 #include <iostream>
 #include <iomanip>
 
-#include "Endian.h"
+#include <ApfsLib/Endian.h>
 
 union Rfc3394_Unit {
 	uint64_t u64[2];

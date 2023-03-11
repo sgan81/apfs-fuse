@@ -36,11 +36,26 @@ add_library(lzfse
 	3rdparty/lzfse/src/lzvn_encode_base.h
 	)
 
+add_library(crypto
+	Crypto/Aes.cpp
+	Crypto/Aes.h
+	Crypto/AesXts.cpp
+	Crypto/AesXts.h
+	Crypto/Asn1Der.cpp
+	Crypto/Asn1Der.h
+	Crypto/Crypto.cpp
+	Crypto/Crypto.h
+	Crypto/Des.cpp
+	Crypto/Des.h
+	Crypto/Sha1.cpp
+	Crypto/Sha1.h
+	Crypto/Sha256.cpp
+	Crypto/Sha256.h
+	Crypto/TripleDes.cpp
+	Crypto/TripleDes.h
+)
+
 add_library(apfs
-	ApfsLib/Aes.cpp
-	ApfsLib/Aes.h
-	ApfsLib/AesXts.cpp
-	ApfsLib/AesXts.h
 	ApfsLib/ApfsContainer.cpp
 	ApfsLib/ApfsContainer.h
 	ApfsLib/ApfsDir.cpp
@@ -59,12 +74,8 @@ add_library(apfs
 	ApfsLib/CheckPointMap.h
 	ApfsLib/Crc32.cpp
 	ApfsLib/Crc32.h
-	ApfsLib/Crypto.cpp
-	ApfsLib/Crypto.h
 	ApfsLib/Decmpfs.cpp
 	ApfsLib/Decmpfs.h
-	ApfsLib/Des.cpp
-	ApfsLib/Des.h
 	ApfsLib/Device.cpp
 	ApfsLib/Device.h
 	ApfsLib/DeviceDMG.cpp
@@ -90,17 +101,11 @@ add_library(apfs
 	ApfsLib/KeyMgmt.h
 	ApfsLib/PList.cpp
 	ApfsLib/PList.h
-	ApfsLib/Sha1.cpp
-	ApfsLib/Sha1.h
-	ApfsLib/Sha256.cpp
-	ApfsLib/Sha256.h
-	ApfsLib/TripleDes.cpp
-	ApfsLib/TripleDes.h
 	ApfsLib/Util.cpp
 	ApfsLib/Util.h
 	ApfsLib/Unicode.cpp
 	ApfsLib/Unicode.h)
-target_link_libraries(apfs z bz2 lzfse)
+target_link_libraries(apfs z bz2 lzfse crypto)
 target_compile_definitions(apfs PUBLIC _FILE_OFFSET_BITS=64 _DARWIN_USE_64_BIT_INODE)
 
 add_executable(apfs-dump
