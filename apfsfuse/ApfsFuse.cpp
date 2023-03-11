@@ -953,6 +953,10 @@ int main(int argc, char *argv[])
 	delete g_container;
 	g_disk_main->Close();
 	delete g_disk_main;
+	if (g_disk_tier2) {
+		g_disk_tier2->Close();
+		delete g_disk_tier2;
+	}
 
 	return err ? 1 : 0;
 }

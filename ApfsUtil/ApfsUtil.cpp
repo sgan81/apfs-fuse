@@ -59,7 +59,6 @@ int main(int argc, char *argv[])
 	ApfsContainer *container = nullptr;
 	uint64_t offset;
 	uint64_t size;
-	int volcnt;
 	apfs_superblock_t apsb;
 
 	g_debug = 0;
@@ -84,7 +83,7 @@ int main(int argc, char *argv[])
 			gpt.ListEntries();
 
 			int partnum = gpt.FindFirstAPFSPartition();
-			if (partnum > 0) {
+			if (partnum >= 0) {
 				printf("First APFS partition is %d\n", partnum);
 				gpt.GetPartitionOffsetAndSize(partnum, offset, size);
 			}
@@ -95,9 +94,9 @@ int main(int argc, char *argv[])
 
 		if (container->Init()) {
 			// printf("Listing volumes:\n");
-			volcnt = container->GetVolumeCnt();
-			for (int k = 0; k < volcnt; k++) {
-				container->GetVolumeInfo(k, apsb);
+			for (int k = 0; k < NX_MAX_FILE_SYSTEMS; k++) {
+				if (!container->GetVolumeInfo(k, apsb))
+					continue;
 				printf("Volume %d ", k);
 				print_apfs_uuid(apsb.apfs_vol_uuid);
 				printf("\n");

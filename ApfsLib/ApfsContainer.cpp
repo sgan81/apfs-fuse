@@ -194,19 +194,19 @@ bool ApfsContainer::Init(xid_t req_xid)
 	return true;
 }
 
-ApfsVolume *ApfsContainer::GetVolume(unsigned int index, const std::string &passphrase, xid_t snap_xid)
+ApfsVolume *ApfsContainer::GetVolume(unsigned int fsid, const std::string &passphrase, xid_t snap_xid)
 {
 	ApfsVolume *vol = nullptr;
 	oid_t oid;
 	omap_res_t omr;
 	bool rc;
 
-	if (index >= 100)
+	if (fsid >= 100)
 		return nullptr;
 
 	m_passphrase = passphrase;
 
-	oid = m_nx.nx_fs_oid[index];
+	oid = m_nx.nx_fs_oid[fsid];
 
 	if (oid == 0)
 		return nullptr;
@@ -234,27 +234,13 @@ ApfsVolume *ApfsContainer::GetVolume(unsigned int index, const std::string &pass
 	return vol;
 }
 
-unsigned int ApfsContainer::GetVolumeCnt() const
-{
-	unsigned int k;
-	unsigned int cnt = 0;
-
-	for (k = 0; k < 100; k++)
-	{
-		if (m_nx.nx_fs_oid[k] != 0)
-			cnt++;
-	}
-
-	return cnt;
-}
-
 bool ApfsContainer::GetVolumeInfo(unsigned int fsid, apfs_superblock_t& apsb)
 {
 	oid_t oid;
 	omap_res_t omr;
 	std::vector<uint8_t> apsb_raw;
 
-	if (fsid >= 100)
+	if (fsid >= NX_MAX_FILE_SYSTEMS)
 		return false;
 
 	oid = m_nx.nx_fs_oid[fsid];

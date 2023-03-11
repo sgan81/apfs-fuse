@@ -41,8 +41,7 @@ public:
 
 	bool Init(xid_t req_xid = 0);
 
-	ApfsVolume *GetVolume(unsigned int index, const std::string &passphrase = std::string(), xid_t snap_xid = 0);
-	unsigned int GetVolumeCnt() const;
+	ApfsVolume *GetVolume(unsigned int fsid, const std::string &passphrase = std::string(), xid_t snap_xid = 0);
 	bool GetVolumeInfo(unsigned int fsid, apfs_superblock_t &apsb);
 
 	bool ReadBlocks(uint8_t *data, paddr_t paddr, uint64_t blkcnt = 1) const;
