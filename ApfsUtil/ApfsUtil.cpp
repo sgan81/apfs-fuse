@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 	uint64_t size;
 	apfs_superblock_t apsb;
 
-	g_debug = 255;
+	g_debug = 0;
 
 	if (argc < 2)
 	{

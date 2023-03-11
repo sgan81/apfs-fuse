@@ -47,6 +47,7 @@ public:
 	bool GetVolumeKey(uint8_t *vek, const apfs_uuid_t &volume_uuid, const char *password = nullptr);
 
 	bool IsValid() const { return m_is_valid; }
+	bool IsUnencrypted() const { return m_is_unencrypted; }
 
 	void dump(std::ostream &st);
 
@@ -63,4 +64,5 @@ private:
 	apfs_uuid_t m_container_uuid;
 
 	bool m_is_valid;
+	bool m_is_unencrypted;
 };

@@ -68,7 +68,7 @@ bool ApfsVolume::Init(paddr_t apsb_paddr)
 		return false;
 	}
 
-	if ((m_sb.apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED)
+	if ((m_sb.apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED && !m_container.IsUnencrypted())
 	{
 		uint8_t vek[0x20];
 		std::string str;

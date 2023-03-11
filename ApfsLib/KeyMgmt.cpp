@@ -384,6 +384,7 @@ KeyManager::KeyManager(ApfsContainer& container) : m_container(container)
 {
 	memset(m_container_uuid, 0, sizeof(m_container_uuid));
 	m_is_valid = false;
+	m_is_unencrypted = false;
 }
 
 KeyManager::~KeyManager()
@@ -613,10 +614,13 @@ bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t
 		std::cout << "starting LoadKeybag @ " << std::hex << block << std::endl;
 
 	data.resize(blockcnt * blocksize);
+	const media_keybag_t *mk = reinterpret_cast<const media_keybag_t *>(data.data());
 
 	m_container.ReadBlocks(data.data(), block, blockcnt);
-
-	DecryptBlocks(data.data(), block, blockcnt, uuid);
+	if (mk->mk_obj.o_type == type)
+		m_is_unencrypted = true;
+	else
+		DecryptBlocks(data.data(), block, blockcnt, uuid);
 
 	for (k = 0; k < blockcnt; k++)
 	{
@@ -626,8 +630,6 @@ bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t
 
 	if (g_debug & Dbg_Crypto)
 		std::cout << " all blocks verified" << std::endl;
-
-	const media_keybag_t *mk = reinterpret_cast<const media_keybag_t *>(data.data());
 
 	if (mk->mk_obj.o_type != type)
 	{

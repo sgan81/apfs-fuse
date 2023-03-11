@@ -53,6 +53,7 @@ public:
 
 	bool GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password = nullptr);
 	bool GetPasswordHint(std::string &hint, const apfs_uuid_t &vol_uuid);
+	bool IsUnencrypted() const { return m_keymgr.IsUnencrypted(); }
 
 	void dump(BlockDumper& bd);
 
