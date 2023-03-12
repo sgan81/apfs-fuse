@@ -500,6 +500,9 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 
 		if (g_debug & Dbg_Crypto)
 		{
+			std::cout << "!!! WARNING !!!" << std::endl;
+			std::cout << "Do not post the output \"PW Key\", \"KEK\" or \"VEK\" on the internet !!!" << std::endl;
+			std::cout << "These contain your encryption keys." << std::endl << std::endl;
 			std::cout << "PW Key  : " << hexstr(dk, sizeof(dk)) << std::endl;
 			std::cout << "KEK Wrpd: " << hexstr(keke.wrapped_kek, sizeof(keke.wrapped_kek)) << std::endl;
 			std::cout << "KEK     : " << hexstr(kek, 0x20) << std::endl;
