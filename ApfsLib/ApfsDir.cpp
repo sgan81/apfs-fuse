@@ -23,6 +23,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <cinttypes>
 
 #include "ApfsDir.h"
 #include "ApfsVolume.h"
@@ -183,49 +184,53 @@ ApfsDir::~ApfsDir()
 
 bool ApfsDir::GetInode(ApfsDir::Inode& res, uint64_t inode)
 {
-	BTreeEntry bte;
 	j_inode_key_t key;
-	bool rc;
+	union {
+		uint8_t buf[JOBJ_MAX_VALUE_SIZE];
+		j_inode_val_t v;
+	} val;
+	uint16_t key_len = sizeof(j_inode_key_t);
+	uint16_t val_len = sizeof(j_inode_val_t);
+	int err;
 
 	key.hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_INODE, inode);
+	err = m_fs_tree.Lookup(&key, sizeof(j_inode_key_t), key_len, val.buf, val_len, BTree::FindMode::EQ);
 
-	rc = m_fs_tree.Lookup(bte, &key, sizeof(j_inode_key_t), CompareStdDirKey, this, true);
+	if (err) {
+		log_error("get inode: error %d\n", err);
+		return false; // TODO ...
+	}
 
-	if (!rc || (bte.val == nullptr))
-		return false;
-
-	// const uint8_t *idata = reinterpret_cast<const uint8_t *>(bte.val);
-	const j_inode_val_t *obj = reinterpret_cast<const j_inode_val_t *>(bte.val);
-
+	const j_inode_val_t& jv = val.v;
 	res.obj_id = inode;
 
-	res.parent_id = obj->parent_id;
-	res.private_id = obj->private_id;
+	res.parent_id = jv.parent_id;
+	res.private_id = jv.private_id;
 
-	res.create_time = obj->create_time;
-	res.mod_time = obj->mod_time;
-	res.change_time = obj->change_time;
-	res.access_time = obj->access_time;
+	res.create_time = jv.create_time;
+	res.mod_time = jv.mod_time;
+	res.change_time = jv.change_time;
+	res.access_time = jv.access_time;
 
-	res.internal_flags = obj->internal_flags;
+	res.internal_flags = jv.internal_flags;
 
-	res.nchildren_nlink = obj->nchildren;
+	res.nchildren_nlink = jv.nchildren;
 
-	res.default_protection_class = obj->default_protection_class;
-	res.write_generation_counter = obj->write_generation_counter;
-	res.bsd_flags = obj->bsd_flags;
-	res.owner = obj->owner;
-	res.group = obj->group;
-	res.mode = obj->mode;
-	res.uncompressed_size = obj->uncompressed_size;
+	res.default_protection_class = jv.default_protection_class;
+	res.write_generation_counter = jv.write_generation_counter;
+	res.bsd_flags = jv.bsd_flags;
+	res.owner = jv.owner;
+	res.group = jv.group;
+	res.mode = jv.mode;
+	res.uncompressed_size = jv.uncompressed_size;
 
 	// internal_flags & 0x00200000 => pad2 = uncompressed_size ?
 
-	if (bte.val_len > sizeof(j_inode_val_t))
+	if (val_len > sizeof(j_inode_val_t))
 	{
-		const xf_blob_t *xf_hdr = reinterpret_cast<const xf_blob_t *>(obj->xfields);
+		const xf_blob_t *xf_hdr = reinterpret_cast<const xf_blob_t *>(jv.xfields);
 		const x_field_t *xf = reinterpret_cast<const x_field_t *>(xf_hdr->xf_data);
-		const uint8_t *xdata = obj->xfields + sizeof(xf_blob_t) + xf_hdr->xf_num_exts * sizeof(x_field_t);
+		const uint8_t *xdata = jv.xfields + sizeof(xf_blob_t) + xf_hdr->xf_num_exts * sizeof(x_field_t);
 		uint16_t n;
 
 		for (n = 0; n < xf_hdr->xf_num_exts; n++)
@@ -298,15 +303,17 @@ bool ApfsDir::GetInode(ApfsDir::Inode& res, uint64_t inode)
 
 bool ApfsDir::ListDirectory(std::vector<DirRec> &dir, uint64_t inode)
 {
-	uint8_t skey_buf[0x500];
+	uint8_t skey_buf[JOBJ_MAX_KEY_SIZE];
+	union {
+		uint8_t buf[JOBJ_MAX_VALUE_SIZE];
+		j_drec_val_t v;
+	} val;
 
 	BTreeIterator it;
-	BTreeEntry bte;
-	bool rc;
 	uint64_t skey;
+	int err;
 
 	const j_key_t *k;
-	const j_drec_val_t *v;
 
 	skey = APFS_TYPE_ID(APFS_TYPE_DIR_REC, inode);
 
@@ -319,7 +326,7 @@ bool ApfsDir::ListDirectory(std::vector<DirRec> &dir, uint64_t inode)
 		key->name_len_and_hash = 0;
 		key->name[0] = 0;
 
-		rc = m_fs_tree.GetIterator(it, key, sizeof(j_drec_hashed_key_t), CompareStdDirKey, this);
+		err = it.init(&m_fs_tree, key, sizeof(j_drec_hashed_key_t), JOBJ_MAX_KEY_SIZE, val.buf, JOBJ_MAX_VALUE_SIZE, BTree::FindMode::GE);
 	}
 	else
 	{
@@ -328,27 +335,24 @@ bool ApfsDir::ListDirectory(std::vector<DirRec> &dir, uint64_t inode)
 		key->name_len = 0;
 		key->name[0] = 0;
 
-		rc = m_fs_tree.GetIterator(it, key, sizeof(j_drec_key_t), CompareStdDirKey, this);
+		err = it.init(&m_fs_tree, key, sizeof(j_drec_key_t), JOBJ_MAX_KEY_SIZE, val.buf, JOBJ_MAX_VALUE_SIZE, BTree::FindMode::GE);
 	}
 
-	if (!rc)
+	if (err) {
 		return false;
+	}
 
 	for (;;)
 	{
 		DirRec e;
 
-		rc = it.GetEntry(bte);
-		if (!rc)
-			break;
-
 		if (g_debug & Dbg_Dir)
 		{
-			DumpBuffer(reinterpret_cast<const uint8_t *>(bte.key), bte.key_len, "entry key");
-			DumpBuffer(reinterpret_cast<const uint8_t *>(bte.val), bte.val_len, "entry val");
+			DumpBuffer(reinterpret_cast<const uint8_t *>(skey_buf), it.key_len(), "entry key");
+			DumpBuffer(reinterpret_cast<const uint8_t *>(val.buf), it.val_len(), "entry val");
 		}
 
-		k = reinterpret_cast<const j_key_t *>(bte.key);
+		k = reinterpret_cast<const j_key_t *>(skey_buf);
 
 		if (k->obj_id_and_type != skey)
 			break;
@@ -357,30 +361,27 @@ bool ApfsDir::ListDirectory(std::vector<DirRec> &dir, uint64_t inode)
 
 		if (m_txt_fmt != 0)
 		{
-			const j_drec_hashed_key_t *hk = reinterpret_cast<const j_drec_hashed_key_t *>(bte.key);
+			const j_drec_hashed_key_t *hk = reinterpret_cast<const j_drec_hashed_key_t *>(skey_buf);
 			e.hash = hk->name_len_and_hash;
 			e.name = reinterpret_cast<const char *>(hk->name);
 		}
 		else
 		{
-			const j_drec_key_t *rk = reinterpret_cast<const j_drec_key_t *>(bte.key);
+			const j_drec_key_t *rk = reinterpret_cast<const j_drec_key_t *>(skey_buf);
 			e.hash = 0;
 			e.name = reinterpret_cast<const char *>(rk->name);
 		}
 
 		// assert(res.val_len == sizeof(APFS_Name));
 
-		v = reinterpret_cast<const j_drec_val_t *>(bte.val);
+		e.file_id = val.v.file_id;
+		e.date_added = val.v.date_added;
+		e.flags = val.v.flags;
 
-		e.file_id = v->file_id;
-		e.date_added = v->date_added;
-		e.flags = v->flags;
-
-		if (bte.val_len > sizeof(j_drec_val_t))
-		{
-			const xf_blob_t *xf_hdr = reinterpret_cast<const xf_blob_t *>(v->xfields);
+		if (it.val_len() > sizeof(j_drec_val_t)) {
+			const xf_blob_t *xf_hdr = reinterpret_cast<const xf_blob_t *>(val.v.xfields);
 			const x_field_t *xf = reinterpret_cast<const x_field_t *>(xf_hdr->xf_data);
-			const uint8_t *xdata = v->xfields + sizeof(xf_blob_t) + xf_hdr->xf_num_exts * sizeof(x_field_t);
+			const uint8_t *xdata = val.v.xfields + sizeof(xf_blob_t) + xf_hdr->xf_num_exts * sizeof(x_field_t);
 			uint16_t n;
 
 			for (n = 0; n < xf_hdr->xf_num_exts; n++)
@@ -411,10 +412,13 @@ bool ApfsDir::ListDirectory(std::vector<DirRec> &dir, uint64_t inode)
 
 bool ApfsDir::LookupName(ApfsDir::DirRec& res, uint64_t parent_id, const char* name)
 {
-	bool rc;
-	BTreeEntry e;
-	uint8_t srch_key_buf[0x500];
+	int err;
+	uint8_t key_buf[JOBJ_MAX_VALUE_SIZE];
+	uint8_t val_buf[JOBJ_MAX_VALUE_SIZE];
 	size_t name_len = strlen(name) + 1;
+	uint16_t key_len;
+	uint16_t val_len;
+	uint16_t skey_len;
 
 	if (name_len > 0x400)
 		return false;
@@ -422,9 +426,8 @@ bool ApfsDir::LookupName(ApfsDir::DirRec& res, uint64_t parent_id, const char* n
 	res.parent_id = parent_id;
 	res.name = name;
 
-	if (m_txt_fmt & 9)
-	{
-		j_drec_hashed_key_t *skey = reinterpret_cast<j_drec_hashed_key_t *>(srch_key_buf);
+	if (m_txt_fmt & 9) {
+		j_drec_hashed_key_t *skey = reinterpret_cast<j_drec_hashed_key_t *>(key_buf);
 
 		skey->hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_DIR_REC, parent_id);
 		skey->name_len_and_hash = HashFilename(reinterpret_cast<const uint8_t *>(name), static_cast<uint16_t>(name_len), (m_txt_fmt & APFS_INCOMPAT_CASE_INSENSITIVE) != 0);
@@ -436,11 +439,13 @@ bool ApfsDir::LookupName(ApfsDir::DirRec& res, uint64_t parent_id, const char* n
 		}
 		res.hash = skey->name_len_and_hash;
 
-		rc = m_fs_tree.Lookup(e, skey, sizeof(j_drec_hashed_key_t) + (skey->name_len_and_hash & J_DREC_LEN_MASK), CompareStdDirKey, this, true);
-	}
-	else
-	{
-		j_drec_key_t *skey = reinterpret_cast<j_drec_key_t *>(srch_key_buf);
+		skey_len = sizeof(j_drec_hashed_key_t) + (skey->name_len_and_hash & J_DREC_LEN_MASK);
+		key_len = JOBJ_MAX_KEY_SIZE;
+		val_len = JOBJ_MAX_VALUE_SIZE;
+
+		err = m_fs_tree.Lookup(skey, skey_len, key_len, val_buf, val_len, BTree::FindMode::EQ);
+	} else {
+		j_drec_key_t *skey = reinterpret_cast<j_drec_key_t *>(key_buf);
 		skey->hdr.obj_id_and_type = parent_id | (static_cast<uint64_t>(APFS_TYPE_DIR_REC) << OBJ_TYPE_SHIFT);
 		skey->name_len = static_cast<uint16_t>(name_len);
 		memcpy(skey->name, name, name_len);
@@ -451,17 +456,19 @@ bool ApfsDir::LookupName(ApfsDir::DirRec& res, uint64_t parent_id, const char* n
 		}
 		res.hash = 0;
 
-		rc = m_fs_tree.Lookup(e, skey, sizeof(j_drec_key_t) + skey->name_len, CompareStdDirKey, this, true);
+		skey_len = sizeof(j_drec_key_t) + skey->name_len;
+		key_len = JOBJ_MAX_KEY_SIZE;
+		val_len = JOBJ_MAX_VALUE_SIZE;
+
+		err = m_fs_tree.Lookup(skey, skey_len, key_len, val_buf, val_len, BTree::FindMode::EQ);
 	}
 
-	if (!rc)
-	{
-		if (g_debug & Dbg_Dir)
-			std::cout << "Lookup failed!" << std::endl;
+	if (err) {
+		log_error("lookup_name %s failed, err = %d\n", name, err);
 		return false;
 	}
 
-	const j_drec_val_t *v = reinterpret_cast<const j_drec_val_t *>(e.val);
+	const j_drec_val_t *v = reinterpret_cast<const j_drec_val_t *>(val_buf);
 
 	res.file_id = v->file_id;
 	res.date_added = v->date_added;
@@ -469,15 +476,14 @@ bool ApfsDir::LookupName(ApfsDir::DirRec& res, uint64_t parent_id, const char* n
 	// TODO: SIBLING-ID! XF!
 
 	if (g_debug & Dbg_Dir)
-		std::cout << "Lookup: id = " << res.file_id << std::endl;
+		log_debug("lookup name %s -> %" PRIx64 "\n", name, res.file_id);
 
 	return true;
 }
 
 bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 {
-	BTreeEntry e;
-	bool rc;
+	int err;
 
 	uint8_t *bdata = reinterpret_cast<uint8_t *>(data);
 
@@ -494,27 +500,29 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 	{
 		if (m_vol.isSealed()) {
 			fext_tree_key_t key;
-			const fext_tree_key_t *fext_key = nullptr;
-			const fext_tree_val_t *fext_val = nullptr;
+			fext_tree_val_t val;
+			uint16_t key_len = sizeof(fext_tree_key_t);
+			uint16_t val_len = sizeof(fext_tree_val_t);
 
 			key.private_id = inode;
 			key.logical_addr = offs;
 
-			rc = m_vol.fexttree().Lookup(e, &key, sizeof(key), CompareFextKey, this, false);
-			if (!rc) return false;
+			err = m_vol.fexttree().Lookup(&key, sizeof(fext_tree_key_t), key_len, &val, val_len, BTree::FindMode::LE);
+			if (err) {
+				log_error("ReadFile: Error %d in lookup fext tree.\n", err);
+				return false;
+			}
 
-			fext_key = reinterpret_cast<const fext_tree_key_t *>(e.key);
-			fext_val = reinterpret_cast<const fext_tree_val_t *>(e.val);
+			extent_offs = offs - key.logical_addr;
 
-			extent_offs = offs - fext_key->logical_addr;
-
-			extent_size = fext_val->len_and_flags & J_FILE_EXTENT_LEN_MASK;
-			extent_paddr = fext_val->phys_block_num;
+			extent_size = val.len_and_flags & J_FILE_EXTENT_LEN_MASK;
+			extent_paddr = val.phys_block_num;
 			extent_crypto_id = 0; /* TODO: Crypto on sealed volumes? Need later beta for that ... */
 		} else {
 			j_file_extent_key_t key;
-			const j_file_extent_key_t *ext_key = nullptr;
-			const j_file_extent_val_t *ext_val = nullptr;
+			j_file_extent_val_t val;
+			uint16_t key_len = sizeof(j_file_extent_key_t);
+			uint16_t val_len = sizeof(j_file_extent_val_t);
 
 			key.hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_FILE_EXTENT, inode);
 			key.logical_addr = offs;
@@ -522,29 +530,27 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 			if (g_debug & Dbg_Dir)
 				std::cout << "ReadFile(inode=" << inode << ",offs=" << offs << ",size=" << size << ")" << std::endl;
 
-			rc = m_fs_tree.Lookup(e, &key, sizeof(key), CompareStdDirKey, this, false);
-
-			if (!rc)
+			err = m_fs_tree.Lookup(&key, sizeof(j_file_extent_key_t), key_len, &val, val_len, BTree::FindMode::LE);
+			if (err) {
+				log_error("ReadFile: Error %d in lookup file extent in fs tree.\n", err);
 				return false;
-
-			ext_key = reinterpret_cast<const j_file_extent_key_t *>(e.key);
-			ext_val = reinterpret_cast<const j_file_extent_val_t *>(e.val);
+			}
 
 			if (g_debug & Dbg_Dir)
 			{
-				std::cout << "FileExtent " << ext_key->hdr.obj_id_and_type << " " << ext_key->logical_addr << " => ";
-				std::cout << ext_val->len_and_flags << " " << ext_val->phys_block_num << " " << ext_val->crypto_id << std::endl;
+				std::cout << "FileExtent " << key.hdr.obj_id_and_type << " " << key.logical_addr << " => ";
+				std::cout << val.len_and_flags << " " << val.phys_block_num << " " << val.crypto_id << std::endl;
 			}
 
-			if (ext_key->hdr.obj_id_and_type != key.hdr.obj_id_and_type)
+			if ((key.hdr.obj_id_and_type & OBJ_ID_MASK) != inode)
 				return false;
 
 			// Remove flags from length member
-			extent_offs = offs - ext_key->logical_addr;
+			extent_offs = offs - key.logical_addr;
 
-			extent_size = ext_val->len_and_flags & J_FILE_EXTENT_LEN_MASK;
-			extent_paddr = ext_val->phys_block_num;
-			extent_crypto_id = ext_val->crypto_id;
+			extent_size = val.len_and_flags & J_FILE_EXTENT_LEN_MASK;
+			extent_paddr = val.phys_block_num;
+			extent_crypto_id = val.crypto_id;
 		}
 
 		blk_idx = extent_offs >> m_blksize_sh;
@@ -598,41 +604,39 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 
 bool ApfsDir::ListAttributes(std::vector<std::string>& names, uint64_t inode)
 {
-	j_inode_key_t skey;
-	const j_xattr_key_t *ekey;
+	union {
+		uint8_t buf[JOBJ_MAX_KEY_SIZE];
+		j_xattr_key_t k;
+	} xk;
+	union {
+		uint8_t buf[JOBJ_MAX_VALUE_SIZE];
+		j_xattr_val_t v;
+	} xv;
+
 	BTreeIterator it;
-	BTreeEntry res;
-	bool rc;
+	int err;
+	le_uint64_t key_val = APFS_TYPE_ID(APFS_TYPE_XATTR, inode);
 
-	skey.hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_INODE, inode);
+	xk.k.hdr.obj_id_and_type = key_val;
+	xk.k.name_len = 0;
+	err = it.init(&m_fs_tree, xk.buf, sizeof(j_xattr_key_t), JOBJ_MAX_KEY_SIZE, xv.buf, JOBJ_MAX_VALUE_SIZE, BTree::FindMode::GE);
 
-	rc = m_fs_tree.GetIterator(it, &skey, sizeof(j_inode_key_t), CompareStdDirKey, this);
-	if (!rc)
+	if (err) {
+		if (err == ENOENT)
+			return true;
+		log_error("Error %d in list attributes.\n", err);
 		return false;
+	}
 
 	for (;;)
 	{
-		rc = it.GetEntry(res);
-		if (!rc)
+		if (xk.k.hdr.obj_id_and_type != key_val)
 			break;
 
-		ekey = reinterpret_cast<const j_xattr_key_t *>(res.key);
+		names.push_back(reinterpret_cast<const char *>(xk.k.name));
 
-		if ((ekey->hdr.obj_id_and_type & OBJ_ID_MASK) != inode)
+		if (!it.next())
 			break;
-
-		if ((ekey->hdr.obj_id_and_type >> OBJ_TYPE_SHIFT) < APFS_TYPE_XATTR)
-		{
-			it.next();
-			continue;
-		}
-
-		if ((ekey->hdr.obj_id_and_type >> OBJ_TYPE_SHIFT) > APFS_TYPE_XATTR)
-			break;
-
-		names.push_back(reinterpret_cast<const char *>(ekey->name));
-
-		it.next();
 	}
 
 	return true;
@@ -640,53 +644,56 @@ bool ApfsDir::ListAttributes(std::vector<std::string>& names, uint64_t inode)
 
 bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const char* name)
 {
-	uint8_t skey_buf[0x500];
-	j_xattr_key_t *skey = reinterpret_cast<j_xattr_key_t *>(skey_buf);
-	const j_xattr_val_t *attr;
-	const j_xattr_dstream_t *xstm = nullptr;
-
-	// const uint8_t *adata;
-	BTreeEntry res;
-	bool rc;
+	union {
+		uint8_t buf[JOBJ_MAX_KEY_SIZE];
+		j_xattr_key_t k;
+	} xk;
+	union {
+		uint8_t buf[JOBJ_MAX_VALUE_SIZE];
+		j_xattr_val_t v;
+	} xv;
+	uint16_t key_len = JOBJ_MAX_KEY_SIZE;
+	uint16_t val_len = JOBJ_MAX_VALUE_SIZE;
+	int err;
 
 	size_t name_len = strlen(name) + 1;
-	if (name_len > 0x400)
+	if (name_len > (JOBJ_MAX_KEY_SIZE - sizeof(j_xattr_key_t)))
 		return false;
 
-	skey->hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_XATTR, inode);
-	skey->name_len = static_cast<int16_t>(name_len);
-	memcpy(skey->name, name, skey->name_len);
+	xk.k.hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_XATTR, inode);
+	xk.k.name_len = static_cast<int16_t>(name_len);
+	memcpy(xk.k.name, name, xk.k.name_len);
 
-	rc = m_fs_tree.Lookup(res, skey, sizeof(j_xattr_key_t) + skey->name_len, CompareStdDirKey, this, true);
-	if (!rc)
+	err = m_fs_tree.Lookup(xk.buf, sizeof(j_xattr_key_t) + xk.k.name_len, key_len, xv.buf, val_len, BTree::FindMode::EQ);
+	if (err) {
+		log_warn("xattr %" PRIx64 "/%s not found.\n", inode, name);
 		return false;
-
-	attr = reinterpret_cast<const j_xattr_val_t *>(res.val);
-	// adata = reinterpret_cast<const uint8_t *>(res.val) + sizeof(APFS_Xattr_Val);
+	}
 
 	if (g_debug & Dbg_Dir)
-		std::cout << "GetAttribute: type=" << attr->flags << std::endl;
+		std::cout << "GetAttribute: type=" << xv.v.flags << std::endl;
 
-	if (attr->flags & XATTR_DATA_STREAM)
+	if (xv.v.flags & XATTR_DATA_STREAM)
 	{
 		// Attribute contents are stored in a file
-		assert(attr->xdata_len == sizeof(j_xattr_dstream_t));
-		xstm = reinterpret_cast<const j_xattr_dstream_t *>(attr->xdata);
+		assert(xv.v.xdata_len == sizeof(j_xattr_dstream_t));
+		j_xattr_dstream_t xstm;
 
-		if (g_debug & Dbg_Dir)
-		{
+		memcpy(&xstm, xv.v.xdata, sizeof(j_xattr_dstream_t));
+
+		if (g_debug & Dbg_Dir) {
 			std::cout << "Attribute is link:" << std::endl;
-			std::cout << "  obj_id       : " << xstm->xattr_obj_id << std::endl;
-			std::cout << "  size         : " << xstm->dstream.size << std::endl;
-			std::cout << "  alloced_size : " << xstm->dstream.alloced_size << std::endl;
-			std::cout << "  default_crypto_id : " << xstm->dstream.default_crypto_id << std::endl;
-			std::cout << "  total_bytes_written  : " << xstm->dstream.total_bytes_written << std::endl;
-			std::cout << "  total_bytes_read  : " << xstm->dstream.total_bytes_read << std::endl;
+			std::cout << "  obj_id       : " << xstm.xattr_obj_id << std::endl;
+			std::cout << "  size         : " << xstm.dstream.size << std::endl;
+			std::cout << "  alloced_size : " << xstm.dstream.alloced_size << std::endl;
+			std::cout << "  default_crypto_id : " << xstm.dstream.default_crypto_id << std::endl;
+			std::cout << "  total_bytes_written  : " << xstm.dstream.total_bytes_written << std::endl;
+			std::cout << "  total_bytes_read  : " << xstm.dstream.total_bytes_read << std::endl;
 		}
 
-		data.resize(xstm->dstream.alloced_size);
-		ReadFile(data.data(), xstm->xattr_obj_id, 0, data.size()); // Read must be multiple of 4K ...
-		data.resize(xstm->dstream.size);
+		data.resize(xstm.dstream.alloced_size);
+		ReadFile(data.data(), xstm.xattr_obj_id, 0, data.size()); // Read must be multiple of 4K ...
+		data.resize(xstm.dstream.size);
 
 		if (g_debug & Dbg_Dir)
 		{
@@ -696,10 +703,10 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 			DumpBuffer(data.data(), dmpsize, "start of attribute content");
 		}
 	}
-	else if (attr->flags & XATTR_DATA_EMBEDDED)
+	else if (xv.v.flags & XATTR_DATA_EMBEDDED)
 	{
 		// Attribute contents are stored in the btree
-		data.assign(attr->xdata, attr->xdata + attr->xdata_len);
+		data.assign(xv.v.xdata, xv.v.xdata + xv.v.xdata_len);
 	}
 
 	return true;
@@ -707,141 +714,38 @@ bool ApfsDir::GetAttribute(std::vector<uint8_t>& data, uint64_t inode, const cha
 
 bool ApfsDir::GetAttributeInfo(ApfsDir::XAttr& attr, uint64_t inode, const char* name)
 {
-	uint8_t skey_buf[0x500];
-	j_xattr_key_t *skey = reinterpret_cast<j_xattr_key_t *>(skey_buf);
-	const j_xattr_val_t *xv;
-	const j_xattr_dstream_t *xs = nullptr;
-
-	BTreeEntry res;
-	bool rc;
+	union {
+		uint8_t buf[JOBJ_MAX_KEY_SIZE];
+		j_xattr_key_t k;
+	} xk;
+	union {
+		uint8_t buf[JOBJ_MAX_VALUE_SIZE];
+		j_xattr_val_t v;
+	} xv;
+	uint16_t key_len = JOBJ_MAX_KEY_SIZE;
+	uint16_t val_len = JOBJ_MAX_VALUE_SIZE;
+	int err;
 
 	size_t name_len = strlen(name) + 1;
-	if (name_len > 0x400)
+	if (name_len > (JOBJ_MAX_KEY_SIZE - sizeof(j_xattr_key_t)))
 		return false;
 
-	skey->hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_XATTR, inode);
-	skey->name_len = static_cast<int16_t>(name_len);
-	memcpy(skey->name, name, skey->name_len);
+	xk.k.hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_XATTR, inode);
+	xk.k.name_len = static_cast<int16_t>(name_len);
+	memcpy(xk.k.name, name, xk.k.name_len);
 
-	rc = m_fs_tree.Lookup(res, skey, sizeof(j_xattr_key_t) + skey->name_len, CompareStdDirKey, this, true);
-	if (!rc)
+	err = m_fs_tree.Lookup(xk.buf, sizeof(j_xattr_key_t) + xk.k.name_len, key_len, xv.buf, val_len, BTree::FindMode::EQ);
+	if (err) {
+		log_warn("xattr %" PRIx64 "/%s not found.\n", inode, name);
 		return false;
+	}
 
-	xv = reinterpret_cast<const j_xattr_val_t *>(res.val);
-	attr.flags = xv->flags;
-	attr.xdata_len = xv->xdata_len;
+	attr.flags = xv.v.flags;
+	attr.xdata_len = xv.v.xdata_len;
 
-	if (xv->flags & XATTR_DATA_STREAM)
-	{
-		xs = reinterpret_cast<const j_xattr_dstream_t *>(xv->xdata);
-		attr.xstrm = *xs;
+	if (xv.v.flags & XATTR_DATA_STREAM) {
+		memcpy(&attr.xstrm, xv.v.xdata, sizeof(j_xattr_dstream_t));
 	}
 
 	return true;
-}
-
-int ApfsDir::CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context)
-{
-	// assert(skey_len == 8);
-	// assert(ekey_len == 8);
-
-	(void)ekey_len;
-
-	ApfsDir *dir = reinterpret_cast<ApfsDir *>(context);
-
-	uint64_t ks = *reinterpret_cast<const le_uint64_t *>(skey);
-	uint64_t ke = *reinterpret_cast<const le_uint64_t *>(ekey);
-
-	// std::cout << std::hex << std::uppercase << std::setfill('0');
-
-	ks = (ks << 4) | (ks >> 60);
-	ke = (ke << 4) | (ke >> 60);
-
-	// std::cout << std::setw(16) << ks << " : " << std::setw(16) << ke << std::endl;
-
-	if (ke < ks)
-		return -1;
-	if (ke > ks)
-		return 1;
-
-	if (skey_len > 8)
-	{
-		switch (ks & 0xF)
-		{
-		case APFS_TYPE_DIR_REC:
-			if (dir->m_txt_fmt & 9)
-			{
-				const j_drec_hashed_key_t *s = reinterpret_cast<const j_drec_hashed_key_t *>(skey);
-				const j_drec_hashed_key_t *e = reinterpret_cast<const j_drec_hashed_key_t *>(ekey);
-
-				/* TODO: Is this correct? Yes. TODO check _apfs_cstrncmp. */
-				if ((e->name_len_and_hash & J_DREC_HASH_MASK) < (s->name_len_and_hash & J_DREC_HASH_MASK))
-					return -1;
-				if ((e->name_len_and_hash & J_DREC_HASH_MASK) > (s->name_len_and_hash & J_DREC_HASH_MASK))
-					return 1;
-
-				return apfs_strncmp(e->name, e->name_len_and_hash & J_DREC_LEN_MASK, s->name, s->name_len_and_hash & J_DREC_LEN_MASK);
-			}
-			else
-			{
-				const j_drec_key_t *s = reinterpret_cast<const j_drec_key_t *>(skey);
-				const j_drec_key_t *e = reinterpret_cast<const j_drec_key_t *>(ekey);
-
-				return apfs_strncmp(e->name, e->name_len, s->name, s->name_len);
-			}
-			break;
-		case APFS_TYPE_FILE_EXTENT:
-		{
-			const j_file_extent_key_t *s = reinterpret_cast<const j_file_extent_key_t *>(skey);
-			const j_file_extent_key_t *e = reinterpret_cast<const j_file_extent_key_t *>(ekey);
-
-			assert(skey_len == sizeof(j_file_extent_key_t));
-			assert(ekey_len == sizeof(j_file_extent_key_t));
-
-			if (e->logical_addr < s->logical_addr)
-				return -1;
-			if (e->logical_addr > s->logical_addr)
-				return 1;
-		}
-			break;
-		case APFS_TYPE_XATTR:
-		{
-			const j_xattr_key_t *s = reinterpret_cast<const j_xattr_key_t *>(skey);
-			const j_xattr_key_t *e = reinterpret_cast<const j_xattr_key_t *>(ekey);
-
-			return apfs_strncmp(e->name, e->name_len, s->name, s->name_len);
-		}
-			break;
-		case APFS_TYPE_FILE_INFO:
-		{
-			const j_file_info_key_t *s = reinterpret_cast<const j_file_info_key_t *>(skey);
-			const j_file_info_key_t *e = reinterpret_cast<const j_file_info_key_t *>(ekey);
-
-			if (e->info_and_lba < s->info_and_lba)
-				return -1;
-			if (e->info_and_lba > s->info_and_lba)
-				return 1;
-
-			break;
-		}
-		}
-	}
-
-	return 0;
-}
-
-int ApfsDir::CompareFextKey(const void* skey, size_t skey_len, const void* ekey, size_t ekey_len, void* context)
-{
-	const fext_tree_key_t *s = reinterpret_cast<const fext_tree_key_t *>(skey);
-	const fext_tree_key_t *e = reinterpret_cast<const fext_tree_key_t *>(ekey);
-
-	if (e->private_id < s->private_id)
-		return -1;
-	if (e->private_id > s->private_id)
-		return 1;
-	if (e->logical_addr < s->logical_addr)
-		return -1;
-	if (e->logical_addr > s->logical_addr)
-		return 1;
-	return 0;
 }

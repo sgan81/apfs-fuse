@@ -20,11 +20,13 @@
 #include <cassert>
 #include <cstring>
 #include <iostream>
+#include <cinttypes>
 
 #include "ApfsNodeMapperBTree.h"
 #include "ApfsContainer.h"
+#include "Util.h"
 
-static int CompareOMapKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context)
+static int CompareOMapKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, const void *context)
 {
 	(void)context;
 	(void)skey_len;
@@ -77,61 +79,39 @@ bool ApfsNodeMapperBTree::Init(oid_t omap_oid, xid_t xid)
 		return false;
 	}
 
-	return m_tree.Init(m_omap.om_tree_oid, xid);
+	return m_tree.Init(m_omap.om_tree_oid, xid, CompareOMapKey, nullptr);
 }
 
 bool ApfsNodeMapperBTree::Lookup(omap_res_t &omr, oid_t oid, xid_t xid)
 {
-	omap_key_t key;
+	omap_key_t ok;
+	omap_val_t ov;
+	uint16_t ok_len = sizeof(omap_key_t);
+	uint16_t ov_len = sizeof(omap_val_t);
+	int err;
 
-	const omap_key_t *res_key = nullptr;
-	const omap_val_t *res_val = nullptr;
+	ok.ok_oid = oid;
+	ok.ok_xid = xid;
+	memset(&omr, 0, sizeof(omap_res_t));
 
-	BTreeEntry res;
+	err = m_tree.Lookup(&ok, sizeof(omap_key_t), ok_len, &ov, ov_len, BTree::FindMode::LE);
+	if (err != 0 && err != ENOENT) {
+		log_error("omap lookup oid %" PRIx64 " xid %" PRIx64 " error %d.\n", oid, xid, err);
+		return false; // TODO ...
+	}
 
-	key.ok_oid = oid;
-	key.ok_xid = xid;
-
-	// std::cout << std::hex << "Omap Lookup: oid = " << oid << ", xid = " << xid << " => ";
-
-	if (!m_tree.Lookup(res, &key, sizeof(key), CompareOMapKey, this, false))
-	{
-		// std::cout << "NOT FOUND" << std::endl;
-		std::cerr << std::hex << "oid " << oid << " xid " << xid << " NOT FOUND!!!" << std::endl;
+	if (err == ENOENT || ok.ok_oid != oid) {
+		log_error("omap lookup oid %" PRIx64 " xid %" PRIx64 " not found.\n", oid, xid);
 		return false;
 	}
 
-	assert(res.val_len == sizeof(omap_val_t));
+	assert(ov_len == sizeof(omap_val_t));
 
-	res_key = reinterpret_cast<const omap_key_t *>(res.key);
-	res_val = reinterpret_cast<const omap_val_t *>(res.val);
-
-#if 0
-	if (g_debug & Dbg_Info) {
-		std::cout << std::hex << "Omap Lookup: oid=" << oid << " xid=" << xid << ": ";
-		std::cout << "oid=" << res_key->ok_oid << " xid=" << res_key->ok_xid << " => flags=" << res_val->ov_flags << " size=" << res_val->ov_size << " paddr=" << res_val->ov_paddr << std::endl;
-	}
-#endif
-
-	if (key.ok_oid != res_key->ok_oid)
-	{
-		// std::cout << "NOT FOUND" << std::endl;
-		std::cerr << std::hex << "oid " << oid << " xid " << xid << " NOT FOUND!!!" << std::endl;
-		omr.oid = oid;
-		omr.xid = xid;
-		omr.flags = 0;
-		omr.size = 0;
-		omr.paddr = 0;
-		return false;
-	}
-
-	// std::cout << val->blockid << std::endl;
-
-	omr.oid = res_key->ok_oid;
-	omr.xid = res_key->ok_xid;
-	omr.flags = res_val->ov_flags;
-	omr.size = res_val->ov_size;
-	omr.paddr = res_val->ov_paddr;
+	omr.oid = ok.ok_oid;
+	omr.xid = ok.ok_xid;
+	omr.flags = ov.ov_flags;
+	omr.size = ov.ov_size;
+	omr.paddr = ov.ov_paddr;
 
 	return true;
 }

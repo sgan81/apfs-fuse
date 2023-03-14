@@ -172,11 +172,13 @@ bool ApfsContainer::Init(xid_t req_xid)
 		return false;
 	}
 
+	/*
 	if (m_sm->sm_fq[SFQ_IP].sfq_tree_oid != 0)
 		m_fq_tree_mgr.Init(m_sm->sm_fq[SFQ_IP].sfq_tree_oid, m_sm->sm_o.o_xid, &m_cpm);
 
 	if (m_sm->sm_fq[SFQ_MAIN].sfq_tree_oid != 0)
 		m_fq_tree_vol.Init(m_sm->sm_fq[SFQ_MAIN].sfq_tree_oid, m_sm->sm_o.o_xid, &m_cpm);
+	*/
 
 	// m_omap_tree.Init(m_nx.nx_omap_oid, m_nx.hdr.o_xid, nullptr);
 

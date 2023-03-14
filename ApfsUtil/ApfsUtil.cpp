@@ -1,6 +1,7 @@
 #include <ApfsLib/ApfsContainer.h>
 #include <ApfsLib/Device.h>
 #include <ApfsLib/GptPartitionMap.h>
+#include <ApfsLib/ApfsVolume.h>
 
 #include <cerrno>
 #include <cinttypes>
@@ -120,18 +121,22 @@ int main(int argc, char *argv[])
 					printf("Snapshots:\n");
 					BTree snap_tree(*container);
 					BTreeIterator it;
-					BTreeEntry bte;
-					const j_snap_metadata_key_t *sme_k;
-					const j_snap_metadata_val_t *sme_v;
+					int err;
+					union {
+						uint8_t buf[JOBJ_MAX_KEY_SIZE];
+						j_snap_metadata_key_t k;
+					} smk;
+					union {
+						uint8_t buf[JOBJ_MAX_VALUE_SIZE];
+						j_snap_metadata_val_t v;
+					} smv;
 
-					snap_tree.Init(apsb.apfs_snap_meta_tree_oid, apsb.apfs_o.o_xid);
-					if (snap_tree.GetIteratorBegin(it)) {
+					snap_tree.Init(apsb.apfs_snap_meta_tree_oid, apsb.apfs_o.o_xid, CompareSnapMetaKey, nullptr);
+					err = it.initFirst(&snap_tree, smk.buf, JOBJ_MAX_KEY_SIZE, smv.buf, JOBJ_MAX_VALUE_SIZE);
+					if (err == 0) {
 						for (;;) {
-							if (!it.GetEntry(bte)) break;
-							sme_k = reinterpret_cast<const j_snap_metadata_key_t*>(bte.key);
-							sme_v = reinterpret_cast<const j_snap_metadata_val_t*>(bte.val);
-							if ((sme_k->hdr.obj_id_and_type >> OBJ_TYPE_SHIFT) != APFS_TYPE_SNAP_METADATA) break;
-							printf("    %" PRIu64 " : '%s'\n", sme_k->hdr.obj_id_and_type & OBJ_ID_MASK, sme_v->name);
+							if ((smk.k.hdr.obj_id_and_type >> OBJ_TYPE_SHIFT) != APFS_TYPE_SNAP_METADATA) break;
+							printf("    %" PRIu64 " : '%s'\n", smk.k.hdr.obj_id_and_type & OBJ_ID_MASK, smv.v.name);
 							if (!it.next()) break;
 						}
 					}
@@ -150,7 +155,6 @@ int main(int argc, char *argv[])
 		printf("Error opening device.\n");
 		return EIO;
 	}
-
 
 	return 0;
 }

@@ -132,10 +132,9 @@ public:
 	bool GetAttribute(std::vector<uint8_t> &data, uint64_t inode, const char *name);
 	bool GetAttributeInfo(XAttr &attr, uint64_t inode, const char *name);
 
-private:
-	static int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context);
-	static int CompareFextKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context);
+public:
 
+private:
 	ApfsVolume &m_vol;
 	BTree &m_fs_tree;
 	uint32_t m_txt_fmt;

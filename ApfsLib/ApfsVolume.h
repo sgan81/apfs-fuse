@@ -29,6 +29,10 @@
 class ApfsContainer;
 class BlockDumper;
 
+int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, const void *context);
+int CompareFextKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, const void *context);
+int CompareSnapMetaKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, const void *context);
+
 class ApfsVolume
 {
 public:
@@ -52,8 +56,6 @@ public:
 	bool isSealed() const { return (m_sb.apfs_incompatible_features & APFS_INCOMPAT_SEALED_VOLUME) != 0; }
 
 private:
-	static int CompareSnapMetaKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context);
-
 	ApfsContainer &m_container;
 
 	apfs_superblock_t m_sb;
