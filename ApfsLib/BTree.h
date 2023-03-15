@@ -57,6 +57,8 @@ public:
 
 	virtual ~BTreeNode();
 
+	uint32_t subtype() const { return m_btn->btn_o.o_subtype; }
+
 	uint64_t nodeid() const { return m_btn->btn_o.o_oid; }
 	uint32_t nkeys() const { return m_btn->btn_nkeys; }
 	uint16_t level() const { return m_btn->btn_level; }
@@ -147,7 +149,7 @@ public:
 	BTreeIterator();
 	~BTreeIterator();
 
-	int init(BTree* tree, void* key_buf, uint16_t key_buf_len, uint16_t key_len, void* val_buf, uint16_t val_buf_len, BTree::FindMode mode);
+	int init(BTree* tree, void* key_buf, uint16_t key_len, uint16_t key_buf_len, void* val_buf, uint16_t val_buf_len, BTree::FindMode mode);
 	int initFirst(BTree* tree, void* key_buf, uint16_t key_buf_len, void* val_buf, uint16_t val_buf_len);
 	bool next();
 

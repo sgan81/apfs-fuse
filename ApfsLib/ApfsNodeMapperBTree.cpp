@@ -94,6 +94,8 @@ bool ApfsNodeMapperBTree::Lookup(omap_res_t &omr, oid_t oid, xid_t xid)
 	ok.ok_xid = xid;
 	memset(&omr, 0, sizeof(omap_res_t));
 
+	log_debug("omap lookup oid %" PRIx64 " xid %" PRIx64, oid, xid);
+
 	err = m_tree.Lookup(&ok, sizeof(omap_key_t), ok_len, &ov, ov_len, BTree::FindMode::LE);
 	if (err != 0 && err != ENOENT) {
 		log_error("omap lookup oid %" PRIx64 " xid %" PRIx64 " error %d.\n", oid, xid, err);
@@ -112,6 +114,8 @@ bool ApfsNodeMapperBTree::Lookup(omap_res_t &omr, oid_t oid, xid_t xid)
 	omr.flags = ov.ov_flags;
 	omr.size = ov.ov_size;
 	omr.paddr = ov.ov_paddr;
+
+	log_debug(" => oid %" PRIx64 " xid %" PRIx64 " / flags %x size %x paddr %" PRIx64 "\n", omr.oid, omr.xid, omr.flags, omr.size, omr.paddr);
 
 	return true;
 }

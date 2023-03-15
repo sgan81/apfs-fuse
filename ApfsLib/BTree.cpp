@@ -30,7 +30,9 @@
 #include "BTree.h"
 #include "Util.h"
 #include "BlockDumper.h"
+#include "Debug.h"
 
+// #define BTREE_DEBUG_VERBOSE
 #define BTREE_DEBUG
 
 int CompareU64Key(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context)
@@ -98,8 +100,8 @@ int BTreeNode::find_ge(const void* key, uint16_t key_len, int& index, bool& equa
 	index = -1;
 	equal = false;
 
-#ifdef BTREE_DEBUG
-	std::cout << "FindBin    : ";
+#ifdef BTREE_DEBUG_VERBOSE
+	std::cout << "find_ge    : ";
 	DumpHex(std::cout, reinterpret_cast<const uint8_t *>(key), key_len, key_len);
 #endif
 
@@ -114,7 +116,7 @@ int BTreeNode::find_ge(const void* key, uint16_t key_len, int& index, bool& equa
 		// TODO aligned access ...
 		rc = m_cmp_func(key, key_len, kptr, klen, m_cmp_ctx);
 
-#ifdef BTREE_DEBUG
+#ifdef BTREE_DEBUG_VERBOSE
 		std::cout << std::dec << std::setfill(' ');
 		std::cout << std::setw(2) << beg << " [" << std::setw(2) << mid << "] " << std::setw(2) << end << " : " << resstr[rc + 1] << " : ";
 		DumpHex(std::cout, reinterpret_cast<const uint8_t *>(kptr), klen, klen);
@@ -131,7 +133,7 @@ int BTreeNode::find_ge(const void* key, uint16_t key_len, int& index, bool& equa
 		}
 	}
 
-#ifdef BTREE_DEBUG
+#ifdef BTREE_DEBUG_VERBOSE
 	std::cout << std::dec << std::setfill(' ');
 	std::cout << " => " << resstr[rc + 1] << ", " << mid;
 #endif
@@ -320,9 +322,14 @@ int BTree::Lookup(void* key, uint16_t srch_key_len, uint16_t& key_len, void* val
 	std::shared_ptr<BTreeNode> node(m_root_node);
 
 #ifdef BTREE_DEBUG
+	static const char* modestr[5] = { "EQ", "LE", "LT", "GE", "GT" };
 	// std::cout << std::hex << "BTree::Lookup: key=" << *reinterpret_cast<const uint64_t *>(key) << " root=" << node->nodeid() << std::endl;
-	std::cout << "BTree::Lookup: ";
-	DumpHex(std::cout, reinterpret_cast<const uint8_t *>(key), srch_key_len, srch_key_len);
+	// std::cout << "BTree::Lookup: ";
+	log_debug("btree lookup %s : ", modestr[static_cast<unsigned>(mode)]);
+	if (node->subtype() == OBJECT_TYPE_FSTREE || node->subtype() == 0)
+		dbg_print_btkey_fs(key, srch_key_len, true);
+	else
+		DumpHex(std::cout, reinterpret_cast<const uint8_t *>(key), srch_key_len, srch_key_len);
 #endif
 
 	while (true) {
@@ -347,7 +354,7 @@ int BTree::Lookup(void* key, uint16_t srch_key_len, uint16_t& key_len, void* val
 
 			node = GetNode(binv);
 			if (!node) {
-				log_error("BTree lookup: node %" PRIx64 " not found.\n", binv.binv_child_oid);
+				log_error("BTree lookup: child node %" PRIx64 " not found.\n", binv.binv_child_oid);
 				return EINVAL;
 			}
 		}
@@ -465,7 +472,7 @@ std::shared_ptr<BTreeNode> BTree::GetNode(const btn_index_node_val_t& binv)
 	// printf("GetNode oid=%" PRIx64 "\n", oid);
 
 	oid = binv.binv_child_oid;
-	if (m_root_node->flags() & BTNODE_HASHED)
+	if (m_root_node && m_root_node->flags() & BTNODE_HASHED)
 		oid += m_oid;
 
 #ifdef BTREE_USE_MAP
@@ -591,7 +598,7 @@ BTreeIterator::~BTreeIterator()
 {
 }
 
-int BTreeIterator::init(BTree* tree, void* key_buf, uint16_t key_buf_len, uint16_t key_len, void* val_buf, uint16_t val_buf_len, BTree::FindMode mode)
+int BTreeIterator::init(BTree* tree, void* key_buf, uint16_t key_len, uint16_t key_buf_len, void* val_buf, uint16_t val_buf_len, BTree::FindMode mode)
 {
 	int err;
 
@@ -620,6 +627,7 @@ int BTreeIterator::initFirst(BTree* tree, void* key_buf, uint16_t key_buf_len, v
 	m_key_len = key_buf_len;
 	m_val_len = val_buf_len;
 
+	log_debug("iterator init\n");
 	err = m_tree->LookupFirst(m_key_buf, m_key_len, m_val_buf, m_val_len);
 
 	return err;
@@ -633,6 +641,7 @@ bool BTreeIterator::next()
 	m_key_len = m_key_buf_len;
 	m_val_len = m_val_buf_len;
 
+	log_debug("iterator next\n");
 	err = m_tree->Lookup(m_key_buf, skey_len, m_key_len, m_val_buf, m_val_len, BTree::FindMode::GT);
 	return err == 0;
 }

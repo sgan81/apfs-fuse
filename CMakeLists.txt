@@ -10,8 +10,8 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 11)
 # set(CMAKE_BUILD_TYPE Release)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -fsanitize=undefined")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -fsanitize=undefined")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 
 # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -march=native -fsanitize=undefined")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -march=native -fsanitize=undefined")
@@ -74,6 +74,8 @@ add_library(apfs
 	ApfsLib/CheckPointMap.h
 	ApfsLib/Crc32.cpp
 	ApfsLib/Crc32.h
+	ApfsLib/Debug.cpp
+	ApfsLib/Debug.h
 	ApfsLib/Decmpfs.cpp
 	ApfsLib/Decmpfs.h
 	ApfsLib/Device.cpp
@@ -99,6 +101,10 @@ add_library(apfs
 	ApfsLib/GptPartitionMap.h
 	ApfsLib/KeyMgmt.cpp
 	ApfsLib/KeyMgmt.h
+	ApfsLib/ObjCache.cpp
+	ApfsLib/ObjCache.h
+	ApfsLib/Object.cpp
+	ApfsLib/Object.h
 	ApfsLib/PList.cpp
 	ApfsLib/PList.h
 	ApfsLib/Util.cpp

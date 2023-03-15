@@ -759,14 +759,14 @@ int log2(uint32_t val)
 	return r;
 }
 
-FILE *g_log = stderr;
+// FILE *g_log = stderr; TODO
 
 void log_debug(const char *msg, ...)
 {
 	if (g_debug & Dbg_Cmpfs) {
 		va_list va;
 		va_start(va, msg);
-		vfprintf(g_log, msg, va);
+		vfprintf(stdout, msg, va);
 		va_end(va);
 	}
 }
@@ -776,7 +776,7 @@ void log_warn(const char *msg, ...)
 	if (g_debug & Dbg_Info) {
 		va_list va;
 		va_start(va, msg);
-		vfprintf(g_log, msg, va);
+		vfprintf(stderr, msg, va);
 		va_end(va);
 	}
 }
@@ -786,7 +786,7 @@ void log_error(const char *msg, ...)
 	if (g_debug & Dbg_Errors) {
 		va_list va;
 		va_start(va, msg);
-		vfprintf(g_log, msg, va);
+		vfprintf(stderr, msg, va);
 		va_end(va);
 	}
 }

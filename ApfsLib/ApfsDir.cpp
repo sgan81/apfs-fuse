@@ -190,7 +190,7 @@ bool ApfsDir::GetInode(ApfsDir::Inode& res, uint64_t inode)
 		j_inode_val_t v;
 	} val;
 	uint16_t key_len = sizeof(j_inode_key_t);
-	uint16_t val_len = sizeof(j_inode_val_t);
+	uint16_t val_len = JOBJ_MAX_VALUE_SIZE;
 	int err;
 
 	key.hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_INODE, inode);

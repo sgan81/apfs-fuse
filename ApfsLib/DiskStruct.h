@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 
 #include "ApfsTypes.h"
 #include "Endian.h"
