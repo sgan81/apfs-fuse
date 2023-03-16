@@ -29,9 +29,9 @@
 class ApfsContainer;
 class BlockDumper;
 
-int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, const void *context);
-int CompareFextKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, const void *context);
-int CompareSnapMetaKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, const void *context);
+int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
+int CompareFextKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
+int CompareSnapMetaKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
 
 class ApfsVolume
 {

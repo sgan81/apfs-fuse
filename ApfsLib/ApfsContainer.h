@@ -32,6 +32,7 @@
 
 class ApfsVolume;
 class BlockDumper;
+class ObjCache;
 
 class ApfsContainer
 {
@@ -56,6 +57,8 @@ public:
 	bool IsUnencrypted() const { return m_keymgr.IsUnencrypted(); }
 
 	void dump(BlockDumper& bd);
+
+	ObjCache& cache();
 
 private:
 	Device *m_main_disk;

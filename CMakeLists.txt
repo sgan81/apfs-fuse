@@ -105,6 +105,8 @@ add_library(apfs
 	ApfsLib/ObjCache.h
 	ApfsLib/Object.cpp
 	ApfsLib/Object.h
+	ApfsLib/OMap.cpp
+	ApfsLib/OMap.h
 	ApfsLib/PList.cpp
 	ApfsLib/PList.h
 	ApfsLib/Util.cpp

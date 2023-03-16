@@ -26,8 +26,8 @@
 
 #include "Global.h"
 #include "DiskStruct.h"
-
-#include "ApfsNodeMapper.h"
+#include "Object.h"
+#include "ObjPtr.h"
 
 class BTree;
 class BTreeNode;
@@ -37,75 +37,61 @@ class BlockDumper;
 class ApfsContainer;
 class ApfsVolume;
 
-// This enables a rudimentary disk cache ...
-#define BTREE_USE_MAP
-// TODO: Think about a better solution.
-// 8192 will take max. 32 MB of RAM. Higher may be faster, but use more RAM.
-#define BTREE_MAP_MAX_NODES 8192
-
 // ekey < skey: -1, ekey > skey: 1, ekey == skey: 0
-typedef int(*BTCompareFunc)(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, const void *context);
+typedef int(*BTCompareFunc)(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
 
-int CompareU64Key(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, const void *context);
+int CompareU64Key(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
 
-class BTreeNode
+struct BTreeParams
+{
+	btree_info_fixed_t info;
+	BTCompareFunc cmp_func;
+	uint64_t cmp_ctx;
+};
+
+class BTreeNode : public Object
 {
 public:
-	BTreeNode(BTree &tree, const uint8_t *block, size_t blocksize, paddr_t paddr, BTCompareFunc cmp_func, const void* cmp_ctx);
-
-	static std::shared_ptr<BTreeNode> CreateNode(BTree &tree, const uint8_t *block, size_t blocksize, paddr_t paddr, BTCompareFunc cmp_func, const void* cmp_ctx);
-
+	// BTreeNode(BTree &tree, const uint8_t *block, size_t blocksize, paddr_t paddr, BTCompareFunc cmp_func, const void* cmp_ctx);
+	BTreeNode();
 	virtual ~BTreeNode();
 
-	uint32_t subtype() const { return m_btn->btn_o.o_subtype; }
+	int init(const void* params) override;
 
-	uint64_t nodeid() const { return m_btn->btn_o.o_oid; }
+	// static std::shared_ptr<BTreeNode> CreateNode(BTree &tree, const uint8_t *block, size_t blocksize, paddr_t paddr, BTCompareFunc cmp_func, const void* cmp_ctx);
+
 	uint32_t nkeys() const { return m_btn->btn_nkeys; }
 	uint16_t level() const { return m_btn->btn_level; }
 	uint16_t flags() const { return m_btn->btn_flags; }
-	paddr_t paddr() const { return m_paddr; }
+	// paddr_t paddr() const { return m_paddr; }
 
-	int find_ge(const void* key, uint16_t key_len, int& index, bool& equal);
-	int find_le(const void* key, uint16_t key_len, int& index, bool& equal);
-	bool key_ptr_len(int index, const void*& kptr, uint16_t& klen);
-	bool val_ptr_len(int index, const void*& vptr, uint16_t& vlen);
-	bool child_val(int index, btn_index_node_val_t& binv);
-
-	const std::vector<uint8_t> &block() const { return m_block; }
+	int find_ge(const void* key, uint16_t key_len, int& index, bool& equal) const;
+	int find_le(const void* key, uint16_t key_len, int& index, bool& equal) const;
+	int key_ptr_len(int index, const void*& kptr, uint16_t& klen) const;
+	int val_ptr_len(int index, const void*& vptr, uint16_t& vlen) const;
+	int child_val(int index, btn_index_node_val_t& binv) const;
 
 protected:
-	std::vector<uint8_t> m_block;
-	BTree &m_tree;
-
-	const paddr_t m_paddr;
-
 	const btree_node_phys_t *m_btn;
 	const void* m_table;
 	const uint8_t* m_keys;
 	const uint8_t* m_vals;
 
+	btree_info_fixed_t m_info;
 	BTCompareFunc m_cmp_func;
-	const void* m_cmp_ctx;
+	uint64_t m_cmp_ctx;
 };
 
 class BTree
 {
 public:
-	enum class FindMode
-	{
-		EQ,
-		LE,
-		LT,
-		GE,
-		GT
-	};
-
+	enum class FindMode { EQ, LE, LT, GE, GT };
 	friend class BTreeIterator;
 
-	BTree(ApfsContainer &container, ApfsVolume *vol = nullptr);
+	BTree();
 	~BTree();
 
-	bool Init(oid_t oid_root, xid_t xid, BTCompareFunc cmp_func, const void* cmp_ctx, ApfsNodeMapper *omap = nullptr);
+	int Init(Object* owner, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, BTCompareFunc cmp_func, uint64_t cmp_ctx);
 
 	int LookupFirst(void* key, uint16_t& key_len, void* val, uint16_t& val_len);
 	int Lookup(void* key, uint16_t srch_key_len, uint16_t& key_len, void* val, uint16_t& val_len, FindMode mode);
@@ -117,30 +103,19 @@ public:
 	void dump(BlockDumper &out);
 
 private:
-	void DumpTreeInternal(BlockDumper &out, const std::shared_ptr<BTreeNode> &node);
+	void DumpTreeInternal(BlockDumper &out, const ObjPtr<BTreeNode> &node);
 	uint32_t Find(const std::shared_ptr<BTreeNode> &node, const void *key, size_t key_size, BTCompareFunc func, void *context);
 	int FindBin(const std::shared_ptr<BTreeNode> &node, const void *key, size_t key_size, BTCompareFunc func, void *context, FindMode mode);
 
-	std::shared_ptr<BTreeNode> GetNode(const btn_index_node_val_t& binv);
+	int GetNode(ObjPtr<BTreeNode>& node, const btn_index_node_val_t& binv);
 
-	ApfsContainer &m_container;
-	ApfsVolume *m_volume;
+	ApfsContainer* m_nx;
+	ApfsVolume* m_fs;
 
-	std::shared_ptr<BTreeNode> m_root_node;
-	ApfsNodeMapper *m_omap;
-
+	ObjPtr<BTreeNode> m_root;
 	btree_info_t m_treeinfo;
 
-	oid_t m_oid;
-	xid_t m_xid;
-
-	BTCompareFunc m_cmp_func;
-	const void* m_cmp_ctx;
-
-#ifdef BTREE_USE_MAP
-	std::map<uint64_t, std::shared_ptr<BTreeNode>> m_nodes;
-	std::mutex m_mutex;
-#endif
+	BTreeParams m_params;
 };
 
 class BTreeIterator

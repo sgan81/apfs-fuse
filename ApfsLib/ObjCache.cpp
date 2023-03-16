@@ -1,11 +1,15 @@
 #include <cerrno>
 #include <cstdlib>
+#include <cinttypes>
 
 #include "DiskStruct.h"
 #include "Object.h"
 #include "ObjCache.h"
 #include "ApfsContainer.h"
 #include "ApfsVolume.h"
+#include "OMap.h"
+#include "Util.h"
+#include "BTree.h"
 
 ObjCache::ObjCache()
 {
@@ -32,7 +36,7 @@ ObjCache::~ObjCache()
 	delete[] m_hashtable;
 }
 
-int ObjCache::getObj(Object*& obj, const void* params, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, ApfsVolume* vol)
+int ObjCache::getObj(Object*& obj, const void* params, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, ApfsVolume* fs)
 {
 	Object* o;
 	int err;
@@ -77,32 +81,32 @@ Object * ObjCache::createObjInstance(uint32_t type)
 	Object* o = nullptr;
 	switch (type & OBJECT_TYPE_MASK) {
 	case OBJECT_TYPE_BTREE:
-		// o = new BTree();
-		break;
 	case OBJECT_TYPE_BTREE_NODE:
-		// o = new BTreeNode();
+		o = new BTreeNode();
+		break;
+	case OBJECT_TYPE_OMAP:
+		o = new OMap();
 		break;
 		// ...
 	}
 	return o;
 }
 
-int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, ApfsVolume* vol)
+int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, ApfsVolume* fs)
 {
-	o.m_oid = oid;
-	o.m_xid = xid;
-	o.m_type = type;
-	o.m_subtype = subtype;
-	o.m_size = size;
-	o.m_o = reinterpret_cast<obj_phys_t*>(malloc(size));
+	uint32_t o_flags = type & OBJECT_TYPE_FLAGS_MASK;
+	int err;
 
 	if (paddr == 0) {
-		uint32_t cls = type & OBJECT_TYPE_FLAGS_MASK;
-		if (cls & OBJ_EPHEMERAL)
+		if (o_flags & OBJ_EPHEMERAL) // TODO ... epehemerals list probably ...
 			return ENOTSUP;
-		else if (cls & OBJ_PHYSICAL)
+		else if (o_flags & OBJ_PHYSICAL)
 			paddr = oid;
 		else {
+			ObjPtr<OMap> omap;
+			uint32_t om_flags;
+			uint32_t om_size;
+			paddr_t om_paddr;
 			// TODO omap lookup
 			/*
 			if (vol)
@@ -110,14 +114,42 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 			else
 				omap = m_nx->omap();
 			*/
+			err = omap->lookup(oid, xid, nullptr, &om_flags, &om_size, &om_paddr);
+			if (err) {
+				log_error("obj read: error %d in omap lookup %" PRIx64 " / %" PRIx64 "\n", err, oid, xid);
+				return err;
+			}
+			size = om_size;
+			paddr = om_paddr;
 		}
 	}
 
 	if (paddr == 0)
 		return ENOENT;
 
+	o.m_size = size;
+	o.m_data = new uint8_t[size];
+
 	// if (vol) ... else
-	return m_nx->ReadBlocks(reinterpret_cast<uint8_t*>(o.m_o), paddr, size / m_nx->GetBlocksize()) ? 0 : EIO; // TODO
+	if (!m_nx->ReadBlocks(o.m_data, paddr, size / m_nx->GetBlocksize())) return EIO;
+
+	const obj_phys_t* p = reinterpret_cast<const obj_phys_t*>(o.m_data);
+	if (!(o_flags & OBJ_NOHEADER)) {
+		o.m_oid = p->o_oid;
+		o.m_xid = p->o_xid;
+		o.m_type = p->o_type;
+		o.m_subtype = p->o_subtype;
+	} else {
+		o.m_oid = oid;
+		o.m_xid = xid;
+		o.m_type = type;
+		o.m_subtype = subtype;
+	}
+	o.m_paddr = paddr;
+	o.m_oc = this;
+	o.m_fs = fs;
+
+	return 0;
 }
 
 void ObjCache::htAdd(Object* obj, uint64_t key)
