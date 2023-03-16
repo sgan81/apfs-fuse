@@ -29,7 +29,7 @@ class BlockDumper;
 class ApfsNodeMapperBTree : public ApfsNodeMapper
 {
 public:
-	ApfsNodeMapperBTree(ApfsContainer &container);
+	ApfsNodeMapperBTree(Container &container);
 	virtual ~ApfsNodeMapperBTree();
 
 	bool Init(oid_t omap_oid, xid_t xid);
@@ -41,5 +41,5 @@ private:
 	omap_phys_t m_omap;
 	BTree m_tree;
 
-	ApfsContainer &m_container;
+	Container &m_container;
 };

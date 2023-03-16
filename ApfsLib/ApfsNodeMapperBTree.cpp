@@ -23,7 +23,7 @@
 #include <cinttypes>
 
 #include "ApfsNodeMapperBTree.h"
-#include "ApfsContainer.h"
+#include "Container.h"
 #include "Util.h"
 
 static int CompareOMapKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, const void *context)
@@ -49,7 +49,7 @@ static int CompareOMapKey(const void *skey, size_t skey_len, const void *ekey, s
 	return 0;
 }
 
-ApfsNodeMapperBTree::ApfsNodeMapperBTree(ApfsContainer &container) :
+ApfsNodeMapperBTree::ApfsNodeMapperBTree(Container &container) :
 	m_tree(container),
 	m_container(container)
 {

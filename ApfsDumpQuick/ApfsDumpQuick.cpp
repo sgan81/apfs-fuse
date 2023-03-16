@@ -23,8 +23,8 @@
 #include <fstream>
 
 #include <ApfsLib/Device.h>
-#include <ApfsLib/ApfsContainer.h>
-#include <ApfsLib/ApfsVolume.h>
+#include <ApfsLib/Container.h>
+#include <ApfsLib/Volume.h>
 #include <ApfsLib/BlockDumper.h>
 #include <ApfsLib/ApfsDir.h>
 #include <ApfsLib/GptPartitionMap.h>

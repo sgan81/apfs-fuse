@@ -1,10 +1,37 @@
+#include <cassert>
+
+#include "ObjCache.h"
 #include "OMap.h"
-#include "ApfsContainer.h"
+#include "Container.h"
+#include "Volume.h"
+#include "Util.h"
+
+int CompareOMapKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
+{
+	(void)context;
+
+	if (skey_len != sizeof(omap_key_t)) return EINVAL;
+	if (ekey_len != sizeof(omap_key_t)) return EINVAL;
+
+	const omap_key_t *skey_map = reinterpret_cast<const omap_key_t *>(skey);
+	const omap_key_t *ekey_map = reinterpret_cast<const omap_key_t *>(ekey);
+
+	if (ekey_map->ok_oid < skey_map->ok_oid)
+		res = -1;
+	else if (ekey_map->ok_oid > skey_map->ok_oid)
+		res = 1;
+	else if (ekey_map->ok_xid < skey_map->ok_xid)
+		res = -1;
+	else if (ekey_map->ok_xid > skey_map->ok_xid)
+		res = 1;
+	else
+		res = 0;
+	return 0;
+}
 
 OMap::OMap()
 {
 	om_phys = nullptr;
-	m_tree = nullptr;
 }
 
 OMap::~OMap()
@@ -19,9 +46,20 @@ int OMap::init(const void* params)
 
 int OMap::lookup(oid_t oid, xid_t xid, xid_t* xid_o, uint32_t* flags, uint32_t* size, paddr_t* paddr)
 {
-	BTree* tree = getTree();
-	if (tree == nullptr)
-		return EINVAL;
+	if (!m_tree.isValid()) {
+		int err;
+		Object* owner;
+
+		owner = fs();
+		if (owner == nullptr)
+			owner = nx();
+
+		err = m_tree.Init(owner, om_phys->om_tree_oid, 0, om_phys->om_tree_type, OBJECT_TYPE_OMAP, CompareOMapKey, 0);
+		if (err) {
+			log_error("omap: failed to init tree, err = %d\n", err);
+			return err;
+		}
+	}
 
 	omap_key_t ok;
 	omap_val_t ov;
@@ -33,27 +71,15 @@ int OMap::lookup(oid_t oid, xid_t xid, xid_t* xid_o, uint32_t* flags, uint32_t* 
 
 	ok.ok_oid = oid;
 	ok.ok_xid = xid;
-	err = tree->Lookup(&ok, sizeof(omap_key_t), key_len, &ov, val_len, BTree::FindMode::LE);
+
+	err = m_tree.Lookup(&ok, sizeof(omap_key_t), key_len, &ov, val_len, BTree::FindMode::LE);
 	if (err) return err;
+
 	if (ok.ok_oid != oid) return ENOENT;
 	if (xid_o) *xid_o = ok.ok_xid;
 	if (flags) *flags = ov.ov_flags;
 	if (size) *size = ov.ov_size;
 	if (paddr) *paddr = ov.ov_paddr;
 
-	// tree->release(); --- nope, ObjPtr
 	return 0;
-}
-
-BTree * OMap::getTree()
-{
-	int err;
-	Object* tree;
-
-	// Something like this in BTree::Get ...
-	err = oc()->getObj(tree, nullptr, om_phys->om_tree_oid, 0, om_phys->om_tree_type, OBJECT_TYPE_OMAP, 0, 0, nullptr);
-
-	// m_tree = tree;
-	// retain ...
-	return m_tree;
 }

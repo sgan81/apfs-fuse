@@ -24,23 +24,34 @@
 
 #include "Global.h"
 
-#include "ApfsContainer.h"
-#include "ApfsVolume.h"
+#include "Container.h"
+#include "Volume.h"
+#include "ObjCache.h"
 #include "BlockDumper.h"
 #include "Util.h"
 #include "ApfsDir.h"
+#include "OMap.h"
 
-int CompareSnapMetaKey(const void* skey, size_t skey_len, const void* ekey, size_t ekey_len, const void* context)
+int CompareSnapMetaKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
 {
 	const j_key_t *ks = reinterpret_cast<const j_key_t*>(skey);
 	const j_key_t *ke = reinterpret_cast<const j_key_t*>(ekey);
 	const j_snap_name_key_t *sks;
 	const j_snap_name_key_t *ske;
 
-	if (ke->obj_id_and_type < ks->obj_id_and_type)
-		return -1;
-	if (ke->obj_id_and_type > ks->obj_id_and_type)
-		return 1;
+	// TODO: Maybe move to fs
+	(void)skey_len;
+	(void)ekey_len;
+	(void)context;
+
+	if (ke->obj_id_and_type < ks->obj_id_and_type) {
+		res = -1;
+		return 0;
+	}
+	else if (ke->obj_id_and_type > ks->obj_id_and_type) {
+		res = 1;
+		return 0;
+	}
 
 	switch (ks->obj_id_and_type >> OBJ_TYPE_SHIFT)
 	{
@@ -49,7 +60,7 @@ int CompareSnapMetaKey(const void* skey, size_t skey_len, const void* ekey, size
 		case APFS_TYPE_SNAP_NAME:
 			sks = reinterpret_cast<const j_snap_name_key_t*>(skey);
 			ske = reinterpret_cast<const j_snap_name_key_t*>(ekey);
-			return apfs_strncmp(ske->name, ske->name_len, sks->name, sks->name_len);
+			res = apfs_strncmp(ske->name, ske->name_len, sks->name, sks->name_len);
 			break;
 	}
 
@@ -57,7 +68,7 @@ int CompareSnapMetaKey(const void* skey, size_t skey_len, const void* ekey, size
 }
 
 
-int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, const void *context)
+int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
 {
 	// assert(skey_len == 8);
 	// assert(ekey_len == 8);
@@ -69,17 +80,17 @@ int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t
 	uint64_t ks = *reinterpret_cast<const le_uint64_t *>(skey);
 	uint64_t ke = *reinterpret_cast<const le_uint64_t *>(ekey);
 
-	// std::cout << std::hex << std::uppercase << std::setfill('0');
-
 	ks = (ks << 4) | (ks >> 60);
 	ke = (ke << 4) | (ke >> 60);
 
-	// std::cout << std::setw(16) << ks << " : " << std::setw(16) << ke << std::endl;
-
-	if (ke < ks)
-		return -1;
-	if (ke > ks)
-		return 1;
+	if (ke < ks) {
+		res = -1;
+		return 0;
+	}
+	else if (ke > ks) {
+		res = 1;
+		return 0;
+	}
 
 	if (skey_len > 8)
 	{
@@ -92,19 +103,25 @@ int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t
 					const j_drec_hashed_key_t *e = reinterpret_cast<const j_drec_hashed_key_t *>(ekey);
 
 					/* TODO: Is this correct? Yes. TODO check _apfs_cstrncmp. */
-					if ((e->name_len_and_hash & J_DREC_HASH_MASK) < (s->name_len_and_hash & J_DREC_HASH_MASK))
-						return -1;
-					if ((e->name_len_and_hash & J_DREC_HASH_MASK) > (s->name_len_and_hash & J_DREC_HASH_MASK))
-						return 1;
+					if ((e->name_len_and_hash & J_DREC_HASH_MASK) < (s->name_len_and_hash & J_DREC_HASH_MASK)) {
+						res = -1;
+						return 0;
+					}
+					else if ((e->name_len_and_hash & J_DREC_HASH_MASK) > (s->name_len_and_hash & J_DREC_HASH_MASK)) {
+						res = 1;
+						return 0;
+					}
 
-					return apfs_strncmp(e->name, e->name_len_and_hash & J_DREC_LEN_MASK, s->name, s->name_len_and_hash & J_DREC_LEN_MASK);
+					res = apfs_strncmp(e->name, e->name_len_and_hash & J_DREC_LEN_MASK, s->name, s->name_len_and_hash & J_DREC_LEN_MASK);
+					return 0;
 				}
 				else
 				{
 					const j_drec_key_t *s = reinterpret_cast<const j_drec_key_t *>(skey);
 					const j_drec_key_t *e = reinterpret_cast<const j_drec_key_t *>(ekey);
 
-					return apfs_strncmp(e->name, e->name_len, s->name, s->name_len);
+					res = apfs_strncmp(e->name, e->name_len, s->name, s->name_len);
+					return 0;
 				}
 				break;
 			case APFS_TYPE_FILE_EXTENT:
@@ -115,10 +132,16 @@ int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t
 				assert(skey_len == sizeof(j_file_extent_key_t));
 				assert(ekey_len == sizeof(j_file_extent_key_t));
 
-				if (e->logical_addr < s->logical_addr)
-					return -1;
-				if (e->logical_addr > s->logical_addr)
-					return 1;
+				if (e->logical_addr < s->logical_addr) {
+					res = -1;
+					return 0;
+				}
+				else if (e->logical_addr > s->logical_addr) {
+					res = 1;
+					return 0;
+				}
+				res = 0;
+				return 0;
 			}
 			break;
 			case APFS_TYPE_XATTR:
@@ -126,7 +149,8 @@ int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t
 				const j_xattr_key_t *s = reinterpret_cast<const j_xattr_key_t *>(skey);
 				const j_xattr_key_t *e = reinterpret_cast<const j_xattr_key_t *>(ekey);
 
-				return apfs_strncmp(e->name, e->name_len, s->name, s->name_len);
+				res = apfs_strncmp(e->name, e->name_len, s->name, s->name_len);
+				return 0;
 			}
 			break;
 			case APFS_TYPE_FILE_INFO:
@@ -135,93 +159,86 @@ int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t
 				const j_file_info_key_t *e = reinterpret_cast<const j_file_info_key_t *>(ekey);
 
 				if (e->info_and_lba < s->info_and_lba)
-					return -1;
-				if (e->info_and_lba > s->info_and_lba)
-					return 1;
-
+					res = -1;
+				else if (e->info_and_lba > s->info_and_lba)
+					res = 1;
+				else
+					res = 0;
+				return 0;
 				break;
 			}
 		}
 	}
 
+	res = 0;
 	return 0;
 }
 
-int CompareFextKey(const void* skey, size_t skey_len, const void* ekey, size_t ekey_len, const void* context)
+int CompareFextKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
 {
 	const fext_tree_key_t *s = reinterpret_cast<const fext_tree_key_t *>(skey);
 	const fext_tree_key_t *e = reinterpret_cast<const fext_tree_key_t *>(ekey);
 
 	if (e->private_id < s->private_id)
-		return -1;
-	if (e->private_id > s->private_id)
-		return 1;
-	if (e->logical_addr < s->logical_addr)
-		return -1;
-	if (e->logical_addr > s->logical_addr)
-		return 1;
+		res = -1;
+	else if (e->private_id > s->private_id)
+		res = 1;
+	else if (e->logical_addr < s->logical_addr)
+		res = -1;
+	else if (e->logical_addr > s->logical_addr)
+		res = 1;
+	else
+		res = 0;
 	return 0;
 }
 
-ApfsVolume::ApfsVolume(ApfsContainer &container) :
-	m_container(container),
-	m_omap(container),
-	m_fs_tree(container, this),
-	m_extentref_tree(container, this),
-	m_snap_meta_tree(container, this),
-	m_fext_tree(container, this)
+Volume::Volume(Container &container) :
+	m_container(container)
 {
-	m_apsb_paddr = 0;
 	m_is_encrypted = false;
 }
 
-ApfsVolume::~ApfsVolume()
+Volume::~Volume()
 {
 }
 
-bool ApfsVolume::Init(paddr_t apsb_paddr)
+int Volume::init(const void* params)
 {
-	std::vector<uint8_t> blk;
+	m_sb = reinterpret_cast<const apfs_superblock_t*>(data());
+	if (m_sb->apfs_magic != APFS_MAGIC)
+		return EINVAL;
 
-	m_apsb_paddr = apsb_paddr;
+	return 0;
+}
 
-	blk.resize(m_container.GetBlocksize());
+int Volume::Mount()
+{
+	int err;
 
-	if (!ReadBlocks(blk.data(), apsb_paddr, 1, 0))
-		return false;
-
-	if (!VerifyBlock(blk.data(), blk.size()))
-		return false;
-
-	memcpy(&m_sb, blk.data(), sizeof(m_sb));
-
-	if (m_sb.apfs_magic != APFS_MAGIC)
-		return false;
-
-	if (!m_omap.Init(m_sb.apfs_omap_oid, m_sb.apfs_o.o_xid)) {
-		std::cerr << "WARNING: Volume omap tree init failed." << std::endl;
-		return false;
+	err = oc().getObj(m_omap, nullptr, m_sb->apfs_omap_oid, 0, OBJ_PHYSICAL | OBJECT_TYPE_OMAP, 0, 0, 0, nullptr);
+	if (err) {
+		log_error("mount: omap init failed, err = %d\n", err);
+		return err;
 	}
 
-	if ((m_sb.apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED && !m_container.IsUnencrypted())
+	if ((m_sb->apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED && !m_container.IsUnencrypted())
 	{
 		uint8_t vek[0x20];
 		std::string str;
 
-		std::cout << "Volume " << m_sb.apfs_volname << " is encrypted." << std::endl;
-
-		if (!m_container.GetVolumeKey(vek, m_sb.apfs_vol_uuid))
+		if (!m_container.GetVolumeKey(vek, m_sb->apfs_vol_uuid))
 		{
-			if (m_container.GetPasswordHint(str, m_sb.apfs_vol_uuid))
-				std::cout << "Hint: " << str << std::endl;
+			printf("Volume %s is encrypted.\n", m_sb->apfs_volname);
+			if (m_container.GetPasswordHint(str, m_sb->apfs_vol_uuid))
+				printf("Hint: %s\n", str.c_str());
 
-			std::cout << "Enter Password: ";
+			printf("Enter password: ");
 			GetPassword(str);
 
-			if (!m_container.GetVolumeKey(vek, m_sb.apfs_vol_uuid, str.c_str()))
+			if (!m_container.GetVolumeKey(vek, m_sb->apfs_vol_uuid, str.c_str()))
 			{
-				std::cout << "Wrong password!" << std::endl;
-				return false;
+				printf("Wrong password!\n");
+				return EINVAL;
 			}
 		}
 
@@ -229,26 +246,35 @@ bool ApfsVolume::Init(paddr_t apsb_paddr)
 		m_is_encrypted = true;
 	}
 
-	if (!m_fs_tree.Init(m_sb.apfs_root_tree_oid, m_sb.apfs_o.o_xid, CompareStdDirKey, &m_sb, &m_omap))
-		std::cerr << "ERROR: root tree init failed" << std::endl;
-
-	if (!m_extentref_tree.Init(m_sb.apfs_extentref_tree_oid, m_sb.apfs_o.o_xid, CompareStdDirKey, &m_sb))
-		std::cerr << "WARNING: extentref tree init failed" << std::endl;
-
-	if (!m_snap_meta_tree.Init(m_sb.apfs_snap_meta_tree_oid, m_sb.apfs_o.o_xid, CompareSnapMetaKey, nullptr))
-		std::cerr << "WARNING: snap meta tree init failed" << std::endl;
-
-	if (m_sb.apfs_incompatible_features & APFS_INCOMPAT_SEALED_VOLUME)
-	{
-		if (!m_fext_tree.Init(m_sb.apfs_fext_tree_oid, m_sb.apfs_o.o_xid, CompareFextKey, nullptr))
-			std::cerr << "ERROR: fext tree init failed" << std::endl;
+	err = m_fs_tree.Init(this, m_sb->apfs_root_tree_oid, 0, m_sb->apfs_root_tree_type, OBJECT_TYPE_FSTREE,
+		CompareStdDirKey, m_sb->apfs_incompatible_features & (APFS_INCOMPAT_CASE_INSENSITIVE | APFS_INCOMPAT_NORMALIZATION_INSENSITIVE));
+	if (err) {
+		log_error("mount: fs tree init failed.\n");
+		return EINVAL;
 	}
 
-	return true;
+	err = m_extentref_tree.Init(this, m_sb->apfs_extentref_tree_oid, 0, m_sb->apfs_extentref_tree_type, OBJECT_TYPE_EXTENT_LIST_TREE, CompareStdDirKey, 0);
+	if (err)
+		log_error("mount: extentref tree init failed.\n");
+
+	err = m_snap_meta_tree.Init(this, m_sb->apfs_snap_meta_tree_oid, 0, m_sb->apfs_snap_meta_tree_type, OBJECT_TYPE_SNAPMETATREE, CompareSnapMetaKey, 0);
+	if (err)
+		log_error("mount: snap meta tree init failed.\n");
+
+	if (m_sb->apfs_incompatible_features & APFS_INCOMPAT_SEALED_VOLUME) {
+		err = m_fext_tree.Init(this, m_sb->apfs_fext_tree_oid, 0, m_sb->apfs_fext_tree_type, OBJECT_TYPE_FEXT_TREE, CompareFextKey, 0);
+		if (err) {
+			log_error("mount: fext tree init failed.\n");
+			return EINVAL;
+		}
+	}
+
+	return 0;
 }
 
-bool ApfsVolume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
+int Volume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 {
+#if 0 // Mach ich morgen ... oder uebermorgen ...
 	BTree snap_btree(m_container);
 	j_snap_metadata_key_t snap_key;
 	union {
@@ -352,10 +378,13 @@ bool ApfsVolume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 	}
 
 	return true;
+#endif
+	return ENOTSUP;
 }
 
-void ApfsVolume::dump(BlockDumper& bd)
+void Volume::dump(BlockDumper& bd)
 {
+#if 0 // <--
 	std::vector<uint8_t> blk;
 	omap_res_t om;
 	oid_t omap_snapshot_tree_oid = 0;
@@ -416,6 +445,7 @@ void ApfsVolume::dump(BlockDumper& bd)
 		fxtree.dump(bd);
 	}
 #endif
+#endif // <--
 
 #if 0
 	BTreeIterator it;
@@ -482,7 +512,7 @@ void ApfsVolume::dump(BlockDumper& bd)
 #endif
 }
 
-bool ApfsVolume::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt, uint64_t xts_tweak)
+bool Volume::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt, uint64_t xts_tweak)
 {
 	constexpr int encryption_block_size = 0x200;
 

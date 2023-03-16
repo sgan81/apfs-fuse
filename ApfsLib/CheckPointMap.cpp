@@ -1,11 +1,11 @@
 #include <cassert>
 
-#include "ApfsContainer.h"
+#include "Container.h"
 #include "DiskStruct.h"
 #include "BlockDumper.h"
 #include "CheckPointMap.h"
 
-CheckPointMap::CheckPointMap(ApfsContainer& container) : m_container(container)
+CheckPointMap::CheckPointMap(Container& container) : m_container(container)
 {
 	m_cpm_oid = 0;
 	m_blksize = 0;

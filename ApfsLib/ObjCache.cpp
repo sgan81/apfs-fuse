@@ -5,8 +5,8 @@
 #include "DiskStruct.h"
 #include "Object.h"
 #include "ObjCache.h"
-#include "ApfsContainer.h"
-#include "ApfsVolume.h"
+#include "Container.h"
+#include "Volume.h"
 #include "OMap.h"
 #include "Util.h"
 #include "BTree.h"
@@ -36,7 +36,15 @@ ObjCache::~ObjCache()
 	delete[] m_hashtable;
 }
 
-int ObjCache::getObj(Object*& obj, const void* params, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, ApfsVolume* fs)
+void ObjCache::setContainer(Container* nx, paddr_t nxsb_paddr)
+{
+	m_nx = nx;
+	htAdd(nx, 1);
+	m_nx->m_oc = this;
+	m_nx->m_paddr = nxsb_paddr;
+}
+
+int ObjCache::getObj(Object*& obj, const void* params, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, Volume* fs)
 {
 	Object* o;
 	int err;
@@ -56,7 +64,10 @@ int ObjCache::getObj(Object*& obj, const void* params, oid_t oid, xid_t xid, uin
 	o = createObjInstance(type);
 	if (o == nullptr) return EINVAL;
 
-	err = readObj(*o, oid, xid, type, subtype, 0x1000, paddr); // TODO
+	if (size == 0)
+		size = m_nx->GetBlocksize();
+
+	err = readObj(*o, oid, xid, type, subtype, size, paddr, fs);
 	if (err != 0) {
 		delete o;
 		return err;
@@ -80,6 +91,9 @@ Object * ObjCache::createObjInstance(uint32_t type)
 {
 	Object* o = nullptr;
 	switch (type & OBJECT_TYPE_MASK) {
+	case OBJECT_TYPE_NX_SUPERBLOCK:
+		// TODO
+		break;
 	case OBJECT_TYPE_BTREE:
 	case OBJECT_TYPE_BTREE_NODE:
 		o = new BTreeNode();
@@ -87,12 +101,14 @@ Object * ObjCache::createObjInstance(uint32_t type)
 	case OBJECT_TYPE_OMAP:
 		o = new OMap();
 		break;
-		// ...
+	case OBJECT_TYPE_FS:
+		o = new Volume(*m_nx); // TODO Trickery, but could work out ... hmmm ...
+		break;
 	}
 	return o;
 }
 
-int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, ApfsVolume* fs)
+int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, Volume* fs)
 {
 	uint32_t o_flags = type & OBJECT_TYPE_FLAGS_MASK;
 	int err;
@@ -132,6 +148,11 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 
 	// if (vol) ... else
 	if (!m_nx->ReadBlocks(o.m_data, paddr, size / m_nx->GetBlocksize())) return EIO;
+
+	if (!(o_flags & OBJ_NOHEADER)) {
+		if (!VerifyBlock(o.m_data, o.m_size))
+			return EINVAL;
+	}
 
 	const obj_phys_t* p = reinterpret_cast<const obj_phys_t*>(o.m_data);
 	if (!(o_flags & OBJ_NOHEADER)) {

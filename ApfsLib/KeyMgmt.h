@@ -7,7 +7,7 @@
 
 #include "Global.h"
 
-class ApfsContainer;
+class Container;
 
 struct bagdata_t;
 
@@ -38,7 +38,7 @@ class KeyManager
 {
 	friend class Keybag;
 public:
-	KeyManager(ApfsContainer &container);
+	KeyManager(Container &container);
 	~KeyManager();
 
 	bool Init(uint64_t block, uint64_t blockcnt, const apfs_uuid_t &container_uuid);
@@ -59,7 +59,7 @@ private:
 	static bool DecodeKEK(kek_entry_t &kek, const uint8_t* der, const uint8_t* der_end);
 	static bool DecodeVEK(vek_entry_t &vek, const uint8_t* der, const uint8_t* der_end);
 
-	ApfsContainer &m_container;
+	Container &m_container;
 	Keybag m_container_bag;
 	apfs_uuid_t m_container_uuid;
 

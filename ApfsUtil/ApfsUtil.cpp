@@ -1,7 +1,7 @@
-#include <ApfsLib/ApfsContainer.h>
+#include <ApfsLib/Container.h>
 #include <ApfsLib/Device.h>
 #include <ApfsLib/GptPartitionMap.h>
-#include <ApfsLib/ApfsVolume.h>
+#include <ApfsLib/Volume.h>
 
 #include <cerrno>
 #include <cinttypes>
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 			printf("\n");
 		}
 
-		container = new ApfsContainer(device, offset, size);
+		container = new Container(device, offset, size);
 
 		if (container->Init()) {
 			// printf("Listing volumes:\n");

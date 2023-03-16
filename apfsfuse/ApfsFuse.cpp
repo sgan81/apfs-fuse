@@ -43,8 +43,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include <ApfsLib/ApfsContainer.h>
-#include <ApfsLib/ApfsVolume.h>
+#include <ApfsLib/Container.h>
+#include <ApfsLib/Volume.h>
 #include <ApfsLib/ApfsDir.h>
 #include <ApfsLib/Decmpfs.h>
 #include <ApfsLib/DeviceLinux.h>

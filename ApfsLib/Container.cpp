@@ -20,67 +20,83 @@
 #include <cstring>
 #include <iostream>
 #include <fstream>
+#include <cinttypes>
 
-#include "ApfsContainer.h"
-#include "ApfsVolume.h"
+#include "Container.h"
+#include "Volume.h"
 #include "Util.h"
 #include "BlockDumper.h"
 #include "Global.h"
+#include "ObjCache.h"
 
 int g_debug = 0;
 bool g_lax = false;
 
-ApfsContainer::ApfsContainer(Device *disk_main, uint64_t main_start, uint64_t main_len, Device *disk_tier2, uint64_t tier2_start, uint64_t tier2_len) :
-	m_main_disk(disk_main),
-	m_main_part_start(main_start),
-	m_main_part_len(main_len),
-	m_tier2_disk(disk_tier2),
-	m_tier2_part_start(tier2_start),
-	m_tier2_part_len(tier2_len),
-	m_cpm(*this),
-	m_omap(*this),
-	// m_omap_tree(*this),
-	m_fq_tree_mgr(*this),
-	m_fq_tree_vol(*this),
-	m_keymgr(*this)
+Container::Container() : m_keymgr(*this)
 {
-	m_sm = nullptr;
+	m_main_disk = nullptr;
+	m_main_part_start = 0;
+	m_main_part_len = 0;
+	m_tier2_disk = nullptr;
+	m_tier2_part_start = 0;
+	m_tier2_part_len = 0;
 }
 
-ApfsContainer::~ApfsContainer()
+Container::~Container()
 {
+	ObjCache* oc = &cache();
+	if (oc)
+		delete oc;
 }
 
-bool ApfsContainer::Init(xid_t req_xid)
+int Container::Bootstrap(ObjPtr<Container>& ptr, Device *disk_main, uint64_t main_start, uint64_t main_len, Device *disk_tier2, uint64_t tier2_start, uint64_t tier2_len, xid_t req_xid)
 {
+	Container* nx_obj = nullptr;
+
 	std::vector<uint8_t> blk;
+	const nx_superblock_t* nxsb;
+	int err;
 
-	blk.resize(0x1000);
+	blk.resize(NX_DEFAULT_BLOCK_SIZE);
 
-	if (!m_main_disk->Read(blk.data(), m_main_part_start, 0x1000))
-	{
-		std::cerr << "Reading block 0 from main device failed." << std::endl;
+	err = disk_main->Read(blk.data(), main_start, NX_DEFAULT_BLOCK_SIZE) ? 0 : EIO; // TODO
+	if (err) {
+		log_error("Reading block 0 from main device failed, err = %d\n", err);
 		return false;
 	}
 
-	memcpy(&m_nx, blk.data(), sizeof(nx_superblock_t));
-
-	if (m_nx.nx_magic != NX_MAGIC)
-	{
-		std::cerr << "This doesn't seem to be an apfs volume (invalid superblock)." << std::endl;
-		return false;
+	nxsb = reinterpret_cast<const nx_superblock_t*>(blk.data());
+	if (nxsb->nx_magic != NX_MAGIC) {
+		log_error("This is not an apfs volume (invalid superblock).\n");
+		// TODO help the user ...
+		return EINVAL;
 	}
 
-	if (m_nx.nx_block_size != 0x1000)
-	{
-		blk.resize(m_nx.nx_block_size);
-		m_main_disk->Read(blk.data(), m_main_part_start, blk.size());
+	if (nxsb->nx_block_size != NX_DEFAULT_BLOCK_SIZE) {
+		blk.resize(nxsb->nx_block_size);
+		err = disk_main->Read(blk.data(), main_start, blk.size());
+		nxsb = reinterpret_cast<const nx_superblock_t*>(blk.data());
 	}
 
-	if (!VerifyBlock(blk.data(), blk.size()))
-		return false;
+	if (!VerifyBlock(blk.data(), blk.size())) {
+		log_error("nx superblock checksum error!\n");
+		return EINVAL;
+	}
 
-	memcpy(&m_nx, blk.data(), sizeof(nx_superblock_t));
+	if ((nxsb->nx_incompatible_features & NX_INCOMPAT_FUSION) && !disk_tier2) {
+		log_error("Need to specify two devices for a fusion drive.\n");
+		return EINVAL;
+	}
+
+	nx_obj = new Container();
+
+	nx_obj->m_main_disk = disk_main;
+	nx_obj->m_main_part_start = main_start;
+	nx_obj->m_main_part_len = main_len;
+	nx_obj->m_tier2_disk = disk_tier2;
+	nx_obj->m_tier2_part_start = tier2_start;
+	nx_obj->m_tier2_part_len = tier2_len;
+	nx_obj->setData(blk.data(), blk.size());
 
 	// Scan container for most recent superblock (might fix segfaults)
 	uint64_t max_xid = 0;
@@ -88,56 +104,50 @@ bool ApfsContainer::Init(xid_t req_xid)
 	paddr_t paddr;
 	std::vector<uint8_t> tmp;
 
-	tmp.resize(m_nx.nx_block_size);
+	tmp.resize(nxsb->nx_block_size);
+	const nx_superblock_t *xpsb = reinterpret_cast<const nx_superblock_t *>(tmp.data());
 
-	for (paddr = m_nx.nx_xp_desc_base; paddr < (m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_blocks); paddr++)
-	{
-		if (!ReadBlocks(tmp.data(), paddr, 1))
-			return false;
+	for (paddr = nxsb->nx_xp_desc_base; paddr < (nxsb->nx_xp_desc_base + nxsb->nx_xp_desc_blocks); paddr++) {
+		err = nx_obj->ReadBlocks(tmp.data(), paddr, 1);
+		if (err) return err;
 
-		if (!VerifyBlock(tmp.data(), tmp.size()))
+		if (!VerifyBlock(tmp.data(), tmp.size())) {
+			log_warn("checksum error in xp desc area\n");
 			continue;
+		}
 
-		const nx_superblock_t *sb = reinterpret_cast<const nx_superblock_t *>(tmp.data());
-		if ((sb->nx_o.o_type & OBJECT_TYPE_MASK) != OBJECT_TYPE_NX_SUPERBLOCK)
+		if ((xpsb->nx_o.o_type & OBJECT_TYPE_MASK) != OBJECT_TYPE_NX_SUPERBLOCK)
 			continue;
 
 		if (req_xid) {
-			if (req_xid == sb->nx_o.o_xid) {
+			if (req_xid == xpsb->nx_o.o_xid) {
 				max_xid = req_xid;
 				max_paddr = paddr;
 				break;
 			}
 		} else {
-			if (sb->nx_o.o_xid > max_xid)
+			if (xpsb->nx_o.o_xid > max_xid)
 			{
-				max_xid = sb->nx_o.o_xid;
+				max_xid = xpsb->nx_o.o_xid;
 				max_paddr = paddr;
 			}
 		}
 	}
 
-	if (max_paddr)
-	{
-		// if (g_debug & Dbg_Errors)
-		//	std::cout << "Found more recent xid " << max_xid << " than superblock 0 contained (" << m_nx.nx_o.o_xid << ")." << std::endl;
-		if (g_debug & Dbg_Info)
-			std::cout << "Mounting xid different from NXSB at 0 (xid = " << m_nx.nx_o.o_xid << "). xid = " << max_xid << std::endl;
+	if (max_paddr) {
+		if (nxsb->nx_o.o_xid != max_xid)
+			log_warn("Mounting xid different from NXSB at 0 (xid = %" PRIx64 "). xid = %" PRIx64 "\n", nxsb->nx_o.o_xid, max_xid);
 
-		ReadBlocks(tmp.data(), max_paddr, 1);
-
-		memcpy(&m_nx, tmp.data(), sizeof(nx_superblock_t));
+		nx_obj->ReadBlocks(tmp.data(), max_paddr, 1);
 	}
 
-	if (g_debug & Dbg_Info)
-		std::cout << "Mounting xid " << m_nx.nx_o.o_xid << std::endl;
+	log_debug("Mounting xid %" PRIx64 "\n", max_xid);
 
-	if ((m_nx.nx_incompatible_features & NX_INCOMPAT_FUSION) && !m_tier2_disk)
-	{
-		std::cerr << "Need to specify two devices for a fusion drive." << std::endl;
-		return false;
-	}
+	ObjCache* oc = new ObjCache();
+	nx_obj->setData(tmp.data(), tmp.size());
+	oc->setContainer(nx_obj, max_paddr);
 
+#if 0 // TODO
 	if (!m_cpm.Init(m_nx.nx_xp_desc_base + m_nx.nx_xp_desc_index, m_nx.nx_xp_desc_len - 1))
 	{
 		std::cerr << "Failed to load checkpoint map" << std::endl;
@@ -192,51 +202,40 @@ bool ApfsContainer::Init(xid_t req_xid)
 			return false;
 		}
 	}
+#endif
 
 	return true;
 }
 
-ApfsVolume *ApfsContainer::GetVolume(unsigned int fsid, const std::string &passphrase, xid_t snap_xid)
+int Container::MountVolume(ObjPtr<Volume>& vol, unsigned int fsid, const std::string &passphrase, xid_t snap_xid)
 {
-	ApfsVolume *vol = nullptr;
 	oid_t oid;
-	omap_res_t omr;
 	bool rc;
+	int err;
 
 	if (fsid >= 100)
-		return nullptr;
+		return EINVAL;
 
 	m_passphrase = passphrase;
 
-	oid = m_nx.nx_fs_oid[fsid];
+	oid = m_nxsb->nx_fs_oid[fsid];
 
 	if (oid == 0)
-		return nullptr;
+		return ENOENT;
 
-	if (!m_omap.Lookup(omr, oid, m_nx.nx_o.o_xid))
-		return nullptr;
+	err = cache().getObj(vol, nullptr, oid, 0, OBJECT_TYPE_FS, 0, 0, 0, nullptr);
+	if (err)
+		return err;
 
-	// std::cout << std::hex << "Loading Volume " << index << ", nodeid = " << nodeid << ", version = " << m_sb.hdr.version << ", blkid = " << blkid << std::endl;
-
-	if (omr.paddr == 0)
-		return nullptr;
-
-	vol = new ApfsVolume(*this);
 	if (snap_xid != 0)
-		rc = vol->MountSnapshot(omr.paddr, snap_xid);
+		err = vol->MountSnapshot(vol->paddr(), snap_xid); // TODO paddr braucht es nicht mehr ...
 	else
-		rc = vol->Init(omr.paddr);
+		err = vol->Mount();
 
-	if (rc == false)
-	{
-		delete vol;
-		vol = nullptr;
-	}
-
-	return vol;
+	return err;
 }
 
-bool ApfsContainer::GetVolumeInfo(unsigned int fsid, apfs_superblock_t& apsb)
+int Container::GetVolumeInfo(unsigned int fsid, apfs_superblock_t& apsb)
 {
 	oid_t oid;
 	omap_res_t omr;

@@ -26,8 +26,8 @@
 #include <cinttypes>
 
 #include "ApfsDir.h"
-#include "ApfsVolume.h"
-#include "ApfsContainer.h"
+#include "Volume.h"
+#include "Container.h"
 #include "BTree.h"
 #include "Util.h"
 

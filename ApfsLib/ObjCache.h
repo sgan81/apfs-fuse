@@ -3,10 +3,11 @@
 #include <cstdint>
 
 #include "ApfsTypes.h"
+#include "ObjPtr.h"
 
 class Object;
-class ApfsContainer;
-class ApfsVolume;
+class Container;
+class Volume;
 
 struct ObjListHead
 {
@@ -25,14 +26,26 @@ public:
 	ObjCache();
 	~ObjCache();
 
-	void setContainer(ApfsContainer* nx);
-	int getObj(Object*& obj, const void* params, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, ApfsVolume* fs = nullptr);
+	void setContainer(Container* nx, paddr_t nxsb_paddr);
+	int getObj(Object*& obj, const void* params, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, Volume* fs = nullptr);
 
-	ApfsContainer* nx() { return m_nx; }
+	template<typename T>
+	int getObj(ObjPtr<T>& ptr, const void* params, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, Volume* fs = nullptr)
+	{
+		int err;
+		Object* obj = nullptr;
+
+		err = getObj(obj, params, oid, xid, type, subtype, size, paddr, fs);
+		if (err) return err;
+		ptr = obj;
+		return 0;
+	}
+
+	Container* nx() { return m_nx; }
 
 private:
 	Object* createObjInstance(uint32_t type);
-	int readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, ApfsVolume* fs = nullptr);
+	int readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, uint32_t size, paddr_t paddr, Volume* fs);
 
 	void htAdd(Object* obj, uint64_t key);
 	void htRemove(Object* obj);
@@ -46,5 +59,5 @@ private:
 	uint64_t m_ht_mask;
 	uint32_t m_lru_cnt;
 	uint32_t m_lru_limit;
-	ApfsContainer* m_nx;
+	Container* m_nx;
 };

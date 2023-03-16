@@ -4,14 +4,13 @@
 
 #include "ApfsTypes.h"
 #include "DiskStruct.h"
-#include "ObjCache.h"
 
 struct obj_phys_t;
 
 class Object;
 class ObjCache;
-class ApfsVolume;
-class ApfsContainer;
+class Volume;
+class Container;
 
 struct ObjListEntry
 {
@@ -40,14 +39,15 @@ public:
 	paddr_t paddr() const { return m_paddr; }
 	const uint8_t* data() const { return m_data; }
 	uint32_t size() const { return m_size; }
+	int setData(uint8_t* data, uint32_t size);
 
-	ApfsContainer* nx() { return m_oc->nx(); }
-	ApfsVolume* fs() { return m_fs; }
-	ObjCache* oc() { return m_oc; }
+	Container* nx();
+	Volume* fs() { return m_fs; }
+	ObjCache& oc() { return *m_oc; }
 
 private:
 	ObjCache* m_oc;
-	ApfsVolume* m_fs;
+	Volume* m_fs;
 
 	int m_refcnt;
 

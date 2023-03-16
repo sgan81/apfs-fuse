@@ -5,13 +5,13 @@
 #include "DiskStruct.h"
 #include "ApfsNodeMapper.h"
 
-class ApfsContainer;
+class Container;
 class BlockDumper;
 
 class CheckPointMap : public ApfsNodeMapper
 {
 public:
-	CheckPointMap(ApfsContainer &container);
+	CheckPointMap(Container &container);
 	virtual ~CheckPointMap();
 
 	bool Init(oid_t root_oid, uint32_t blk_count);
@@ -20,7 +20,7 @@ public:
 	void dump(BlockDumper &bd);
 
 private:
-	ApfsContainer &m_container;
+	Container &m_container;
 	std::vector<uint8_t> m_cpm_data;
 	oid_t m_cpm_oid;
 	uint32_t m_blksize;

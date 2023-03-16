@@ -19,11 +19,6 @@
 
 #pragma once
 
-#include <vector>
-#include <map>
-#include <memory>
-#include <mutex>
-
 #include "Global.h"
 #include "DiskStruct.h"
 #include "Object.h"
@@ -34,8 +29,8 @@ class BTreeNode;
 class BTreeIterator;
 class BlockDumper;
 
-class ApfsContainer;
-class ApfsVolume;
+class Container;
+class Volume;
 
 // ekey < skey: -1, ekey > skey: 1, ekey == skey: 0
 typedef int(*BTCompareFunc)(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
@@ -52,18 +47,14 @@ struct BTreeParams
 class BTreeNode : public Object
 {
 public:
-	// BTreeNode(BTree &tree, const uint8_t *block, size_t blocksize, paddr_t paddr, BTCompareFunc cmp_func, const void* cmp_ctx);
 	BTreeNode();
 	virtual ~BTreeNode();
 
 	int init(const void* params) override;
 
-	// static std::shared_ptr<BTreeNode> CreateNode(BTree &tree, const uint8_t *block, size_t blocksize, paddr_t paddr, BTCompareFunc cmp_func, const void* cmp_ctx);
-
 	uint32_t nkeys() const { return m_btn->btn_nkeys; }
 	uint16_t level() const { return m_btn->btn_level; }
 	uint16_t flags() const { return m_btn->btn_flags; }
-	// paddr_t paddr() const { return m_paddr; }
 
 	int find_ge(const void* key, uint16_t key_len, int& index, bool& equal) const;
 	int find_le(const void* key, uint16_t key_len, int& index, bool& equal) const;
@@ -91,6 +82,7 @@ public:
 	BTree();
 	~BTree();
 
+	bool isValid() const { return static_cast<bool>(m_root); }
 	int Init(Object* owner, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, BTCompareFunc cmp_func, uint64_t cmp_ctx);
 
 	int LookupFirst(void* key, uint16_t& key_len, void* val, uint16_t& val_len);
@@ -104,13 +96,10 @@ public:
 
 private:
 	void DumpTreeInternal(BlockDumper &out, const ObjPtr<BTreeNode> &node);
-	uint32_t Find(const std::shared_ptr<BTreeNode> &node, const void *key, size_t key_size, BTCompareFunc func, void *context);
-	int FindBin(const std::shared_ptr<BTreeNode> &node, const void *key, size_t key_size, BTCompareFunc func, void *context, FindMode mode);
-
 	int GetNode(ObjPtr<BTreeNode>& node, const btn_index_node_val_t& binv);
 
-	ApfsContainer* m_nx;
-	ApfsVolume* m_fs;
+	Container* m_nx;
+	Volume* m_fs;
 
 	ObjPtr<BTreeNode> m_root;
 	btree_info_t m_treeinfo;

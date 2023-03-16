@@ -56,22 +56,20 @@ add_library(crypto
 )
 
 add_library(apfs
-	ApfsLib/ApfsContainer.cpp
-	ApfsLib/ApfsContainer.h
 	ApfsLib/ApfsDir.cpp
 	ApfsLib/ApfsDir.h
 	ApfsLib/ApfsNodeMapper.cpp
 	ApfsLib/ApfsNodeMapper.h
-	ApfsLib/ApfsNodeMapperBTree.cpp
-	ApfsLib/ApfsNodeMapperBTree.h
-	ApfsLib/ApfsVolume.cpp
-	ApfsLib/ApfsVolume.h
+#	ApfsLib/ApfsNodeMapperBTree.cpp
+#	ApfsLib/ApfsNodeMapperBTree.h
 	ApfsLib/BlockDumper.cpp
 	ApfsLib/BlockDumper.h
 	ApfsLib/BTree.cpp
 	ApfsLib/BTree.h
 	ApfsLib/CheckPointMap.cpp
 	ApfsLib/CheckPointMap.h
+	ApfsLib/Container.cpp
+	ApfsLib/Container.h
 	ApfsLib/Crc32.cpp
 	ApfsLib/Crc32.h
 	ApfsLib/Debug.cpp
@@ -112,7 +110,10 @@ add_library(apfs
 	ApfsLib/Util.cpp
 	ApfsLib/Util.h
 	ApfsLib/Unicode.cpp
-	ApfsLib/Unicode.h)
+	ApfsLib/Unicode.h
+	ApfsLib/Volume.cpp
+	ApfsLib/Volume.h
+)
 target_link_libraries(apfs z bz2 lzfse crypto)
 target_compile_definitions(apfs PUBLIC _FILE_OFFSET_BITS=64 _DARWIN_USE_64_BIT_INODE)
 

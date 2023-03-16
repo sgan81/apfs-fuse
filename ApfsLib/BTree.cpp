@@ -25,8 +25,9 @@
 #include <iostream>
 #include <iomanip>
 
-#include "ApfsContainer.h"
-#include "ApfsVolume.h"
+#include "ObjCache.h"
+#include "Container.h"
+#include "Volume.h"
 #include "BTree.h"
 #include "Util.h"
 #include "BlockDumper.h"
@@ -245,14 +246,13 @@ BTree::~BTree()
 int BTree::Init(Object* owner, oid_t oid, xid_t xid, uint32_t type, uint32_t subtype, BTCompareFunc cmp_func, uint64_t cmp_ctx)
 {
 	int err;
-	Object* node;
 
 	if (owner->type() == OBJECT_TYPE_FS) {
-		// m_fs = static_cast<ApfsVolume*>(owner); // TODO
+		m_fs = static_cast<Volume*>(owner);
 		m_nx = &m_fs->getContainer();
 	} else {
 		m_fs = nullptr;
-		// m_nx = static_cast<ApfsContainer*>(owner); // TODO
+		m_nx = static_cast<Container*>(owner);
 	}
 
 	m_params.cmp_func = cmp_func;
@@ -261,13 +261,12 @@ int BTree::Init(Object* owner, oid_t oid, xid_t xid, uint32_t type, uint32_t sub
 	if (oid == 0)
 		return EINVAL;
 
-	err = m_nx->cache().getObj(node, &m_params, oid, xid, type, subtype, m_nx->GetBlocksize(), 0, m_fs);
+	err = m_nx->cache().getObj(m_root, &m_params, oid, xid, type, subtype, m_nx->GetBlocksize(), 0, m_fs);
 	if (err) {
 		log_error("BTree init: unable to get root node, error = %d\n", err);
 		return err;
 	}
 
-	m_root = node;
 	memcpy(&m_treeinfo, m_root->data() + m_root->size() - sizeof(btree_info_t), sizeof(btree_info_t));
 	m_params.info = m_treeinfo.bt_fixed;
 

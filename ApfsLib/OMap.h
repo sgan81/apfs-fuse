@@ -4,6 +4,8 @@
 #include "ObjPtr.h"
 #include "BTree.h"
 
+int CompareOMapKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
+
 class OMap : public Object
 {
 public:
@@ -15,9 +17,6 @@ public:
 	int lookup(oid_t oid, xid_t xid, xid_t* xid_o, uint32_t* flags, uint32_t* size, paddr_t* paddr);
 
 private:
-	BTree* getTree();
-
 	const omap_phys_t* om_phys;
-	// ObjPtr<BTree> m_tree;
-	BTree* m_tree; // TODO -> ObjPtr
+	BTree m_tree;
 };
