@@ -53,9 +53,12 @@ public:
 	int ReadBlocks(uint8_t *data, paddr_t paddr, uint64_t blkcnt = 1) const;
 	int ReadAndVerifyHeaderBlock(uint8_t *data, paddr_t paddr) const;
 
+	int getOMap(ObjPtr<OMap>& ptr);
+
 	uint32_t GetBlocksize() const { return m_nxsb->nx_block_size; }
 	uint64_t GetBlockCount() const { return m_nxsb->nx_block_count; }
-	uint64_t GetFreeBlocks() const { return m_sm->sm_dev[SD_MAIN].sm_free_count + m_sm->sm_dev[SD_TIER2].sm_free_count; }
+	// uint64_t GetFreeBlocks() const { return m_sm->sm_dev[SD_MAIN].sm_free_count + m_sm->sm_dev[SD_TIER2].sm_free_count; }
+	[[deprecated]] uint64_t GetFreeBlocks() const { return 0; }
 
 	bool GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password = nullptr);
 	bool GetPasswordHint(std::string &hint, const apfs_uuid_t &vol_uuid);
@@ -79,10 +82,7 @@ private:
 	ObjPtr<OMap> m_omap;
 
 	// CheckPointMap m_cpm;
-	// ApfsNodeMapperBTree m_omap;
 
-	std::vector<uint8_t> m_sm_data;
-	const spaceman_phys_t *m_sm;
 	// Block_8_11 -> omap
 
 	BTree m_fq_tree_mgr; // Don't need those for ro ...

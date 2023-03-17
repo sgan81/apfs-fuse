@@ -48,6 +48,7 @@ int Object::setData(uint8_t* data, uint32_t size)
 	m_type = o->o_type;
 	m_subtype = o->o_subtype;
 	m_paddr = o->o_oid;
+	init(nullptr);
 
 	return 0;
 }

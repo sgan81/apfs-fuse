@@ -14,6 +14,8 @@ class Container;
 
 struct ObjListEntry
 {
+	ObjListEntry() { next = nullptr; prev = &next; }
+
 	Object* next;
 	Object** prev;
 };

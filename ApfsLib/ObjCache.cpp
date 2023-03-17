@@ -147,7 +147,8 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 	o.m_data = new uint8_t[size];
 
 	// if (vol) ... else
-	if (!m_nx->ReadBlocks(o.m_data, paddr, size / m_nx->GetBlocksize())) return EIO;
+	err = m_nx->ReadBlocks(o.m_data, paddr, size / m_nx->GetBlocksize());
+	if (err) return err;
 
 	if (!(o_flags & OBJ_NOHEADER)) {
 		if (!VerifyBlock(o.m_data, o.m_size))
@@ -156,6 +157,10 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 
 	const obj_phys_t* p = reinterpret_cast<const obj_phys_t*>(o.m_data);
 	if (!(o_flags & OBJ_NOHEADER)) {
+		if (p->o_oid != oid)
+			log_warn("OID mismatch: %" PRIx64 " / %" PRIx64 "\n", p->o_oid, oid);
+		if (p->o_type != type)
+			log_warn("Type mismatch: %08X / %08X\n", p->o_type, type);
 		o.m_oid = p->o_oid;
 		o.m_xid = p->o_xid;
 		o.m_type = p->o_type;

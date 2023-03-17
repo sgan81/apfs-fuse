@@ -19,9 +19,9 @@ public:
 		p->retain();
 	}
 
-	ObjPtr(ObjPtr&& o) {
+	void operator=(const ObjPtr& o) {
 		p = o.p;
-		o.p = nullptr;
+		p->retain();
 	}
 
 	Object* operator=(Object* o) {

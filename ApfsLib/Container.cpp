@@ -208,7 +208,8 @@ int Container::Mount(ObjPtr<Container>& ptr, Device *disk_main, uint64_t main_st
 	}
 #endif
 
-	return true;
+	ptr = nx_obj;
+	return 0;
 }
 
 int Container::Unmount(ObjPtr<Container>& ptr)
@@ -219,6 +220,7 @@ int Container::Unmount(ObjPtr<Container>& ptr)
 	ObjCache* cache = &nx->oc();
 	delete cache;
 	delete nx;
+	return 0;
 }
 
 int Container::MountVolume(ObjPtr<Volume>& vol, unsigned int fsid, const std::string &passphrase, xid_t snap_xid)
@@ -254,6 +256,7 @@ int Container::GetVolumeInfo(unsigned int fsid, apfs_superblock_t& apsb)
 	paddr_t paddr;
 	int err;
 	std::vector<uint8_t> apsb_raw;
+	ObjPtr<OMap> omap;
 
 	if (fsid >= NX_MAX_FILE_SYSTEMS)
 		return false;
@@ -263,13 +266,16 @@ int Container::GetVolumeInfo(unsigned int fsid, apfs_superblock_t& apsb)
 	if (oid == 0)
 		return false;
 
-	err = m_omap->lookup(fsid, 0, nullptr, nullptr, nullptr, &paddr);
+	err = getOMap(omap);
+	if (err) return err;
+
+	err = omap->lookup(oid, 0, nullptr, nullptr, nullptr, &paddr);
 	if (err) return err;
 
 	apsb_raw.resize(GetBlocksize());
 
-	if (!ReadAndVerifyHeaderBlock(apsb_raw.data(), paddr))
-		return false;
+	err = ReadAndVerifyHeaderBlock(apsb_raw.data(), paddr);
+	if (err) return err;
 
 	memcpy(&apsb, apsb_raw.data(), sizeof(apfs_superblock_t));
 
@@ -280,6 +286,7 @@ int Container::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt) const
 {
 	uint64_t offs;
 	uint64_t size;
+	bool ok;
 
 	//if ((paddr + blkcnt) > m_nxsb->nx_block_count)
 	//	return false;
@@ -293,7 +300,9 @@ int Container::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt) const
 			return EINVAL;
 
 		offs = offs - FUSION_TIER2_DEVICE_BYTE_ADDR + m_tier2_part_start;
-		return m_tier2_disk->Read(data, offs, size) ? 0 : EIO; // TODO
+		ok = m_tier2_disk->Read(data, offs, size); // TODO
+		if (!ok)
+			log_error("Failed to read from tier2 disk, %" PRIx64 " / %" PRIx64 "\n", paddr, blkcnt);
 	}
 	else
 	{
@@ -301,8 +310,12 @@ int Container::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt) const
 			return EINVAL;
 
 		offs = offs + m_main_part_start;
-		return m_main_disk->Read(data, offs, size) ? 0 : EIO;
+		ok = m_main_disk->Read(data, offs, size); // TODO
+		if (!ok)
+			log_error("Failed to read from main disk, %" PRIx64 " / %" PRIx64 "\n", paddr, blkcnt);
 	}
+
+	return ok ? 0 : EIO;
 }
 
 int Container::ReadAndVerifyHeaderBlock(uint8_t * data, paddr_t paddr) const
@@ -318,6 +331,19 @@ int Container::ReadAndVerifyHeaderBlock(uint8_t * data, paddr_t paddr) const
 		return EINVAL;
 	}
 
+	return 0;
+}
+
+int Container::getOMap(ObjPtr<OMap>& ptr)
+{
+	if (!m_omap) {
+		int err = oc().getObj(m_omap, NULL, m_nxsb->nx_omap_oid, 0, OBJECT_TYPE_OMAP | OBJ_PHYSICAL, 0, 0, 0);
+		if (err) {
+			log_error("nx: failed to get omap, err = %d\n", err);
+			return err;
+		}
+	}
+	ptr = m_omap;
 	return 0;
 }
 
@@ -424,9 +450,11 @@ void Container::dump(BlockDumper& bd)
 		bd.DumpNode(blk.data(), m_nxsb->nx_efi_jumpstart);
 	}
 
+	// TODO move to omap
 	ReadAndVerifyHeaderBlock(blk.data(), m_nxsb->nx_omap_oid);
 	bd.DumpNode(blk.data(), m_nxsb->nx_omap_oid);
 
+#if 0 // TODO move to spaceman
 	{
 		size_t bs = bd.GetBlockSize();
 		bd.SetBlockSize(m_sm_data.size());
@@ -490,4 +518,5 @@ void Container::dump(BlockDumper& bd)
 		ReadAndVerifyHeaderBlock(blk.data(), cib_oid_list[cib_id]);
 		bd.DumpNode(blk.data(), cib_oid_list[cib_id]);
 	}
+#endif
 }

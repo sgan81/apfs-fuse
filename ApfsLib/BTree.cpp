@@ -80,12 +80,15 @@ int BTreeNode::init(const void* params)
 
 	m_btn = reinterpret_cast<const btree_node_phys_t*>(d);
 	m_table = d + sizeof(btree_node_phys_t);
-	m_keys = d + sizeof(btree_node_phys_t) * m_btn->btn_table_space.len;
+	m_keys = d + sizeof(btree_node_phys_t) + m_btn->btn_table_space.len;
 	m_vals = d + size();
-	if (m_btn->btn_flags & BTNODE_ROOT)
+	if (m_btn->btn_flags & BTNODE_ROOT) {
 		m_vals -= sizeof(btree_info_t);
-
-	m_info = bp->info;
+		const btree_info_t* info = reinterpret_cast<const btree_info_t*>(m_vals);
+		m_info = info->bt_fixed;
+	} else {
+		m_info = bp->info;
+	}
 	m_cmp_func = bp->cmp_func;
 	m_cmp_ctx = bp->cmp_ctx;
 

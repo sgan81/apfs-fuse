@@ -107,6 +107,8 @@ add_library(apfs
 	ApfsLib/OMap.h
 	ApfsLib/PList.cpp
 	ApfsLib/PList.h
+	ApfsLib/Spaceman.cpp
+	ApfsLib/Spaceman.h
 	ApfsLib/Util.cpp
 	ApfsLib/Util.h
 	ApfsLib/Unicode.cpp

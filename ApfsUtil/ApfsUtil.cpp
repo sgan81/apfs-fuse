@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
 				printf("\n");
 			}
 		} else {
-			printf("Unable to open APFS container\n");
+			printf("Unable to open APFS container, err = %d\n", err);
 		}
 
 		Container::Unmount(container);

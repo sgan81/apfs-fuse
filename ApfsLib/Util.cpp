@@ -760,10 +760,17 @@ int log2(uint32_t val)
 }
 
 // FILE *g_log = stderr; TODO
+enum LogLevel {
+	LL_ERROR = 0,
+	LL_WARNING,
+	LL_DEBUG
+};
+
+static int g_loglevel = LL_DEBUG;
 
 void log_debug(const char *msg, ...)
 {
-	if (g_debug & Dbg_Cmpfs) {
+	if (g_loglevel >= LL_DEBUG) {
 		va_list va;
 		va_start(va, msg);
 		vfprintf(stdout, msg, va);
@@ -773,7 +780,7 @@ void log_debug(const char *msg, ...)
 
 void log_warn(const char *msg, ...)
 {
-	if (g_debug & Dbg_Info) {
+	if (g_loglevel >= LL_WARNING) {
 		va_list va;
 		va_start(va, msg);
 		vfprintf(stderr, msg, va);
@@ -783,7 +790,7 @@ void log_warn(const char *msg, ...)
 
 void log_error(const char *msg, ...)
 {
-	if (g_debug & Dbg_Errors) {
+	if (g_loglevel >= LL_ERROR) {
 		va_list va;
 		va_start(va, msg);
 		vfprintf(stderr, msg, va);
