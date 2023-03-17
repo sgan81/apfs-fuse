@@ -35,6 +35,7 @@ class Volume;
 class BlockDumper;
 class ObjCache;
 class OMap;
+class Spaceman;
 
 class Container : public Object
 {
@@ -45,6 +46,7 @@ public:
 	int init(const void* params) override;
 
 	static int Mount(ObjPtr<Container>& ptr, Device *disk_main, uint64_t main_start, uint64_t main_len, Device *disk_tier2 = 0, uint64_t tier2_start = 0, uint64_t tier2_len = 0, xid_t req_xid = 0);
+	int FinishMount();
 	static int Unmount(ObjPtr<Container>& ptr);
 
 	int MountVolume(ObjPtr<Volume>& ptr, unsigned int fsid, const std::string &passphrase = std::string(), xid_t snap_xid = 0);
@@ -57,16 +59,17 @@ public:
 
 	uint32_t GetBlocksize() const { return m_nxsb->nx_block_size; }
 	uint64_t GetBlockCount() const { return m_nxsb->nx_block_count; }
-	// uint64_t GetFreeBlocks() const { return m_sm->sm_dev[SD_MAIN].sm_free_count + m_sm->sm_dev[SD_TIER2].sm_free_count; }
-	[[deprecated]] uint64_t GetFreeBlocks() const { return 0; }
+	[[deprecated]] uint64_t GetFreeBlocks();
 
-	bool GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password = nullptr);
+	[[deprecated]] int GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password = nullptr);
 	bool GetPasswordHint(std::string &hint, const apfs_uuid_t &vol_uuid);
 	bool IsUnencrypted() const { return m_keymgr.IsUnencrypted(); }
 
 	void dump(BlockDumper& bd);
 
 private:
+	int getSpaceman(ObjPtr<Spaceman> &sm);
+
 	const nx_superblock_t* m_nxsb;
 
 	Device *m_main_disk;
@@ -80,6 +83,7 @@ private:
 	std::string m_passphrase;
 
 	ObjPtr<OMap> m_omap;
+	ObjPtr<Spaceman> m_sm;
 
 	// CheckPointMap m_cpm;
 

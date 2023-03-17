@@ -32,6 +32,7 @@
 #include "Util.h"
 #include "ApfsDir.h"
 #include "OMap.h"
+#include "Debug.h"
 
 int CompareFsKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
 {
@@ -175,6 +176,7 @@ Volume::~Volume()
 
 int Volume::init(const void* params)
 {
+	(void)params;
 	m_sb = reinterpret_cast<const apfs_superblock_t*>(data());
 	if (m_sb->apfs_magic != APFS_MAGIC)
 		return EINVAL;
@@ -192,6 +194,7 @@ int Volume::Mount()
 		log_error("mount: omap init failed, err = %d\n", err);
 		return err;
 	}
+	m_omap->dump_tree();
 
 	if ((m_sb->apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED && !m_container.IsUnencrypted())
 	{
@@ -248,8 +251,10 @@ int Volume::Mount()
 
 int Volume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 {
-#if 0 // Mach ich morgen ... oder uebermorgen ...
-	BTree snap_btree(m_container);
+	// Currently not supported
+#if 0
+	const apfs_superblock_t* apsb;
+	BTree snap_btree;
 	j_snap_metadata_key_t snap_key;
 	union {
 		uint8_t buf[JOBJ_MAX_VALUE_SIZE];
@@ -261,25 +266,27 @@ int Volume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 	std::vector<uint8_t> blk;
 	int err;
 
-	m_apsb_paddr = apsb_paddr;
-
 	blk.resize(m_container.GetBlocksize());
 
 	if (!ReadBlocks(blk.data(), apsb_paddr, 1, 0))
-		return false;
+		return EIO;
 
 	if (!VerifyBlock(blk.data(), blk.size()))
-		return false;
+		return EINVAL;
 
-	memcpy(&m_sb, blk.data(), sizeof(m_sb));
+	apsb = reinterpret_cast<const apfs_superblock_t*>(blk.data());
 
-	if (m_sb.apfs_magic != APFS_MAGIC)
-		return false;
+	if (apsb->apfs_magic != APFS_MAGIC) {
+		log_error("Mount snapshot: not an apfs superblock.\n");
+		return EINVAL;
+	}
 
-	if (m_sb.apfs_snap_meta_tree_oid == 0)
-		return false;
+	if (apsb->apfs_snap_meta_tree_oid == 0) {
+		log_error("Mount snapshot: no snapshot meta tree there.\n");
+		return EINVAL;
+	}
 
-	if (!snap_btree.Init(m_sb.apfs_snap_meta_tree_oid, m_sb.apfs_o.o_xid, CompareSnapMetaKey, nullptr)) {
+	if (!snap_btree.Init(this, apsb->apfs_snap_meta_tree_oid, 0, apsb->apfs_snap_meta_tree_type, OBJECT_TYPE_SNAPMETATREE, CompareFsKey, 0)) {
 		log_error("snap meta tree init failed.\n");
 		return false;
 	}
@@ -350,8 +357,6 @@ int Volume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 		if (!m_fext_tree.Init(m_sb.apfs_fext_tree_oid, m_sb.apfs_o.o_xid, CompareFextKey, nullptr))
 			std::cerr << "ERROR: fext tree init failed" << std::endl;
 	}
-
-	return true;
 #endif
 	return ENOTSUP;
 }

@@ -33,8 +33,8 @@
 #include "BlockDumper.h"
 #include "Debug.h"
 
-#define BTREE_DEBUG_VERBOSE
-#define BTREE_DEBUG
+// #define BTREE_DEBUG_VERBOSE
+// #define BTREE_DEBUG
 
 int CompareU64Key(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
 {
@@ -556,10 +556,14 @@ int BTreeIterator::initFirst(BTree* tree, void* key_buf, uint16_t key_buf_len, v
 	m_key_len = key_buf_len;
 	m_val_len = val_buf_len;
 
+#ifdef BTREE_DEBUG
 	log_debug("iterator init\n");
+#endif
 	err = m_tree->LookupFirst(m_key_buf, m_key_len, m_val_buf, m_val_len);
+#ifdef BTREE_DEBUG
 	log_debug("... returned %d\n", err);
 	dbg_print_btree_entry(m_key_buf, m_key_len, m_val_buf, m_val_len, m_tree->tree_type(), true);
+#endif
 
 	return err;
 }
@@ -572,9 +576,13 @@ bool BTreeIterator::next()
 	m_key_len = m_key_buf_len;
 	m_val_len = m_val_buf_len;
 
+#ifdef BTREE_DEBUG
 	log_debug("iterator next\n");
+#endif
 	err = m_tree->Lookup(m_key_buf, skey_len, m_key_len, m_val_buf, m_val_len, BTree::FindMode::GT);
+#ifdef BTREE_DEBUG
 	log_debug("... returned %d\n", err);
 	dbg_print_btree_entry(m_key_buf, m_key_len, m_val_buf, m_val_len, m_tree->tree_type(), true);
+#endif
 	return err == 0;
 }

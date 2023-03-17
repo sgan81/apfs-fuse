@@ -91,7 +91,7 @@ public:
 	uint16_t GetKeyLen() const { return m_treeinfo.bt_fixed.bt_key_size; }
 	uint16_t GetValLen() const { return m_treeinfo.bt_fixed.bt_val_size; }
 	uint32_t GetBTFlags() const { return m_treeinfo.bt_fixed.bt_flags; }
-	uint32_t key_count() const { return m_treeinfo.bt_key_count; }
+	uint64_t key_count() const { return m_treeinfo.bt_key_count; }
 
 	uint32_t tree_type() const { return m_root ? m_root->subtype() : 0; }
 

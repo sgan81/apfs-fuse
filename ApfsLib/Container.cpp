@@ -29,6 +29,7 @@
 #include "Global.h"
 #include "ObjCache.h"
 #include "OMap.h"
+#include "Spaceman.h"
 
 int g_debug = 0;
 bool g_lax = false;
@@ -151,65 +152,114 @@ int Container::Mount(ObjPtr<Container>& ptr, Device *disk_main, uint64_t main_st
 	nx_obj->setData(tmp.data(), tmp.size());
 	oc->setContainer(nx_obj, max_paddr);
 
-#if 0 // TODO
-	if (!m_cpm.Init(m_nxsb->nx_xp_desc_base + m_nxsb->nx_xp_desc_index, m_nxsb->nx_xp_desc_len - 1))
-	{
-		std::cerr << "Failed to load checkpoint map" << std::endl;
-		return false;
-	}
-
-	if (!m_omap.Init(m_nxsb->nx_omap_oid, m_nxsb->nx_o.o_xid))
-	{
-		std::cerr << "Failed to load nx omap" << std::endl;
-		return false;
-	}
-
-	omap_res_t omr;
-	if (!m_cpm.Lookup(omr, m_nxsb->nx_spaceman_oid, m_nxsb->nx_o.o_xid))
-	{
-		std::cerr << "Failed to map spaceman oid" << std::endl;
-		return false;
-	}
-
-	m_sm_data.resize(omr.size);
-	ReadBlocks(m_sm_data.data(), omr.paddr, omr.size / GetBlocksize());
-	m_sm = reinterpret_cast<const spaceman_phys_t *>(m_sm_data.data());
-
-	if (!VerifyBlock(m_sm_data.data(), m_sm_data.size())) {
-		std::cerr << "Checksum error in spaceman" << std::endl;
-		return false;
-	}
-
-	if ((m_sm->sm_o.o_type & OBJECT_TYPE_MASK) != OBJECT_TYPE_SPACEMAN)
-	{
-		std::cerr << "Spaceman has wrong type " << m_sm->sm_o.o_type << std::endl;
-		return false;
-	}
-
-	/*
-	if (m_sm->sm_fq[SFQ_IP].sfq_tree_oid != 0)
-		m_fq_tree_mgr.Init(m_sm->sm_fq[SFQ_IP].sfq_tree_oid, m_sm->sm_o.o_xid, &m_cpm);
-
-	if (m_sm->sm_fq[SFQ_MAIN].sfq_tree_oid != 0)
-		m_fq_tree_vol.Init(m_sm->sm_fq[SFQ_MAIN].sfq_tree_oid, m_sm->sm_o.o_xid, &m_cpm);
-	*/
-
-	// m_omap_tree.Init(m_nxsb->nx_omap_oid, m_nxsb->hdr.o_xid, nullptr);
-
-	// m_sb.nx_spaceman_oid
-
-	if ((m_nxsb->nx_keylocker.pr_start_addr != 0) && (m_nxsb->nx_keylocker.pr_block_count != 0))
-	{
-		if (!m_keymgr.Init(m_nxsb->nx_keylocker.pr_start_addr, m_nxsb->nx_keylocker.pr_block_count, m_nxsb->nx_uuid))
-		{
-			std::cerr << "Initialization of KeyManager failed." << std::endl;
-			return false;
-		}
-	}
-#endif
+	nx_obj->FinishMount();
 
 	ptr = nx_obj;
 	return 0;
+}
+
+int Container::FinishMount()
+{
+	paddr_t paddr;
+	std::vector<uint8_t> cpm_data;
+	const checkpoint_map_phys_t *cpm = nullptr;
+	uint32_t i;
+	uint32_t k;
+	int err;
+
+	cpm_data.resize(m_nxsb->nx_block_size);
+	cpm = reinterpret_cast<const checkpoint_map_phys_t*>(cpm_data.data());
+
+	for (i = m_nxsb->nx_xp_desc_index; i != m_nxsb->nx_xp_desc_next;) {
+		paddr = m_nxsb->nx_xp_desc_base + i;
+
+		err = ReadAndVerifyHeaderBlock(cpm_data.data(), paddr);
+		if (err) return err;
+
+		cpm = reinterpret_cast<const checkpoint_map_phys_t*>(cpm_data.data());
+
+		if ((cpm->cpm_o.o_type & OBJECT_TYPE_MASK) == OBJECT_TYPE_CHECKPOINT_MAP) {
+			log_debug("cpm: count=%d type=%08x\n", cpm->cpm_count, cpm->cpm_o.o_type);
+			for (k = 0; k < cpm->cpm_count; k++) {
+				const checkpoint_mapping_t& cm = cpm->cpm_map[k];
+
+				log_debug("%x %x %x %x fs_oid=%" PRIx64 " oid=%" PRIx64 " paddr=%" PRIx64 "\n",
+					cm.cpm_type, cm.cpm_subtype, cm.cpm_size, cm.cpm_pad, cm.cpm_fs_oid, cm.cpm_oid, cm.cpm_paddr);
+				// For now, load only sm ...
+				if ((cm.cpm_type & OBJECT_TYPE_MASK) == OBJECT_TYPE_SPACEMAN) {
+					Object* dummy;
+					err = oc().getObj(dummy, nullptr, cm.cpm_oid, 0, cm.cpm_type, cm.cpm_subtype, cm.cpm_size, cm.cpm_paddr);
+					if (err)
+						log_debug("Failed to load ephemeral, oid %" PRIx64 ", err %d\n", cm.cpm_oid, err);
+				}
+			}
+		}
+
+		i++;
+		if (i >= m_nxsb->nx_xp_desc_blocks)
+			i = 0;
+	}
+
+	return 0;
+
+#if 0 // TODO
+
+
+	if (!m_cpm.Init(m_nxsb->nx_xp_desc_base + m_nxsb->nx_xp_desc_index, m_nxsb->nx_xp_desc_len - 1))
+	{
+	std::cerr << "Failed to load checkpoint map" << std::endl;
+	return false;
+}
+
+if (!m_omap.Init(m_nxsb->nx_omap_oid, m_nxsb->nx_o.o_xid))
+{
+std::cerr << "Failed to load nx omap" << std::endl;
+return false;
+}
+
+omap_res_t omr;
+if (!m_cpm.Lookup(omr, m_nxsb->nx_spaceman_oid, m_nxsb->nx_o.o_xid))
+{
+std::cerr << "Failed to map spaceman oid" << std::endl;
+return false;
+}
+
+m_sm_data.resize(omr.size);
+ReadBlocks(m_sm_data.data(), omr.paddr, omr.size / GetBlocksize());
+m_sm = reinterpret_cast<const spaceman_phys_t *>(m_sm_data.data());
+
+if (!VerifyBlock(m_sm_data.data(), m_sm_data.size())) {
+	std::cerr << "Checksum error in spaceman" << std::endl;
+	return false;
+}
+
+if ((m_sm->sm_o.o_type & OBJECT_TYPE_MASK) != OBJECT_TYPE_SPACEMAN)
+{
+std::cerr << "Spaceman has wrong type " << m_sm->sm_o.o_type << std::endl;
+return false;
+}
+
+/*
+ *	if (m_sm->sm_fq[SFQ_IP].sfq_tree_oid != 0)
+ *		m_fq_tree_mgr.Init(m_sm->sm_fq[SFQ_IP].sfq_tree_oid, m_sm->sm_o.o_xid, &m_cpm);
+ *
+ *	if (m_sm->sm_fq[SFQ_MAIN].sfq_tree_oid != 0)
+ *		m_fq_tree_vol.Init(m_sm->sm_fq[SFQ_MAIN].sfq_tree_oid, m_sm->sm_o.o_xid, &m_cpm);
+ */
+
+// m_omap_tree.Init(m_nxsb->nx_omap_oid, m_nxsb->hdr.o_xid, nullptr);
+
+// m_sb.nx_spaceman_oid
+
+if ((m_nxsb->nx_keylocker.pr_start_addr != 0) && (m_nxsb->nx_keylocker.pr_block_count != 0))
+{
+if (!m_keymgr.Init(m_nxsb->nx_keylocker.pr_start_addr, m_nxsb->nx_keylocker.pr_block_count, m_nxsb->nx_uuid))
+{
+std::cerr << "Initialization of KeyManager failed." << std::endl;
+return false;
+}
+}
+#endif
 }
 
 int Container::Unmount(ObjPtr<Container>& ptr)
@@ -347,22 +397,46 @@ int Container::getOMap(ObjPtr<OMap>& ptr)
 	return 0;
 }
 
-bool Container::GetVolumeKey(uint8_t *key, const apfs_uuid_t & vol_uuid, const char *password)
+uint64_t Container::GetFreeBlocks()
 {
-	if (!m_keymgr.IsValid())
-		return false;
+	ObjPtr<Spaceman> sm;
+	int err;
+
+	err = getSpaceman(sm);
+	if (err) return 0;
+
+	return sm->getFreeBlocks();
+}
+
+int Container::GetVolumeKey(uint8_t *key, const apfs_uuid_t & vol_uuid, const char *password)
+{
+	bool ok;
+
+	if (!m_keymgr.IsValid()) {
+		if (m_nxsb->nx_keylocker.pr_start_addr == 0 || m_nxsb->nx_keylocker.pr_block_count == 0) {
+			log_error("No keylocker location specified.\n");
+			return EINVAL;
+		}
+		// TODO
+		ok = m_keymgr.Init(m_nxsb->nx_keylocker.pr_start_addr, m_nxsb->nx_keylocker.pr_block_count, m_nxsb->nx_uuid);
+		if (!ok) {
+			log_error("Keybag initialization failed.\n");
+			return EINVAL;
+		}
+	}
 
 	if (password)
 	{
-		return m_keymgr.GetVolumeKey(key, vol_uuid, password);
+		ok = m_keymgr.GetVolumeKey(key, vol_uuid, password);
 	}
 	else
 	{
 		if (m_passphrase.empty())
-			return false;
-
-		return m_keymgr.GetVolumeKey(key, vol_uuid, m_passphrase.c_str());
+			ok = false;
+		else
+			ok = m_keymgr.GetVolumeKey(key, vol_uuid, m_passphrase.c_str());
 	}
+	return ok ? 0 : EPERM; // TODO
 }
 
 bool Container::GetPasswordHint(std::string & hint, const apfs_uuid_t & vol_uuid)
@@ -519,4 +593,15 @@ void Container::dump(BlockDumper& bd)
 		bd.DumpNode(blk.data(), cib_oid_list[cib_id]);
 	}
 #endif
+}
+
+int Container::getSpaceman(ObjPtr<Spaceman>& sm)
+{
+	int err = 0;
+	if (!m_sm) {
+		err = oc().getObj(m_sm, nullptr, m_nxsb->nx_spaceman_oid, 0, OBJECT_TYPE_SPACEMAN | OBJ_EPHEMERAL, 0, 0, 0, nullptr);
+		if (err) return err;
+	}
+	sm = m_sm;
+	return 0;
 }

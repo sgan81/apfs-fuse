@@ -1,3 +1,22 @@
+/*
+ *	This file is part of apfs-fuse, a read-only implementation of APFS
+ *	(Apple File System) for FUSE.
+ *	Copyright (C) 2023 Simon Gander
+ *
+ *	Apfs-fuse is free software: you can redistribute it and/or modify
+ *	it under the terms of the GNU General Public License as published by
+ *	the Free Software Foundation, either version 2 of the License, or
+ *	(at your option) any later version.
+ *
+ *	Apfs-fuse is distributed in the hope that it will be useful,
+ *	but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *	GNU General Public License for more details.
+ *
+ *	You should have received a copy of the GNU General Public License
+ *	along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <cerrno>
 #include <cstdlib>
 #include <cinttypes>
@@ -10,12 +29,14 @@
 #include "OMap.h"
 #include "Util.h"
 #include "BTree.h"
+#include "Spaceman.h"
 
 ObjCache::ObjCache()
 {
 	m_ht_size = 0x400;
 	m_ht_mask = 0x3FF;
 	m_hashtable = new Object*[m_ht_size];
+	std::fill_n(m_hashtable, m_ht_size, nullptr);
 	m_lru_cnt = 0;
 	m_lru_limit = 4096;
 }
@@ -26,6 +47,14 @@ ObjCache::~ObjCache()
 	Object* next;
 
 	obj = m_lru_list.first;
+	while (obj != nullptr) {
+		next = obj->m_le_lru.next;
+		htRemove(obj);
+		delete obj;
+		obj = next;
+	}
+
+	obj = m_ephemeral_list.first;
 	while (obj != nullptr) {
 		next = obj->m_le_lru.next;
 		htRemove(obj);
@@ -52,11 +81,13 @@ int ObjCache::getObj(Object*& obj, const void* params, oid_t oid, xid_t xid, uin
 	obj = nullptr;
 
 	for (o = m_hashtable[oid & m_ht_mask]; o != nullptr; o = o->m_le_ht.next) {
-		if (oid == o->m_oid && xid == o->m_xid && type == o->m_type) {
+		if (oid == o->m_oid && type == o->m_type && fs == o->fs()) {
 			obj = o;
 			o->retain();
-			lruRemove(o);
-			lruAdd(o);
+			if (!(type & OBJ_EPHEMERAL)) {
+				lruRemove(o);
+				lruAdd(o);
+			}
 			return 0;
 		}
 	}
@@ -81,8 +112,12 @@ int ObjCache::getObj(Object*& obj, const void* params, oid_t oid, xid_t xid, uin
 
 	obj = o;
 	htAdd(o, oid);
-	lruAdd(o);
-	lruShrink();
+	if (o->type_and_flags() & OBJ_EPHEMERAL)
+		ephemeralAdd(o);
+	else {
+		lruAdd(o);
+		lruShrink();
+	}
 
 	return 0;
 }
@@ -97,6 +132,9 @@ Object * ObjCache::createObjInstance(uint32_t type)
 	case OBJECT_TYPE_BTREE:
 	case OBJECT_TYPE_BTREE_NODE:
 		o = new BTreeNode();
+		break;
+	case OBJECT_TYPE_SPACEMAN:
+		o = new Spaceman();
 		break;
 	case OBJECT_TYPE_OMAP:
 		o = new OMap();
@@ -114,8 +152,10 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 	int err;
 
 	if (paddr == 0) {
-		if (o_flags & OBJ_EPHEMERAL) // TODO ... epehemerals list probably ...
-			return ENOTSUP;
+		if (o_flags & OBJ_EPHEMERAL) { // TODO ... epehemerals list probably ... yes, but paddr needs to be set.
+			log_error("read obj: trying to load ephemeral without valid paddr.\n");
+			return EINVAL;
+		}
 		else if (o_flags & OBJ_PHYSICAL)
 			paddr = oid;
 		else {
@@ -136,6 +176,8 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 			}
 			size = om_size;
 			paddr = om_paddr;
+			if (om_flags & OMAP_VAL_NOHEADER)
+				o_flags |= OBJ_NOHEADER;
 		}
 	}
 
@@ -174,7 +216,7 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 	o.m_oc = this;
 	o.m_fs = fs;
 
-	log_debug("obj_get new oid %" PRIx64 " xid %" PRIx64 " type %x subtype %x paddr %" PRIx64 "\n", o.m_oid, o.m_xid, o.m_type, o.m_subtype, o.m_paddr);
+	log_debug("obj_get %" PRIx64 " %" PRIx64 " -> new oid %" PRIx64 " xid %" PRIx64 " type %x subtype %x paddr %" PRIx64 "\n", oid, xid, o.m_oid, o.m_xid, o.m_type, o.m_subtype, o.m_paddr);
 
 	return 0;
 }
@@ -228,4 +270,21 @@ void ObjCache::lruShrink()
 		}
 		o = n;
 	}
+}
+
+void ObjCache::ephemeralAdd(Object* obj)
+{
+	obj->m_le_lru.next = nullptr;
+	obj->m_le_lru.prev = m_ephemeral_list.last;
+	*m_ephemeral_list.last = obj;
+	m_ephemeral_list.last = &obj->m_le_lru.next;
+}
+
+void ObjCache::ephemeralRemove(Object* obj)
+{
+	if (obj->m_le_lru.next != 0)
+		obj->m_le_lru.next->m_le_lru.prev = obj->m_le_lru.prev;
+	else
+		m_ephemeral_list.last = obj->m_le_lru.prev;
+	*obj->m_le_lru.prev = obj->m_le_lru.next;
 }

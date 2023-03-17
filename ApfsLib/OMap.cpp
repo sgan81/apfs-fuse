@@ -1,3 +1,22 @@
+/*
+ *	This file is part of apfs-fuse, a read-only implementation of APFS
+ *	(Apple File System) for FUSE.
+ *	Copyright (C) 2023 Simon Gander
+ *
+ *	Apfs-fuse is free software: you can redistribute it and/or modify
+ *	it under the terms of the GNU General Public License as published by
+ *	the Free Software Foundation, either version 2 of the License, or
+ *	(at your option) any later version.
+ *
+ *	Apfs-fuse is distributed in the hope that it will be useful,
+ *	but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *	GNU General Public License for more details.
+ *
+ *	You should have received a copy of the GNU General Public License
+ *	along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <cassert>
 #include <cinttypes>
 
@@ -6,6 +25,7 @@
 #include "Container.h"
 #include "Volume.h"
 #include "Util.h"
+#include "Debug.h"
 
 int CompareOMapKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
 {
@@ -79,6 +99,9 @@ int OMap::lookup(oid_t oid, xid_t xid, xid_t* xid_o, uint32_t* flags, uint32_t* 
 		return err;
 	}
 
+	if (ov.ov_flags & OMAP_VAL_DELETED)
+		return ENOENT;
+
 	if (ok.ok_oid != oid) return ENOENT;
 	if (xid_o) *xid_o = ok.ok_xid;
 	if (flags) *flags = ov.ov_flags;
@@ -88,4 +111,24 @@ int OMap::lookup(oid_t oid, xid_t xid, xid_t* xid_o, uint32_t* flags, uint32_t* 
 	log_debug("omap lookup oid %" PRIx64 " xid %" PRIx64 " => xid %" PRIx64 " flags %x size %x paddr %" PRIx64 "\n", oid, xid, ok.ok_xid, ov.ov_flags, ov.ov_size, ov.ov_paddr);
 
 	return 0;
+}
+
+void OMap::dump_tree()
+{
+	if (!m_tree.isValid()) {
+		int err;
+		Object* owner;
+
+		owner = fs();
+		if (owner == nullptr)
+			owner = nx();
+
+		err = m_tree.Init(owner, om_phys->om_tree_oid, 0, om_phys->om_tree_type, OBJECT_TYPE_OMAP, CompareOMapKey, 0);
+		if (err) {
+			log_error("omap: failed to init tree, err = %d\n", err);
+			return;
+		}
+	}
+
+	dbg_dump_btree(m_tree);
 }

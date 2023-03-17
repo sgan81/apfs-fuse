@@ -1,8 +1,28 @@
+/*
+ *	This file is part of apfs-fuse, a read-only implementation of APFS
+ *	(Apple File System) for FUSE.
+ *	Copyright (C) 2023 Simon Gander
+ *
+ *	Apfs-fuse is free software: you can redistribute it and/or modify
+ *	it under the terms of the GNU General Public License as published by
+ *	the Free Software Foundation, either version 2 of the License, or
+ *	(at your option) any later version.
+ *
+ *	Apfs-fuse is distributed in the hope that it will be useful,
+ *	but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *	GNU General Public License for more details.
+ *
+ *	You should have received a copy of the GNU General Public License
+ *	along with apfs-fuse.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <cinttypes>
 
 #include "DiskStruct.h"
 #include "Util.h"
 #include "Debug.h"
+#include "BTree.h"
 
 void dbg_print_hex(const void* vdata, size_t size)
 {
@@ -148,4 +168,22 @@ void dbg_print_btree_entry(const void* key, uint16_t key_len, const void* val, u
 		dbg_print_btree_val_int(val, val_len, tree_subtype, 0);
 	}
 	log_debug("\n");
+}
+
+void dbg_dump_btree(BTree& tree)
+{
+	uint8_t key_buf[JOBJ_MAX_KEY_SIZE];
+	uint8_t val_buf[JOBJ_MAX_VALUE_SIZE];
+	BTreeIterator it;
+	int err;
+
+	log_debug("BTree: key_count=%" PRIu64 "\n", tree.key_count());
+
+	err = it.initFirst(&tree, key_buf, JOBJ_MAX_KEY_SIZE, val_buf, JOBJ_MAX_VALUE_SIZE);
+	if (err) return;
+
+	for (;;) {
+		dbg_print_btree_entry(key_buf, it.key_len(), val_buf, it.val_len(), tree.tree_type(), true);
+		if (!it.next()) break;
+	}
 }
