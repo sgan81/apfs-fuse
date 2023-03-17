@@ -44,7 +44,8 @@ public:
 
 	int init(const void* params) override;
 
-	static int Bootstrap(ObjPtr<Container>& ptr, Device *disk_main, uint64_t main_start, uint64_t main_len, Device *disk_tier2 = 0, uint64_t tier2_start = 0, uint64_t tier2_len = 0, xid_t req_xid = 0);
+	static int Mount(ObjPtr<Container>& ptr, Device *disk_main, uint64_t main_start, uint64_t main_len, Device *disk_tier2 = 0, uint64_t tier2_start = 0, uint64_t tier2_len = 0, xid_t req_xid = 0);
+	static int Unmount(ObjPtr<Container>& ptr);
 
 	int MountVolume(ObjPtr<Volume>& ptr, unsigned int fsid, const std::string &passphrase = std::string(), xid_t snap_xid = 0);
 	int GetVolumeInfo(unsigned int fsid, apfs_superblock_t &apsb);
@@ -61,8 +62,6 @@ public:
 	bool IsUnencrypted() const { return m_keymgr.IsUnencrypted(); }
 
 	void dump(BlockDumper& bd);
-
-	ObjCache& cache();
 
 private:
 	const nx_superblock_t* m_nxsb;
@@ -82,13 +81,12 @@ private:
 	// CheckPointMap m_cpm;
 	// ApfsNodeMapperBTree m_omap;
 
-	// std::vector<uint8_t> m_sm_data;
-	// const spaceman_phys_t *m_sm;
+	std::vector<uint8_t> m_sm_data;
+	const spaceman_phys_t *m_sm;
 	// Block_8_11 -> omap
 
-	// BTree m_omap_tree; // see ApfsNodeMapperBTree
-	// BTree m_fq_tree_mgr; // Don't need those for ro ...
-	// BTree m_fq_tree_vol; // Don't need those for ro ...
+	BTree m_fq_tree_mgr; // Don't need those for ro ...
+	BTree m_fq_tree_vol; // Don't need those for ro ...
 
 	KeyManager m_keymgr;
 };

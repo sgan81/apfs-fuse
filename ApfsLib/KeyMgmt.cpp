@@ -380,7 +380,7 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 	st << endl;
 }
 
-KeyManager::KeyManager(ApfsContainer& container) : m_container(container)
+KeyManager::KeyManager(Container& container) : m_container(container)
 {
 	memset(m_container_uuid, 0, sizeof(m_container_uuid));
 	m_is_valid = false;

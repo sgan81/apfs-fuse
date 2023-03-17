@@ -31,7 +31,7 @@
 
 int main(int argc, char *argv[])
 {
-	bool rc;
+	int err;
 	int volume_id;
 	int n;
 	std::unique_ptr<Device> main_disk;
@@ -45,17 +45,17 @@ int main(int argc, char *argv[])
 	const char *tier2_name;
 	const char *output_name;
 
-	if (argc < 3)
-	{
-		std::cerr << "Syntax: apfs-dump-quick <main-device> [-f fusion-device] <Logfile.txt>" << std::endl;
-		return -1;
+	if (argc < 3) {
+		printf("Syntax: apfs-dump-quick <main-device> [-f fusion-device] <Logfile.txt>\n");
+		return EINVAL;
 	}
 
 	main_name = argv[1];
-	if (!strcmp(argv[2], "-f"))
-	{
-		if (argc < 5)
-			std::cerr << "Syntax: apfs-dump-quick <main-device> [-f fusion-secondary-device] <Logfile.txt>" << std::endl;
+	if (!strcmp(argv[2], "-f")) {
+		if (argc < 5) {
+			printf("Syntax: apfs-dump-quick <main-device> [-f fusion-secondary-device] <Logfile.txt>\n");
+			return EINVAL;
+		}
 
 		tier2_name = argv[3];
 		output_name = argv[4];
@@ -72,25 +72,23 @@ int main(int argc, char *argv[])
 	if (tier2_name)
 		tier2_disk.reset(Device::OpenDevice(tier2_name));
 
-	if (!main_disk)
-	{
-		std::cerr << "Unable to open device " << main_name << std::endl;
+	if (!main_disk) {
+		fprintf(stderr, "Unable to open device %s\n", main_name);
 		return -1;
 	}
 
-	if (tier2_name && !tier2_disk)
-	{
-		std::cerr << "Unable to open secondary device " << tier2_name << std::endl;
+	if (tier2_name && !tier2_disk) {
+		fprintf(stderr, "Unable to open secondary device %s\n", tier2_name);
 		return -1;
 	}
 
 	std::ofstream st;
 	st.open(output_name);
 
-	if (!st.is_open())
-	{
-		std::cerr << "Unable to open output file " << output_name << std::endl;
-		      main_disk->Close();
+	if (!st.is_open()) {
+		fprintf(stderr, "Unable to open output file %s\n", output_name);
+		main_disk->Close();
+		if (tier2_disk) tier2_disk->Close();
 		return -1;
 	}
 
@@ -106,7 +104,7 @@ int main(int argc, char *argv[])
 	GptPartitionMap gpt;
 	if (gpt.LoadAndVerify(*main_disk.get()))
 	{
-		std::cout << "Info: Found valid GPT partition table on main device. Dumping first APFS partition." << std::endl;
+		printf("Info: Found valid GPT partition table on main device. Dumping first APFS partition.\n");
 
 		n = gpt.FindFirstAPFSPartition();
 		if (n != -1)
@@ -115,23 +113,23 @@ int main(int argc, char *argv[])
 
 	if (tier2_disk && gpt.LoadAndVerify(*tier2_disk.get()))
 	{
-		std::cout << "Info: Found valid GPT partition table on tier2 device. Dumping first APFS partition." << std::endl;
+		printf("Info: Found valid GPT partition table on tier2 device. Dumping first APFS partition.\n");
 
 		n = gpt.FindFirstAPFSPartition();
 		if (n != -1)
 			gpt.GetPartitionOffsetAndSize(n, tier2_offset, tier2_size);
 	}
 
-	std::unique_ptr<ApfsContainer> container(new ApfsContainer(main_disk.get(), main_offset, main_size, tier2_disk.get(), tier2_offset, tier2_size));
+	ObjPtr<Container> container;
+	err = Container::Mount(container, main_disk.get(), main_offset, main_size, tier2_disk.get(), tier2_offset, tier2_size);
 
-	rc = container->Init();
-
-	if (!rc)
-	{
-		std::cerr << "Unable to init container." << std::endl;
-		container.reset();
+	if (err) {
+		fprintf(stderr, "Unable to mount container, err %d.\n", err);
+		Container::Unmount(container);
 		main_disk->Close();
-		return -1;
+		if (tier2_disk)
+			tier2_disk->Close();
+		return err;
 	}
 
 #if 1
@@ -140,19 +138,15 @@ int main(int argc, char *argv[])
 	container->dump(bd);
 
 #if 1
-	for (volume_id = 0; volume_id < NX_MAX_FILE_SYSTEMS; volume_id++)
-	{
-		ApfsVolume *vol;
+	for (volume_id = 0; volume_id < NX_MAX_FILE_SYSTEMS; volume_id++) {
+		ObjPtr<Volume> vol;
+		err = container->MountVolume(vol, volume_id);
 
-		vol = container->GetVolume(volume_id);
-
-		if (vol)
-		{
-			std::cout << "Volume " << volume_id << ": " << vol->name() << std::endl;
-
+		if (vol) {
+			printf("Volume %d: %s\n", volume_id, vol->name());
 			vol->dump(bd);
-
-			delete vol;
+		} else {
+			fprintf(stderr, "Unable to mount volume, err = %d\n", err);
 		}
 	}
 #endif
@@ -192,7 +186,7 @@ int main(int argc, char *argv[])
 
 #endif
 
-	container.reset();
+	Container::Unmount(container);
 
 	st.close();
 

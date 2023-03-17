@@ -57,10 +57,11 @@ int main(int argc, char *argv[])
 {
 	const char *devname = nullptr;
 	Device *device = nullptr;
-	ApfsContainer *container = nullptr;
+	ObjPtr<Container> container;
 	uint64_t offset;
 	uint64_t size;
 	apfs_superblock_t apsb;
+	int err;
 
 	g_debug = 255;
 
@@ -91,9 +92,8 @@ int main(int argc, char *argv[])
 			printf("\n");
 		}
 
-		container = new Container(device, offset, size);
-
-		if (container->Init()) {
+		err = Container::Mount(container, device, offset, size);
+		if (err == 0) {
 			// printf("Listing volumes:\n");
 			for (int k = 0; k < NX_MAX_FILE_SYSTEMS; k++) {
 				if (!container->GetVolumeInfo(k, apsb))
@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
 				printf("\n");
 				if (apsb.apfs_snap_meta_tree_oid) {
 					printf("Snapshots:\n");
-					BTree snap_tree(*container);
+					BTree snap_tree;
 					BTreeIterator it;
 					int err;
 					union {
@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
 						j_snap_metadata_val_t v;
 					} smv;
 
-					snap_tree.Init(apsb.apfs_snap_meta_tree_oid, apsb.apfs_o.o_xid, CompareSnapMetaKey, nullptr);
+					snap_tree.Init(container.get(), apsb.apfs_snap_meta_tree_oid, apsb.apfs_o.o_xid, apsb.apfs_snap_meta_tree_type, OBJECT_TYPE_SNAPMETATREE, CompareSnapMetaKey, 0);
 					err = it.initFirst(&snap_tree, smk.buf, JOBJ_MAX_KEY_SIZE, smv.buf, JOBJ_MAX_VALUE_SIZE);
 					if (err == 0) {
 						for (;;) {
@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
 			printf("Unable to open APFS container\n");
 		}
 
-		delete container;
+		Container::Unmount(container);
 
 		device->Close();
 		delete device;

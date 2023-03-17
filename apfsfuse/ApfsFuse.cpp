@@ -50,6 +50,8 @@
 #include <ApfsLib/DeviceLinux.h>
 #include <ApfsLib/DeviceMac.h>
 #include <ApfsLib/GptPartitionMap.h>
+#include <ApfsLib/ObjPtr.h>
+#include <ApfsLib/Util.h>
 
 #include <cassert>
 #include <cstring>
@@ -64,8 +66,8 @@ constexpr double FUSE_TIMEOUT = 86400.0;
 static struct fuse_lowlevel_ops ops;
 static Device *g_disk_main = nullptr;
 static Device *g_disk_tier2 = nullptr;
-static ApfsContainer *g_container = nullptr;
-static ApfsVolume *g_volume = nullptr;
+static ObjPtr<Container> g_container;
+static ObjPtr<Volume> g_volume;
 static unsigned int g_vol_id = 0;
 static uid_t g_uid = 0;
 static gid_t g_gid = 0;
@@ -97,7 +99,7 @@ struct File
 
 static bool apfs_stat_internal(fuse_ino_t ino, struct stat &st)
 {
-	ApfsDir dir(*g_volume);
+	ApfsDir dir(*g_volume.get());
 	ApfsDir::Inode rec;
 	bool rc = false;
 
@@ -252,7 +254,7 @@ static void apfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
 	(void)fi;
 
-	ApfsDir dir(*g_volume);
+	ApfsDir dir(*g_volume.get());
 	ApfsDir::Inode rec;
 	bool rc = false;
 	struct stat st;
@@ -300,7 +302,7 @@ static void apfs_getxattr_mac(fuse_req_t req, fuse_ino_t ino, const char *name, 
 #ifdef __linux__
 static void apfs_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 {
-	ApfsDir dir(*g_volume);
+	ApfsDir dir(*g_volume.get());
 	bool rc = false;
 	std::vector<uint8_t> data;
 
@@ -326,7 +328,7 @@ static void apfs_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 
 static void apfs_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
-	ApfsDir dir(*g_volume);
+	ApfsDir dir(*g_volume.get());
 	bool rc = false;
 	std::vector<std::string> names;
 	std::string reply;
@@ -360,7 +362,7 @@ static void apfs_lookup(fuse_req_t req, fuse_ino_t ino, const char *name)
 	if (g_debug & Dbg_Info)
 		std::cout << "apfs_lookup: ino=" << ino << " name=" << name << " => ";
 
-	ApfsDir dir(*g_volume);
+	ApfsDir dir(*g_volume.get());
 	ApfsDir::DirRec res;
 	bool rc;
 
@@ -402,7 +404,7 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 	else
 	{
 		File *f = new File();
-		ApfsDir dir(*g_volume);
+		ApfsDir dir(*g_volume.get());
 
 		rc = dir.GetInode(f->ino, ino);
 
@@ -462,7 +464,7 @@ static void apfs_opendir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 
 static void apfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, struct fuse_file_info *fi)
 {
-	ApfsDir dir(*g_volume);
+	ApfsDir dir(*g_volume.get());
 	File *file = reinterpret_cast<File *>(fi->fh);
 
 	if (g_debug & Dbg_Info)
@@ -519,7 +521,7 @@ static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize, of
 
 static void apfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, struct fuse_file_info *fi)
 {
-	ApfsDir dir(*g_volume);
+	ApfsDir dir(*g_volume.get());
 	std::vector<ApfsDir::DirRec> dir_list;
 	Directory *dirptr = reinterpret_cast<Directory *>(fi->fh);
 	std::vector<char> &dirbuf = dirptr->dirbuf;
@@ -565,7 +567,7 @@ static void apfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
 static void apfs_readlink(fuse_req_t req, fuse_ino_t ino)
 {
-	ApfsDir dir(*g_volume);
+	ApfsDir dir(*g_volume.get());
 	bool rc = false;
 	std::vector<uint8_t> data;
 
@@ -887,23 +889,22 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	g_container = new ApfsContainer(g_disk_main, main_offset, main_size, g_disk_tier2, tier2_offset, tier2_size);
-	if (!g_container->Init(g_xid))
-	{
-		std::cerr << "Unable to load container." << std::endl;
-		delete g_container;
-		g_disk_main->Close();
-		delete g_disk_main;
-		return EINVAL;
+	err = Container::Mount(g_container, g_disk_main, main_offset, main_size, g_disk_tier2, tier2_offset, tier2_size, g_xid);
+	if (err) {
+		log_error("Unable to load container, err = %d\n", err);
+	} else {
+		err = g_container->MountVolume(g_volume, g_vol_id, g_password, g_snap_xid);
+		if (err)
+			log_error("Unable to mount volume, err = %d\n", err);
 	}
-	g_volume = g_container->GetVolume(g_vol_id, g_password, g_snap_xid);
-	if (!g_volume)
-	{
-		std::cerr << "Unable to get volume!" << std::endl;
-		delete g_container;
+	if (err) {
+		Container::Unmount(g_container);
 		g_disk_main->Close();
+		if (g_disk_tier2)
+			g_disk_tier2->Close();
 		delete g_disk_main;
-		return 1;
+		delete g_disk_tier2;
+		return err;
 	}
 
 #ifdef USE_FUSE2
@@ -949,8 +950,11 @@ int main(int argc, char *argv[])
 #endif
 	fuse_opt_free_args(&args);
 
-	delete g_volume;
-	delete g_container;
+	// delete g_volume;
+	// delete g_container;
+	// TODO move into Container
+	Container::Unmount(g_container);
+
 	g_disk_main->Close();
 	delete g_disk_main;
 	if (g_disk_tier2) {

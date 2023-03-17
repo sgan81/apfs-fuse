@@ -31,6 +31,11 @@ public:
 		return o;
 	}
 
+	void reset() {
+		if (p) p->release();
+		p = nullptr;
+	}
+
 	T* operator->() {
 		return static_cast<T*>(p);
 	}

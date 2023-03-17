@@ -164,7 +164,7 @@ ApfsDir::DirRec::DirRec(const ApfsDir::DirRec& o)
 	has_sibling_id = o.has_sibling_id;
 }
 
-ApfsDir::ApfsDir(ApfsVolume &vol) :
+ApfsDir::ApfsDir(Volume &vol) :
 	m_vol(vol),
 	m_fs_tree(vol.fstree())
 {

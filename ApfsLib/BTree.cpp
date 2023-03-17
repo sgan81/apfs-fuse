@@ -261,7 +261,7 @@ int BTree::Init(Object* owner, oid_t oid, xid_t xid, uint32_t type, uint32_t sub
 	if (oid == 0)
 		return EINVAL;
 
-	err = m_nx->cache().getObj(m_root, &m_params, oid, xid, type, subtype, m_nx->GetBlocksize(), 0, m_fs);
+	err = m_nx->oc().getObj(m_root, &m_params, oid, xid, type, subtype, m_nx->GetBlocksize(), 0, m_fs);
 	if (err) {
 		log_error("BTree init: unable to get root node, error = %d\n", err);
 		return err;
@@ -491,7 +491,7 @@ int BTree::GetNode(ObjPtr<BTreeNode>& ptr, const btn_index_node_val_t& binv)
 	if (m_root->flags() & BTNODE_HASHED)
 		oid += m_root->oid();
 
-	err = m_nx->cache().getObj(node, &m_params, oid, m_root->xid(), otype, m_root->subtype(), m_treeinfo.bt_fixed.bt_node_size, 0, m_root->fs());
+	err = m_nx->oc().getObj(node, &m_params, oid, m_root->xid(), otype, m_root->subtype(), m_treeinfo.bt_fixed.bt_node_size, 0, m_root->fs());
 	if (err) {
 		log_error("BTree: error %d getting node.\n", err);
 		return err;

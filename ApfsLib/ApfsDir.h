@@ -25,7 +25,7 @@
 #include "DiskStruct.h"
 
 class BTree;
-class ApfsVolume;
+class Volume;
 
 class ApfsDir
 {
@@ -120,7 +120,7 @@ public:
 	};
 
 
-	ApfsDir(ApfsVolume &vol);
+	ApfsDir(Volume &vol);
 	~ApfsDir();
 
 	bool GetInode(Inode &res, uint64_t inode);
@@ -135,7 +135,7 @@ public:
 public:
 
 private:
-	ApfsVolume &m_vol;
+	Volume &m_vol;
 	BTree &m_fs_tree;
 	uint32_t m_txt_fmt;
 	uint32_t m_blksize;
