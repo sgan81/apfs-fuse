@@ -31,9 +31,8 @@ class Container;
 class OMap;
 class BlockDumper;
 
-int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
+int CompareFsKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
 int CompareFextKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
-int CompareSnapMetaKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
 
 class Volume : public Object
 {
@@ -47,6 +46,7 @@ public:
 	int MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid); // TODO paddr weg
 
 	const char *name() const { return reinterpret_cast<const char *>(m_sb->apfs_volname); }
+	int getOMap(ObjPtr<OMap>& omap);
 
 	void dump(BlockDumper &bd);
 

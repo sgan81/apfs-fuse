@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cinttypes>
 
 #include "ObjCache.h"
 #include "OMap.h"
@@ -73,13 +74,18 @@ int OMap::lookup(oid_t oid, xid_t xid, xid_t* xid_o, uint32_t* flags, uint32_t* 
 	ok.ok_xid = xid;
 
 	err = m_tree.Lookup(&ok, sizeof(omap_key_t), key_len, &ov, val_len, BTree::FindMode::LE);
-	if (err) return err;
+	if (err) {
+		log_error("omap lookup %" PRIx64 "/%" PRIx64 " failed, err = %d.\n", oid, xid, err);
+		return err;
+	}
 
 	if (ok.ok_oid != oid) return ENOENT;
 	if (xid_o) *xid_o = ok.ok_xid;
 	if (flags) *flags = ov.ov_flags;
 	if (size) *size = ov.ov_size;
 	if (paddr) *paddr = ov.ov_paddr;
+
+	log_debug("omap lookup oid %" PRIx64 " xid %" PRIx64 " => xid %" PRIx64 " flags %x size %x paddr %" PRIx64 "\n", oid, xid, ok.ok_xid, ov.ov_flags, ov.ov_size, ov.ov_paddr);
 
 	return 0;
 }

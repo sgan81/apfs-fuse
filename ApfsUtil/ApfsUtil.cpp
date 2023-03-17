@@ -118,26 +118,32 @@ int main(int argc, char *argv[])
 				print_filevault(apsb.apfs_fs_flags & APFS_FS_CRYPTOFLAGS);
 				printf("\n");
 				if (apsb.apfs_snap_meta_tree_oid) {
-					printf("Snapshots:\n");
 					BTree snap_tree;
-					BTreeIterator it;
 					int err;
-					union {
-						uint8_t buf[JOBJ_MAX_KEY_SIZE];
-						j_snap_metadata_key_t k;
-					} smk;
-					union {
-						uint8_t buf[JOBJ_MAX_VALUE_SIZE];
-						j_snap_metadata_val_t v;
-					} smv;
 
-					snap_tree.Init(container.get(), apsb.apfs_snap_meta_tree_oid, apsb.apfs_o.o_xid, apsb.apfs_snap_meta_tree_type, OBJECT_TYPE_SNAPMETATREE, CompareSnapMetaKey, 0);
-					err = it.initFirst(&snap_tree, smk.buf, JOBJ_MAX_KEY_SIZE, smv.buf, JOBJ_MAX_VALUE_SIZE);
-					if (err == 0) {
-						for (;;) {
-							if ((smk.k.hdr.obj_id_and_type >> OBJ_TYPE_SHIFT) != APFS_TYPE_SNAP_METADATA) break;
-							printf("    %" PRIu64 " : '%s'\n", smk.k.hdr.obj_id_and_type & OBJ_ID_MASK, smv.v.name);
-							if (!it.next()) break;
+					err = snap_tree.Init(container.get(), apsb.apfs_snap_meta_tree_oid, apsb.apfs_o.o_xid, apsb.apfs_snap_meta_tree_type, OBJECT_TYPE_SNAPMETATREE, CompareFsKey, 0);
+					if (err) fprintf(stderr, "Error %d initializing snap meta tree.\n", err);
+					if (snap_tree.key_count() > 0) {
+						BTreeIterator it;
+						union {
+							uint8_t buf[JOBJ_MAX_KEY_SIZE];
+							j_snap_metadata_key_t k;
+						} smk;
+						union {
+							uint8_t buf[JOBJ_MAX_VALUE_SIZE];
+							j_snap_metadata_val_t v;
+						} smv;
+
+						printf("Snapshots:\n");
+						err = it.initFirst(&snap_tree, smk.buf, JOBJ_MAX_KEY_SIZE, smv.buf, JOBJ_MAX_VALUE_SIZE);
+						if (err == 0) {
+							for (;;) {
+								if ((smk.k.hdr.obj_id_and_type >> OBJ_TYPE_SHIFT) != APFS_TYPE_SNAP_METADATA) break;
+								printf("    %" PRIu64 " : '%s'\n", smk.k.hdr.obj_id_and_type & OBJ_ID_MASK, smv.v.name);
+								if (!it.next()) break;
+							}
+						} else {
+							fprintf(stderr, "Error %d initializing iterator.\n", err);
 						}
 					}
 				}

@@ -21,6 +21,7 @@
 #include <vector>
 #include <iostream>
 #include <cassert>
+#include <cinttypes>
 
 #include "Global.h"
 
@@ -32,50 +33,12 @@
 #include "ApfsDir.h"
 #include "OMap.h"
 
-int CompareSnapMetaKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
-{
-	const j_key_t *ks = reinterpret_cast<const j_key_t*>(skey);
-	const j_key_t *ke = reinterpret_cast<const j_key_t*>(ekey);
-	const j_snap_name_key_t *sks;
-	const j_snap_name_key_t *ske;
-
-	// TODO: Maybe move to fs
-	(void)skey_len;
-	(void)ekey_len;
-	(void)context;
-
-	if (ke->obj_id_and_type < ks->obj_id_and_type) {
-		res = -1;
-		return 0;
-	}
-	else if (ke->obj_id_and_type > ks->obj_id_and_type) {
-		res = 1;
-		return 0;
-	}
-
-	switch (ks->obj_id_and_type >> OBJ_TYPE_SHIFT)
-	{
-		case APFS_TYPE_SNAP_METADATA:
-			break;
-		case APFS_TYPE_SNAP_NAME:
-			sks = reinterpret_cast<const j_snap_name_key_t*>(skey);
-			ske = reinterpret_cast<const j_snap_name_key_t*>(ekey);
-			res = apfs_strncmp(ske->name, ske->name_len, sks->name, sks->name_len);
-			break;
-	}
-
-	return 0;
-}
-
-
-int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
+int CompareFsKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
 {
 	// assert(skey_len == 8);
 	// assert(ekey_len == 8);
 
 	(void)ekey_len;
-
-	const apfs_superblock_t *apsb = reinterpret_cast<const apfs_superblock_t *>(context);
 
 	uint64_t ks = *reinterpret_cast<const le_uint64_t *>(skey);
 	uint64_t ke = *reinterpret_cast<const le_uint64_t *>(ekey);
@@ -97,7 +60,7 @@ int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t
 		switch (ks & 0xF)
 		{
 			case APFS_TYPE_DIR_REC:
-				if (apsb->apfs_incompatible_features & (APFS_INCOMPAT_CASE_INSENSITIVE | APFS_INCOMPAT_NORMALIZATION_INSENSITIVE))
+				if (context & (APFS_INCOMPAT_CASE_INSENSITIVE | APFS_INCOMPAT_NORMALIZATION_INSENSITIVE))
 				{
 					const j_drec_hashed_key_t *s = reinterpret_cast<const j_drec_hashed_key_t *>(skey);
 					const j_drec_hashed_key_t *e = reinterpret_cast<const j_drec_hashed_key_t *>(ekey);
@@ -142,8 +105,8 @@ int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t
 				}
 				res = 0;
 				return 0;
+				break;
 			}
-			break;
 			case APFS_TYPE_XATTR:
 			{
 				const j_xattr_key_t *s = reinterpret_cast<const j_xattr_key_t *>(skey);
@@ -151,8 +114,16 @@ int CompareStdDirKey(const void *skey, size_t skey_len, const void *ekey, size_t
 
 				res = apfs_strncmp(e->name, e->name_len, s->name, s->name_len);
 				return 0;
+				break;
 			}
-			break;
+			case APFS_TYPE_SNAP_NAME:
+			{
+				const j_snap_name_key_t* s = reinterpret_cast<const j_snap_name_key_t*>(skey);
+				const j_snap_name_key_t* e = reinterpret_cast<const j_snap_name_key_t*>(ekey);
+				res = apfs_strncmp(e->name, e->name_len, s->name, s->name_len);
+				return 0;
+				break;
+			}
 			case APFS_TYPE_FILE_INFO:
 			{
 				const j_file_info_key_t *s = reinterpret_cast<const j_file_info_key_t *>(skey);
@@ -215,6 +186,7 @@ int Volume::Mount()
 {
 	int err;
 
+	log_debug("init omap ...\n");
 	err = oc().getObj(m_omap, nullptr, m_sb->apfs_omap_oid, 0, OBJ_PHYSICAL | OBJECT_TYPE_OMAP, 0, 0, 0, nullptr);
 	if (err) {
 		log_error("mount: omap init failed, err = %d\n", err);
@@ -246,22 +218,24 @@ int Volume::Mount()
 		m_is_encrypted = true;
 	}
 
+	log_debug("init fs tree %" PRIx64 " ...\n", m_sb->apfs_root_tree_oid);
 	err = m_fs_tree.Init(this, m_sb->apfs_root_tree_oid, 0, m_sb->apfs_root_tree_type, OBJECT_TYPE_FSTREE,
-		CompareStdDirKey, m_sb->apfs_incompatible_features & (APFS_INCOMPAT_CASE_INSENSITIVE | APFS_INCOMPAT_NORMALIZATION_INSENSITIVE));
+		CompareFsKey, m_sb->apfs_incompatible_features & (APFS_INCOMPAT_CASE_INSENSITIVE | APFS_INCOMPAT_NORMALIZATION_INSENSITIVE));
 	if (err) {
 		log_error("mount: fs tree init failed.\n");
 		return EINVAL;
 	}
 
-	err = m_extentref_tree.Init(this, m_sb->apfs_extentref_tree_oid, 0, m_sb->apfs_extentref_tree_type, OBJECT_TYPE_EXTENT_LIST_TREE, CompareStdDirKey, 0);
+	err = m_extentref_tree.Init(this, m_sb->apfs_extentref_tree_oid, 0, m_sb->apfs_extentref_tree_type, OBJECT_TYPE_EXTENT_LIST_TREE, CompareFsKey, 0);
 	if (err)
 		log_error("mount: extentref tree init failed.\n");
 
-	err = m_snap_meta_tree.Init(this, m_sb->apfs_snap_meta_tree_oid, 0, m_sb->apfs_snap_meta_tree_type, OBJECT_TYPE_SNAPMETATREE, CompareSnapMetaKey, 0);
+	err = m_snap_meta_tree.Init(this, m_sb->apfs_snap_meta_tree_oid, 0, m_sb->apfs_snap_meta_tree_type, OBJECT_TYPE_SNAPMETATREE, CompareFsKey, 0);
 	if (err)
 		log_error("mount: snap meta tree init failed.\n");
 
 	if (m_sb->apfs_incompatible_features & APFS_INCOMPAT_SEALED_VOLUME) {
+		log_debug("init fext tree ...\n");
 		err = m_fext_tree.Init(this, m_sb->apfs_fext_tree_oid, 0, m_sb->apfs_fext_tree_type, OBJECT_TYPE_FEXT_TREE, CompareFextKey, 0);
 		if (err) {
 			log_error("mount: fext tree init failed.\n");
@@ -380,6 +354,19 @@ int Volume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 	return true;
 #endif
 	return ENOTSUP;
+}
+
+int Volume::getOMap(ObjPtr<OMap>& omap)
+{
+	if (!(m_omap)) {
+		int err = oc().getObj(m_omap, nullptr, m_sb->apfs_omap_oid, 0, OBJ_PHYSICAL | OBJECT_TYPE_OMAP, 0, 0, 0, nullptr);
+		if (err) {
+			log_error("Volume: Loading omap failed, err = %d\n", err);
+			 return err;
+		}
+	}
+	omap = m_omap;
+	return 0;
 }
 
 void Volume::dump(BlockDumper& bd)

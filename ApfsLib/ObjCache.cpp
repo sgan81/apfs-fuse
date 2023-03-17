@@ -123,13 +123,12 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 			uint32_t om_flags;
 			uint32_t om_size;
 			paddr_t om_paddr;
-			// TODO omap lookup
-			/*
-			if (vol)
-				omap = vol->omap();
+
+			if (fs)
+				err = fs->getOMap(omap);
 			else
-				omap = m_nx->omap();
-			*/
+				err = m_nx->getOMap(omap);
+			if (err) return err;
 			err = omap->lookup(oid, xid, nullptr, &om_flags, &om_size, &om_paddr);
 			if (err) {
 				log_error("obj read: error %d in omap lookup %" PRIx64 " / %" PRIx64 "\n", err, oid, xid);
@@ -174,6 +173,8 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 	o.m_paddr = paddr;
 	o.m_oc = this;
 	o.m_fs = fs;
+
+	log_debug("obj_get new oid %" PRIx64 " xid %" PRIx64 " type %x subtype %x paddr %" PRIx64 "\n", o.m_oid, o.m_xid, o.m_type, o.m_subtype, o.m_paddr);
 
 	return 0;
 }

@@ -78,6 +78,9 @@ bool VerifyBlock(const void *block, size_t size)
 	cs = Fletcher64(data + 2, size - 2, 0);
 	cs = Fletcher64(data, 2, cs);
 
+	if (cs != 0)
+		log_error("checksum verification failed.\n");
+
 	return cs == 0;
 }
 

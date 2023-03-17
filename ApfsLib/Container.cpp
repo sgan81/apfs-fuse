@@ -315,7 +315,7 @@ int Container::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt) const
 			log_error("Failed to read from main disk, %" PRIx64 " / %" PRIx64 "\n", paddr, blkcnt);
 	}
 
-	return ok ? 0 : EIO;
+	return ok ? 0 : EIO; // TODO
 }
 
 int Container::ReadAndVerifyHeaderBlock(uint8_t * data, paddr_t paddr) const
