@@ -23,13 +23,11 @@
 #include "BTree.h"
 #include "DiskStruct.h"
 #include "Device.h"
-#include "CheckPointMap.h"
-#include "ApfsNodeMapperBTree.h"
 #include "KeyMgmt.h"
 #include "Object.h"
 
 #include <cstdint>
-#include <vector>
+#include <string>
 
 class Volume;
 class BlockDumper;

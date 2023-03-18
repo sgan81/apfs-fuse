@@ -22,7 +22,6 @@
 #include <cstdint>
 
 #include "DiskStruct.h"
-#include "ApfsNodeMapperBTree.h"
 #include "BTree.h"
 #include <Crypto/AesXts.h>
 #include "ObjPtr.h"

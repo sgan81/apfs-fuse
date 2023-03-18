@@ -177,10 +177,13 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 			}
 			size = om_size;
 			paddr = om_paddr;
-			if (om_flags & OMAP_VAL_NOHEADER)
+			if (om_flags & OMAP_VAL_NOHEADER) {
 				o_flags |= OBJ_NOHEADER;
+				type |= OBJ_NOHEADER;
+			}
 			if (om_flags & OMAP_VAL_ENCRYPTED) {
 				o_flags |= OBJ_ENCRYPTED;
+				type |= OBJ_ENCRYPTED;
 				tweak = paddr;
 			}
 		}
@@ -223,7 +226,7 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 	o.m_oc = this;
 	o.m_fs = fs;
 
-	log_debug("obj_get %" PRIx64 " %" PRIx64 " -> new oid %" PRIx64 " xid %" PRIx64 " type %x subtype %x paddr %" PRIx64 "\n", oid, xid, o.m_oid, o.m_xid, o.m_type, o.m_subtype, o.m_paddr);
+	// log_debug("obj_get %" PRIx64 " %" PRIx64 " -> new oid %" PRIx64 " xid %" PRIx64 " type %x subtype %x paddr %" PRIx64 "\n", oid, xid, o.m_oid, o.m_xid, o.m_type, o.m_subtype, o.m_paddr);
 
 	return 0;
 }

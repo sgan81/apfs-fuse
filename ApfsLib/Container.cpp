@@ -50,6 +50,7 @@ Container::~Container()
 
 int Container::init(const void* params)
 {
+	(void)params;
 	m_nxsb = reinterpret_cast<const nx_superblock_t*>(data());
 	return 0;
 }
@@ -294,8 +295,10 @@ int Container::MountVolume(ObjPtr<Volume>& vol, unsigned int fsid, const std::st
 
 	oid = m_nxsb->nx_fs_oid[fsid];
 
-	if (oid == 0)
+	if (oid == 0) {
+		log_error("Volume %d does not exist.\n", fsid);
 		return ENOENT;
+	}
 
 	err = oc().getObj(vol, nullptr, oid, 0, OBJECT_TYPE_FS, 0, 0, 0, nullptr);
 	if (err)

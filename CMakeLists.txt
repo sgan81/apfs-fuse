@@ -17,6 +17,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -march=native -fsanitize=undefined")
 # set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=undefined")
 
+# set(BUILD_SHARED_LIBS ON)
+
 include_directories(. 3rdparty/lzfse/src)
 
 add_library(lzfse
@@ -58,16 +60,10 @@ add_library(crypto
 add_library(apfs
 	ApfsLib/ApfsDir.cpp
 	ApfsLib/ApfsDir.h
-	ApfsLib/ApfsNodeMapper.cpp
-	ApfsLib/ApfsNodeMapper.h
-#	ApfsLib/ApfsNodeMapperBTree.cpp
-#	ApfsLib/ApfsNodeMapperBTree.h
 	ApfsLib/BlockDumper.cpp
 	ApfsLib/BlockDumper.h
 	ApfsLib/BTree.cpp
 	ApfsLib/BTree.h
-	ApfsLib/CheckPointMap.cpp
-	ApfsLib/CheckPointMap.h
 	ApfsLib/Container.cpp
 	ApfsLib/Container.h
 	ApfsLib/Crc32.cpp

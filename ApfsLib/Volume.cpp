@@ -194,7 +194,7 @@ int Volume::Mount()
 		log_error("mount: omap init failed, err = %d\n", err);
 		return err;
 	}
-	m_omap->dump_tree();
+	// m_omap->dump_tree();
 
 	if ((m_sb->apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED && !m_container.IsUnencrypted())
 	{

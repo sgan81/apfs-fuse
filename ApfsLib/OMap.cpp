@@ -27,6 +27,8 @@
 #include "Util.h"
 #include "Debug.h"
 
+#define log_debug(...)
+
 int CompareOMapKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
 {
 	(void)context;
@@ -61,6 +63,7 @@ OMap::~OMap()
 
 int OMap::init(const void* params)
 {
+	(void)params;
 	om_phys = reinterpret_cast<const omap_phys_t*>(data());
 	return 0;
 }
