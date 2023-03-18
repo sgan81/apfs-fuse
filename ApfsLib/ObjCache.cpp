@@ -150,6 +150,7 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 {
 	uint32_t o_flags = type & OBJECT_TYPE_FLAGS_MASK;
 	int err;
+	uint64_t tweak = 0;
 
 	if (paddr == 0) {
 		if (o_flags & OBJ_EPHEMERAL) { // TODO ... epehemerals list probably ... yes, but paddr needs to be set.
@@ -178,6 +179,10 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 			paddr = om_paddr;
 			if (om_flags & OMAP_VAL_NOHEADER)
 				o_flags |= OBJ_NOHEADER;
+			if (om_flags & OMAP_VAL_ENCRYPTED) {
+				o_flags |= OBJ_ENCRYPTED;
+				tweak = paddr;
+			}
 		}
 	}
 
@@ -187,8 +192,10 @@ int ObjCache::readObj(Object& o, oid_t oid, xid_t xid, uint32_t type, uint32_t s
 	o.m_size = size;
 	o.m_data = new uint8_t[size];
 
-	// if (vol) ... else
-	err = m_nx->ReadBlocks(o.m_data, paddr, size / m_nx->GetBlocksize());
+	if (fs)
+		err = fs->ReadBlocks(o.m_data, paddr, size / m_nx->GetBlocksize(), tweak);
+	else
+		err = m_nx->ReadBlocks(o.m_data, paddr, size / m_nx->GetBlocksize());
 	if (err) return err;
 
 	if (!(o_flags & OBJ_NOHEADER)) {

@@ -201,8 +201,10 @@ int Volume::Mount()
 		uint8_t vek[0x20];
 		std::string str;
 
-		if (!m_container.GetVolumeKey(vek, m_sb->apfs_vol_uuid))
-		{
+		log_debug("Volume is encrypted.\n");
+
+		err = m_container.GetVolumeKey(vek, m_sb->apfs_vol_uuid);
+		if (err) {
 			printf("Volume %s is encrypted.\n", m_sb->apfs_volname);
 			if (m_container.GetPasswordHint(str, m_sb->apfs_vol_uuid))
 				printf("Hint: %s\n", str.c_str());
@@ -210,13 +212,14 @@ int Volume::Mount()
 			printf("Enter password: ");
 			GetPassword(str);
 
-			if (!m_container.GetVolumeKey(vek, m_sb->apfs_vol_uuid, str.c_str()))
-			{
+			err = m_container.GetVolumeKey(vek, m_sb->apfs_vol_uuid, str.c_str());
+			if (err) {
 				printf("Wrong password!\n");
 				return EINVAL;
 			}
 		}
 
+		log_debug("Setting VEK\n");
 		m_aes.SetKey(vek, vek + 0x10);
 		m_is_encrypted = true;
 	}
@@ -504,15 +507,16 @@ void Volume::dump(BlockDumper& bd)
 #endif
 }
 
-bool Volume::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt, uint64_t xts_tweak)
+int Volume::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt, uint64_t xts_tweak)
 {
+	int err;
 	constexpr int encryption_block_size = 0x200;
 
-	if (!m_container.ReadBlocks(data, paddr, blkcnt))
-		return false;
+	err = m_container.ReadBlocks(data, paddr, blkcnt);
+	if (err) return err;
 
 	if (!m_is_encrypted || (xts_tweak == 0))
-		return true;
+		return 0;
 
 	uint64_t cs_factor = m_container.GetBlocksize() / encryption_block_size;
 	uint64_t uno = xts_tweak * cs_factor;
@@ -525,5 +529,5 @@ bool Volume::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt, uint64_t
 		uno++;
 	}
 
-	return true;
+	return 0;
 }

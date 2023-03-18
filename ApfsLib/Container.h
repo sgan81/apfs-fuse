@@ -59,16 +59,17 @@ public:
 
 	uint32_t GetBlocksize() const { return m_nxsb->nx_block_size; }
 	uint64_t GetBlockCount() const { return m_nxsb->nx_block_count; }
-	[[deprecated]] uint64_t GetFreeBlocks();
+	uint64_t GetFreeBlocks();
 
-	[[deprecated]] int GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password = nullptr);
+	int GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password = nullptr);
 	bool GetPasswordHint(std::string &hint, const apfs_uuid_t &vol_uuid);
-	bool IsUnencrypted() const { return m_keymgr.IsUnencrypted(); }
+	bool IsUnencrypted();
 
 	void dump(BlockDumper& bd);
 
 private:
 	int getSpaceman(ObjPtr<Spaceman> &sm);
+	int loadKeybag();
 
 	const nx_superblock_t* m_nxsb;
 

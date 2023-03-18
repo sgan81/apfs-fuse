@@ -114,10 +114,14 @@ int Container::Mount(ObjPtr<Container>& ptr, Device *disk_main, uint64_t main_st
 
 	for (paddr = nxsb->nx_xp_desc_base; paddr < (nxsb->nx_xp_desc_base + nxsb->nx_xp_desc_blocks); paddr++) {
 		err = nx_obj->ReadBlocks(tmp.data(), paddr, 1);
-		if (err) return err;
+		if (err) {
+			log_error("Read blocks failed, err = %d\n", err);
+			return err;
+		}
 
 		if (!VerifyBlock(tmp.data(), tmp.size())) {
 			log_warn("checksum error in xp desc area\n");
+			// DumpHex(std::cout, tmp.data(), tmp.size());
 			continue;
 		}
 
@@ -137,6 +141,11 @@ int Container::Mount(ObjPtr<Container>& ptr, Device *disk_main, uint64_t main_st
 				max_paddr = paddr;
 			}
 		}
+	}
+
+	if (max_xid == 0) {
+		log_error("Checkpoint search failed.\n");
+		return EINVAL;
 	}
 
 	if (max_paddr) {
@@ -410,27 +419,16 @@ uint64_t Container::GetFreeBlocks()
 
 int Container::GetVolumeKey(uint8_t *key, const apfs_uuid_t & vol_uuid, const char *password)
 {
+	int err = 0;
 	bool ok;
 
-	if (!m_keymgr.IsValid()) {
-		if (m_nxsb->nx_keylocker.pr_start_addr == 0 || m_nxsb->nx_keylocker.pr_block_count == 0) {
-			log_error("No keylocker location specified.\n");
-			return EINVAL;
-		}
-		// TODO
-		ok = m_keymgr.Init(m_nxsb->nx_keylocker.pr_start_addr, m_nxsb->nx_keylocker.pr_block_count, m_nxsb->nx_uuid);
-		if (!ok) {
-			log_error("Keybag initialization failed.\n");
-			return EINVAL;
-		}
-	}
+	if (!m_keymgr.IsValid())
+		err = loadKeybag();
+	if (err) return err;
 
-	if (password)
-	{
+	if (password) {
 		ok = m_keymgr.GetVolumeKey(key, vol_uuid, password);
-	}
-	else
-	{
+	} else {
 		if (m_passphrase.empty())
 			ok = false;
 		else
@@ -443,6 +441,17 @@ bool Container::GetPasswordHint(std::string & hint, const apfs_uuid_t & vol_uuid
 {
 	return m_keymgr.GetPasswordHint(hint, vol_uuid);
 }
+
+bool Container::IsUnencrypted()
+{
+	int err;
+	if (!m_keymgr.IsValid()) {
+		err = loadKeybag();
+		if (err) return false;
+	}
+	return m_keymgr.IsUnencrypted();
+}
+
 
 void Container::dump(BlockDumper& bd)
 {
@@ -603,5 +612,21 @@ int Container::getSpaceman(ObjPtr<Spaceman>& sm)
 		if (err) return err;
 	}
 	sm = m_sm;
+	return 0;
+}
+
+int Container::loadKeybag()
+{
+	bool ok;
+	if (m_nxsb->nx_keylocker.pr_start_addr == 0 || m_nxsb->nx_keylocker.pr_block_count == 0) {
+		log_error("No keylocker location specified.\n");
+		return EINVAL;
+	}
+	// TODO
+	ok = m_keymgr.Init(m_nxsb->nx_keylocker.pr_start_addr, m_nxsb->nx_keylocker.pr_block_count, m_nxsb->nx_uuid);
+	if (!ok) {
+		log_error("Keybag initialization failed.\n");
+		return EINVAL;
+	}
 	return 0;
 }
