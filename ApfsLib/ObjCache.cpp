@@ -50,6 +50,10 @@ ObjCache::~ObjCache()
 	while (obj != nullptr) {
 		next = obj->m_le_lru.next;
 		htRemove(obj);
+#if 0
+		if (obj->m_refcnt != 0)
+			log_warn("Object %" PRIx64 " still in use!\n", obj->oid());
+#endif
 		delete obj;
 		obj = next;
 	}
@@ -58,6 +62,10 @@ ObjCache::~ObjCache()
 	while (obj != nullptr) {
 		next = obj->m_le_lru.next;
 		htRemove(obj);
+#if 0
+		if (obj->m_refcnt != 0)
+			log_warn("Object %" PRIx64 " still in use!\n", obj->oid());
+#endif
 		delete obj;
 		obj = next;
 	}

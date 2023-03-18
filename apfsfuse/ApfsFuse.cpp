@@ -953,6 +953,7 @@ int main(int argc, char *argv[])
 	// delete g_volume;
 	// delete g_container;
 	// TODO move into Container
+	g_volume.release();
 	Container::Unmount(g_container);
 
 	g_disk_main->Close();

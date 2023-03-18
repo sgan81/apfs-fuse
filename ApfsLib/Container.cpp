@@ -274,12 +274,11 @@ return false;
 
 int Container::Unmount(ObjPtr<Container>& ptr)
 {
-	Container* nx = ptr.get();
+	Container* nx = ptr.release();
 	if (nx == nullptr) return 0;
-	ptr.reset();
 	ObjCache* cache = &nx->oc();
-	delete cache;
 	delete nx;
+	delete cache;
 	return 0;
 }
 

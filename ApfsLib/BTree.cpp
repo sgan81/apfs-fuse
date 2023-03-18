@@ -486,9 +486,8 @@ void BTree::DumpTreeInternal(BlockDumper& out, const ObjPtr<BTreeNode> &node)
 	}
 }
 
-int BTree::GetNode(ObjPtr<BTreeNode>& ptr, const btn_index_node_val_t& binv)
+int BTree::GetNode(ObjPtr<BTreeNode>& node, const btn_index_node_val_t& binv)
 {
-	Object* node;
 	oid_t oid;
 	uint32_t otype;
 	int err;
@@ -508,7 +507,6 @@ int BTree::GetNode(ObjPtr<BTreeNode>& ptr, const btn_index_node_val_t& binv)
 		return err;
 	}
 
-	ptr = node;
 	return 0;
 }
 

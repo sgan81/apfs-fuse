@@ -56,7 +56,7 @@ public:
 
 		err = getObj(obj, params, oid, xid, type, subtype, size, paddr, fs);
 		if (err) return err;
-		ptr = obj;
+		ptr = dynamic_cast<T*>(obj);
 		return 0;
 	}
 

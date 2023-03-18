@@ -43,28 +43,38 @@ public:
 		p->retain();
 	}
 
-	Object* operator=(Object* o) {
+	T* operator=(T* o) {
 		if (p) p->release();
 		p = o;
 		if (p) p->retain();
 		return o;
 	}
 
-	void reset() {
+	T* release() {
+		T* r = p;
 		if (p) p->release();
 		p = nullptr;
+		return r;
 	}
 
 	T* operator->() {
-		return static_cast<T*>(p);
+		return p;
 	}
 
 	const T* operator->() const {
-		return static_cast<const T*>(p);
+		return p;
 	}
 
 	T* get() {
-		return static_cast<T*>(p);
+		return p;
+	}
+
+	T& ref() {
+		return *p;
+	}
+
+	const T& ref() const {
+		return *p;
 	}
 
 	operator bool() const {
@@ -72,5 +82,5 @@ public:
 	}
 
 private:
-	Object* p;
+	T* p;
 };

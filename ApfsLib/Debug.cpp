@@ -38,6 +38,45 @@ void dbg_print_hex(const void* vdata, size_t size)
 	}
 }
 
+void dbg_dump_hex(const void* data, size_t size, size_t lsize)
+{
+	size_t x;
+	size_t y;
+	uint8_t b;
+	const uint8_t* bdata = reinterpret_cast<const uint8_t*>(data);
+
+	for (y = 0; y < size; y += lsize) {
+		printf("%08zX : ", y);
+		for (x = 0; x < lsize && (x + y) < size; x++)
+			printf("%02X ", bdata[y + x]);
+		for (; x < lsize; x++)
+			printf("   ");
+		printf(" ");
+		for (x = 0; x < lsize && (x + y) < size; x++) {
+			if (bdata[y + x] >= 0x20 && bdata[y + x] < 0x7F)
+				printf("%c", bdata[y + x]);
+			else
+				printf(".");
+		}
+		printf("\n");
+	}
+}
+
+void dbg_dump_hex_nz(const void* data, size_t size, size_t lsize)
+{
+	const uint8_t* bdata = reinterpret_cast<const uint8_t*>(data);
+	ptrdiff_t k;
+
+	for (k = size - 1; k >= 0; k--)
+		if (bdata[k] != 0) break;
+	++k;
+	k = (k + 7) & ~7;
+	if (k == 0)
+		printf("<ZERO>\n");
+	else
+		dbg_dump_hex(data, size, lsize);
+}
+
 void dbg_print_btkey_fs(const void* key, uint16_t key_len, bool hashed)
 {
 	const j_key_t* jk = reinterpret_cast<const j_key_t*>(key);
