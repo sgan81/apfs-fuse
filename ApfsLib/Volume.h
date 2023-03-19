@@ -57,6 +57,7 @@ public:
 
 	int ReadBlocks(uint8_t *data, paddr_t paddr, uint64_t blkcnt, uint64_t xts_tweak);
 	bool isSealed() const { return (m_sb->apfs_incompatible_features & APFS_INCOMPAT_SEALED_VOLUME) != 0; }
+	uint32_t getBlocksize() const;
 
 private:
 	Container &m_container;

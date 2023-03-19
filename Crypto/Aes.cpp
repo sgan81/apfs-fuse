@@ -379,6 +379,27 @@ const uint32_t AES::rcon[11] = {
 	0x80000000U, 0x1B000000U, 0x36000000U
 };
 
+/*
+// Experiments ... TODO optimize later ...
+
+#include <cstring>
+
+void copy_128(uint8_t* dst, const uint8_t* src)
+{
+	memcpy(dst, src, 16);
+}
+
+void xor_128(uint8_t* dst, const uint8_t* src1, const uint8_t* src2)
+{
+	uint64_t* d = reinterpret_cast<uint64_t*>(dst);
+	const uint64_t* s1 = reinterpret_cast<const uint64_t*>(src1);
+	const uint64_t* s2 = reinterpret_cast<const uint64_t*>(src2);
+
+	d[0] = s1[0] ^ s2[0];
+	d[1] = s1[1] ^ s2[1];
+}
+*/
+
 AES::AES()
 {
 	Nb = 4;

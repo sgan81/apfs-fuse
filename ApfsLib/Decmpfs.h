@@ -34,3 +34,22 @@ bool IsDecompAlgoSupported(uint16_t algo);
 bool IsDecompAlgoInRsrc(uint16_t algo);
 
 bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompressed, const std::vector<uint8_t> &compressed);
+
+class Decmpfs
+{
+public:
+	Decmpfs(ApfsDir& dir);
+	~Decmpfs();
+
+	int open(uint64_t ino);
+	int pread(void* data, size_t size, uint64_t offset, uint64_t& nread);
+	int close();
+
+private:
+	size_t decompress(uint8_t* dst, size_t dst_size, const uint8_t* src, size_t src_size, int algo);
+
+	ApfsDir& m_dir;
+	uint8_t* m_header;
+	uint8_t* m_compressed;
+	uint8_t* m_decompressed;
+};

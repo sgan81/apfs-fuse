@@ -27,7 +27,47 @@
 
 #include "Global.h"
 #include "Util.h"
+#include "Debug.h"
 
+enum ChunkScheme {
+	CS_UNKNOWN,
+	CS_EMBEDDED,
+	CS_RSRC_FORK,
+	CS_RSRC_DATA
+};
+
+enum CompressionMethod {
+	CM_UNKNOWN,
+	CM_UNCOMPRESSED,
+	CM_ZLIB,
+	CM_LZVN,
+	CM_LZFSE,
+	CM_LZBITMAP
+};
+
+struct CmpfMethod {
+	ChunkScheme scheme;
+	CompressionMethod method;
+};
+
+static const CmpfMethod cmpf_list[16] = {
+	{ CS_UNKNOWN, CM_UNKNOWN },
+	{ CS_EMBEDDED, CM_UNCOMPRESSED },
+	{ CS_UNKNOWN, CM_UNKNOWN },
+	{ CS_EMBEDDED, CM_ZLIB },
+	{ CS_RSRC_FORK, CM_ZLIB },
+	{ CS_UNKNOWN, CM_UNKNOWN },
+	{ CS_UNKNOWN, CM_UNKNOWN },
+	{ CS_EMBEDDED, CM_LZVN },
+	{ CS_RSRC_DATA, CM_LZVN },
+	{ CS_EMBEDDED, CM_UNCOMPRESSED }, // Not sure ...
+	{ CS_RSRC_DATA, CM_UNCOMPRESSED },
+	{ CS_EMBEDDED, CM_LZFSE },
+	{ CS_RSRC_DATA, CM_LZFSE },
+	{ CS_EMBEDDED, CM_LZBITMAP },
+	{ CS_RSRC_DATA, CM_LZBITMAP },
+	{ CS_UNKNOWN, CM_UNKNOWN }
+};
 
 struct RsrcForkHeader
 {
@@ -52,37 +92,12 @@ struct CmpfRsrc
 
 bool IsDecompAlgoSupported(uint16_t algo)
 {
-	switch (algo)
-	{
-	case 3:
-	case 4:
-	case 7:
-	case 8:
-	case 9:
-	case 10:
-	case 11:
-	case 12:
-	case 13:
-	case 14:
-		return true;
-	default:
-		return false;
-	}
+	return cmpf_list[algo].scheme != CS_UNKNOWN && cmpf_list[algo].method != CM_UNKNOWN;
 }
 
 bool IsDecompAlgoInRsrc(uint16_t algo)
 {
-	switch (algo)
-	{
-	case 4:
-	case 8:
-	case 10:
-	case 12:
-	case 14:
-		return true;
-	default:
-		return false;
-	}
+	return cmpf_list[algo].scheme == CS_RSRC_FORK || cmpf_list[algo].scheme == CS_RSRC_DATA;
 }
 
 bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompressed, const std::vector<uint8_t> &compressed)
@@ -338,4 +353,86 @@ bool DecompressFile(ApfsDir &dir, uint64_t ino, std::vector<uint8_t> &decompress
 #endif
 
 	return true;
+}
+
+Decmpfs::Decmpfs(ApfsDir& dir) : m_dir(dir)
+{
+}
+
+Decmpfs::~Decmpfs()
+{
+}
+
+int Decmpfs::open(uint64_t ino)
+{
+	std::vector<uint8_t> xattr;
+	const CompressionHeader* chdr;
+
+	m_dir.GetAttribute(xattr, ino, "com.apple.decmpfs");
+	chdr = reinterpret_cast<const CompressionHeader*>(xattr.data());
+
+
+	// Etc PP ...
+}
+
+int Decmpfs::pread(void* data, size_t size, uint64_t offset, uint64_t& nread)
+{
+}
+
+int Decmpfs::close()
+{
+}
+
+size_t Decmpfs::decompress(uint8_t* dst, size_t dst_size, const uint8_t* src, size_t src_size, int algo)
+{
+	size_t decoded = 0;
+
+	switch (algo) {
+	case CM_UNCOMPRESSED:
+		if (dst_size < src_size) break;
+		memcpy(dst, src, src_size);
+		decoded = src_size;
+		break;
+	case CM_ZLIB:
+		if (src[0] == 0x78)
+			decoded = DecompressZLib(dst, dst_size, src, src_size);
+		else if ((src[0] & 0x0F) == 0x0F) {
+			if (dst_size < (src_size - 1)) break;
+			memcpy(dst, src + 1, src_size - 1);
+			decoded = src_size - 1;
+		} else {
+			decoded = 0;
+		}
+		break;
+	case CM_LZVN:
+		if (src[0] == 0x06) {
+			if (dst_size < (src_size - 1)) break;
+			memcpy(dst, src + 1, src_size - 1);
+			decoded = src_size - 1;
+		} else
+			decoded = DecompressLZVN(dst, dst_size, src, src_size);
+		break;
+	case CM_LZFSE:
+		// TODO uncompressed?
+		decoded = DecompressLZFSE(dst, dst_size, src, src_size);
+		break;
+	case CM_LZBITMAP:
+		if (src[0] == 0xFF) {
+			if (dst_size < (src_size - 1)) break;
+			memcpy(dst, src + 1, src_size - 1);
+			decoded = src_size - 1;
+		} else
+			decoded = DecompressLZBITMAP(dst, dst_size, src, src_size);
+		break;
+	default:
+		log_error("Unsupported decompression algorithm %d\n", algo);
+		break;
+	}
+
+	if (decoded == 0) {
+		log_error("decmpfs: something went wrong ... algo = %d\n", algo);
+		dbg_dump_hex(src, 0x100);
+	}
+
+	return decoded;
 }

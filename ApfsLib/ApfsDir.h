@@ -119,7 +119,6 @@ public:
 		j_xattr_dstream_t xstrm;
 	};
 
-
 	ApfsDir(Volume &vol);
 	~ApfsDir();
 

@@ -531,3 +531,8 @@ int Volume::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt, uint64_t 
 
 	return 0;
 }
+
+uint32_t Volume::getBlocksize() const
+{
+	return m_container.GetBlocksize();
+}
