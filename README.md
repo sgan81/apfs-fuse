@@ -39,6 +39,7 @@ Example for Linux:
 ```
 sudo apt update
 sudo apt install fuse libfuse3-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev zlib1g-dev
+sudo apt install build-essential
 ```
 Of course these commands depend on the Linux distribution.
 
