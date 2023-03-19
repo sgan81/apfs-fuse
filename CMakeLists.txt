@@ -84,6 +84,8 @@ add_library(apfs
 	ApfsLib/DeviceLinux.h
 	ApfsLib/DeviceMac.cpp
 	ApfsLib/DeviceMac.h
+	ApfsLib/DeviceBSD.h
+	ApfsLib/DeviceBSD.cpp
 	ApfsLib/DeviceSparseImage.cpp
 	ApfsLib/DeviceSparseImage.h
 	ApfsLib/DeviceWinFile.cpp
@@ -126,6 +128,10 @@ target_include_directories(apfs-fuse PRIVATE /usr/local/include/osxfuse/)
 # link_directories(/usr/local/lib/)
 target_link_libraries(apfs-fuse apfs /usr/local/lib/libosxfuse.dylib)
 else()
+if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+target_include_directories(apfs-fuse PRIVATE /usr/local/include/)
+link_directories(/usr/local/lib/)
+endif()
 if (USE_FUSE3)
 target_link_libraries(apfs-fuse apfs fuse3)
 else()

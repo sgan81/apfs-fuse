@@ -23,7 +23,7 @@
 #define FUSE_USE_VERSION 30
 #endif
 
-#ifdef __linux__
+#if defined (__linux__)
 #ifdef USE_FUSE2
 #include <fuse/fuse.h>
 #include <fuse/fuse_lowlevel.h>
@@ -33,7 +33,7 @@
 #endif
 #include <unistd.h>
 #endif
-#ifdef __APPLE__
+#if defined (__APPLE__) || defined (__FreeBSD__)
 #include <fuse/fuse.h>
 #include <fuse/fuse_lowlevel.h>
 #endif
@@ -49,6 +49,7 @@
 #include <ApfsLib/Decmpfs.h>
 #include <ApfsLib/DeviceLinux.h>
 #include <ApfsLib/DeviceMac.h>
+#include <ApfsLib/DeviceBSD.h>
 #include <ApfsLib/GptPartitionMap.h>
 
 #include <cassert>
@@ -56,6 +57,10 @@
 #include <cstddef>
 
 #include <iostream>
+
+#ifdef __FreeBSD__
+#include <unistd.h>
+#endif
 
 static_assert(sizeof(fuse_ino_t) == 8, "Sorry, on 32-bit systems, you need to use FUSE-3.");
 
