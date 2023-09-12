@@ -36,6 +36,7 @@ public:
 	int lookup(oid_t oid, xid_t xid, xid_t* xid_o, uint32_t* flags, uint32_t* size, paddr_t* paddr);
 
 	void dump_tree();
+	BTree& tree() { return m_tree; }
 private:
 	const omap_phys_t* om_phys;
 	BTree m_tree;

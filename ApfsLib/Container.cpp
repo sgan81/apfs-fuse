@@ -539,6 +539,8 @@ void Container::dump(BlockDumper& bd)
 	ReadAndVerifyHeaderBlock(blk.data(), m_nxsb->nx_omap_oid);
 	bd.DumpNode(blk.data(), m_nxsb->nx_omap_oid);
 
+	m_fq_tree_mgr.dump(bd);
+	m_fq_tree_vol.dump(bd);
 #if 0 // TODO move to spaceman
 	{
 		size_t bs = bd.GetBlockSize();

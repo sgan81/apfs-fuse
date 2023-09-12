@@ -85,6 +85,11 @@ struct DirRec
 	bool has_sibling_id;
 };
 
+struct File
+{
+
+};
+
 struct XAttr
 {
 	XAttr();
@@ -131,20 +136,20 @@ public:
 	Filesystem();
 	~Filesystem();
 
-	/*
-	bool GetInode(Inode &res, uint64_t inode);
+	int getInode(Inode& res, uint64_t id);
+	int listDirectory(std::vector<DirRec>& dir, uint64_t parent_id);
+	int lookupName(DirRec& res, uint64_t parent_id, const char* name);
 
-	bool ListDirectory(std::vector<DirRec> &dir, uint64_t inode);
-	bool LookupName(DirRec &res, uint64_t parent_id, const char *name);
-	bool ReadFile(void *data, uint64_t inode, uint64_t offs, size_t size);
-	bool ListAttributes(std::vector<std::string> &names, uint64_t inode);
-	bool GetAttribute(std::vector<uint8_t> &data, uint64_t inode, const char *name);
-	bool GetAttributeInfo(XAttr &attr, uint64_t inode, const char *name);
-	*/
+	int fileOpen(File& file, uint64_t id);
+	int fileRead(File& file, void* data, uint64_t size, uint64_t offs);
+	int fileClose(File& file);
+
+	int listXattr(std::vector<std::string>& names, uint64_t id);
+	int xattrOpen(XAttr& xattr, uint64_t id, const char* name);
+	int xattrRead(XAttr& xattr, void* data, uint64_t size, uint64_t offs);
+	int xattrClose(XAttr& xattr);
 
 	int lookupName(uint64_t parent_id, const char* name, uint64_t& child_id, uint64_t& child_ts);
-
-	int lookupExtent(uint64_t id, uint64_t offset, prange_t& range);
 
 private:
 

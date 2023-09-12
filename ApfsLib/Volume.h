@@ -72,4 +72,6 @@ private:
 
 	bool m_is_encrypted;
 	AesXts m_aes;
+
+	ObjPtr<Volume> m_snap_vol;
 };

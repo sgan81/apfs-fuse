@@ -346,11 +346,13 @@ bool ApfsDir::ListDirectory(std::vector<DirRec> &dir, uint64_t inode)
 	{
 		DirRec e;
 
+#if 0
 		if (g_debug & Dbg_Dir)
 		{
 			DumpBuffer(reinterpret_cast<const uint8_t *>(skey_buf), it.key_len(), "entry key");
 			DumpBuffer(reinterpret_cast<const uint8_t *>(val.buf), it.val_len(), "entry val");
 		}
+#endif
 
 		k = reinterpret_cast<const j_key_t *>(skey_buf);
 

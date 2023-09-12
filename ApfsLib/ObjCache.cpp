@@ -88,6 +88,9 @@ int ObjCache::getObj(Object*& obj, const void* params, oid_t oid, xid_t xid, uin
 
 	obj = nullptr;
 
+	if (xid != 0)
+		log_warn("getObj oid %" PRIx64 " xid %" PRIx64 " xid != 0!\n", oid, xid);
+
 	for (o = m_hashtable[oid & m_ht_mask]; o != nullptr; o = o->m_le_ht.next) {
 		if (oid == o->m_oid && type == o->m_type && fs == o->fs()) {
 			obj = o;
@@ -107,13 +110,9 @@ int ObjCache::getObj(Object*& obj, const void* params, oid_t oid, xid_t xid, uin
 		size = m_nx->GetBlocksize();
 
 	err = readObj(*o, oid, xid, type, subtype, size, paddr, fs);
-	if (err != 0) {
-		delete o;
-		return err;
-	}
-
-	err = o->init(params);
-	if (err != 0) {
+	if (err == 0)
+		err = o->init(params);
+	if (err) {
 		delete o;
 		return err;
 	}

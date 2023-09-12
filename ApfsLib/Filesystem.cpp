@@ -43,6 +43,11 @@ int DStream::pread(uint8_t* data, size_t size, uint64_t offset, size_t* nread_o)
 	size_t chunk_size;
 	size_t nread = 0;
 
+	if (offset >= m_dstm.size)
+		size = 0;
+	else if ((offset + size) > m_dstm.size)
+		size = m_dstm.size - offset;
+
 	if ((offset & m_blksize_mask) != 0) {
 		if (m_buffer == nullptr) {
 			m_buffer = new uint8_t[m_blksize];

@@ -255,7 +255,6 @@ int Volume::Mount()
 int Volume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 {
 	// Currently not supported
-#if 0
 	const apfs_superblock_t* apsb;
 	BTree snap_btree;
 	j_snap_metadata_key_t snap_key;
@@ -289,36 +288,92 @@ int Volume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 		return EINVAL;
 	}
 
-	if (!snap_btree.Init(this, apsb->apfs_snap_meta_tree_oid, 0, apsb->apfs_snap_meta_tree_type, OBJECT_TYPE_SNAPMETATREE, CompareFsKey, 0)) {
-		log_error("snap meta tree init failed.\n");
-		return false;
+	err = snap_btree.Init(this, apsb->apfs_snap_meta_tree_oid, 0, apsb->apfs_snap_meta_tree_type, OBJECT_TYPE_SNAPMETATREE, CompareFsKey, 0);
+	if (err) {
+		log_error("snap meta tree init failed, error = %d.\n", err);
+		return err;
 	}
 
 	snap_key.hdr.obj_id_and_type = APFS_TYPE_ID(APFS_TYPE_SNAP_METADATA, snap_xid);
 	err = snap_btree.Lookup(&snap_key, sizeof(snap_key), sk_len, &snap_val.buf, sv_len, BTree::FindMode::EQ);
 	if (err != 0) {
 		log_error("error %d looking up snap xid.\n", err);
-		return false;
+		return err;
 	}
 
-	if (!m_omap.Init(m_sb.apfs_omap_oid, m_sb.apfs_o.o_xid)) {
-		std::cerr << "WARNING: Volume omap tree init failed." << std::endl;
-		return false;
+	err = oc().getObj(m_omap, nullptr, m_sb->apfs_omap_oid, 0, OBJ_PHYSICAL | OBJECT_TYPE_OMAP, 0, 0, 0, nullptr);
+	if (err) {
+		log_error("Volume omap tree init failed, error %d.\n", err);
+		return err;
 	}
 
-	if (!ReadBlocks(blk.data(), snap_val.v.sblock_oid, 1, 0)) {
-		std::cerr << "failed to read snapshot superblock" << std::endl;
-		return false;
-	}
-	if (!VerifyBlock(blk.data(), blk.size())) {
-		std::cerr << "snap superblock checksum error" << std::endl;
-		return false;
+	err = oc().getObj(m_snap_vol, 0, snap_val.v.sblock_oid, 0, OBJ_VIRTUAL | OBJECT_TYPE_FS, 0, 0, 0, nullptr);
+	if (err) {
+		log_error("Failed to get snapshot apsb, error = %d\n", err);
+		return err;
 	}
 
-	memcpy(&m_sb, blk.data(), sizeof(m_sb));
+	m_sb = reinterpret_cast<const apfs_superblock_t*>(m_snap_vol->data());
 
-	if (m_sb.apfs_magic != APFS_MAGIC)
-		return false;
+	if (m_sb->apfs_magic != APFS_MAGIC) {
+		log_error("Invalid signature in snapshot superblock.\n");
+		return EINVAL;
+	}
+
+	if ((m_sb->apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED && !m_container.IsUnencrypted())
+	{
+		uint8_t vek[0x20];
+		std::string str;
+
+		log_debug("Volume is encrypted.\n");
+
+		err = m_container.GetVolumeKey(vek, m_sb->apfs_vol_uuid);
+		if (err) {
+			printf("Volume %s is encrypted.\n", m_sb->apfs_volname);
+			if (m_container.GetPasswordHint(str, m_sb->apfs_vol_uuid))
+				printf("Hint: %s\n", str.c_str());
+
+			printf("Enter password: ");
+			GetPassword(str);
+
+			err = m_container.GetVolumeKey(vek, m_sb->apfs_vol_uuid, str.c_str());
+			if (err) {
+				printf("Wrong password!\n");
+				return err;
+			}
+		}
+
+		log_debug("Setting VEK\n");
+		m_aes.SetKey(vek, vek + 0x10);
+		m_is_encrypted = true;
+	}
+
+	log_debug("init fs tree %" PRIx64 " ...\n", m_sb->apfs_root_tree_oid);
+	err = m_fs_tree.Init(this, m_sb->apfs_root_tree_oid, 0, m_sb->apfs_root_tree_type, OBJECT_TYPE_FSTREE,
+						 CompareFsKey, m_sb->apfs_incompatible_features & (APFS_INCOMPAT_CASE_INSENSITIVE | APFS_INCOMPAT_NORMALIZATION_INSENSITIVE));
+	if (err) {
+		log_error("mount snapshot: fs tree init failed.\n");
+		return err;
+	}
+
+	err = m_extentref_tree.Init(this, m_sb->apfs_extentref_tree_oid, 0, m_sb->apfs_extentref_tree_type, OBJECT_TYPE_EXTENT_LIST_TREE, CompareFsKey, 0);
+	if (err)
+		log_error("mount: extentref tree init failed.\n");
+
+	err = m_snap_meta_tree.Init(this, m_sb->apfs_snap_meta_tree_oid, 0, m_sb->apfs_snap_meta_tree_type, OBJECT_TYPE_SNAPMETATREE, CompareFsKey, 0);
+	if (err)
+		log_error("mount: snap meta tree init failed.\n");
+
+	if (m_sb->apfs_incompatible_features & APFS_INCOMPAT_SEALED_VOLUME) {
+		log_debug("init fext tree ...\n");
+		err = m_fext_tree.Init(this, m_sb->apfs_fext_tree_oid, 0, m_sb->apfs_fext_tree_type, OBJECT_TYPE_FEXT_TREE, CompareFextKey, 0);
+		if (err) {
+			log_error("mount: fext tree init failed.\n");
+			return err;
+		}
+	}
+
+#if 0
 
 	if ((m_sb.apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED)
 	{
@@ -361,7 +416,7 @@ int Volume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 			std::cerr << "ERROR: fext tree init failed" << std::endl;
 	}
 #endif
-	return ENOTSUP;
+	return 0;
 }
 
 int Volume::getOMap(ObjPtr<OMap>& omap)
@@ -379,64 +434,70 @@ int Volume::getOMap(ObjPtr<OMap>& omap)
 
 void Volume::dump(BlockDumper& bd)
 {
-#if 0 // <--
+#if 1 // <--
 	std::vector<uint8_t> blk;
-	omap_res_t om;
 	oid_t omap_snapshot_tree_oid = 0;
+	xid_t om_xid;
+	uint32_t om_flags;
+	uint32_t om_size;
+	paddr_t om_paddr;
 
 	blk.resize(m_container.GetBlocksize());
 
-	if (!ReadBlocks(blk.data(), m_apsb_paddr, 1, 0))
+	if (ReadBlocks(blk.data(), paddr(), 1, 0) != 0)
 		return;
 
 	if (!VerifyBlock(blk.data(), blk.size()))
 		return;
 
-	bd.SetTextFlags(m_sb.apfs_incompatible_features & 0xFF);
+	bd.SetTextFlags(m_sb->apfs_incompatible_features & 0xFF);
 
-	bd.DumpNode(blk.data(), m_apsb_paddr);
+	bd.DumpNode(blk.data(), paddr());
 
-	ReadBlocks(blk.data(), m_sb.apfs_omap_oid, 1, 0);
-	bd.DumpNode(blk.data(), m_sb.apfs_omap_oid);
+	ReadBlocks(blk.data(), m_sb->apfs_omap_oid, 1, 0);
+	bd.DumpNode(blk.data(), m_sb->apfs_omap_oid);
 
 	{
 		const omap_phys_t *om = reinterpret_cast<const omap_phys_t*>(blk.data());
 		omap_snapshot_tree_oid = om->om_snapshot_tree_oid;
 
-		ReadBlocks(blk.data(), omap_snapshot_tree_oid, 1, 0);
-		bd.DumpNode(blk.data(), omap_snapshot_tree_oid);
+		if (omap_snapshot_tree_oid != 0) {
+			ReadBlocks(blk.data(), omap_snapshot_tree_oid, 1, 0);
+			bd.DumpNode(blk.data(), omap_snapshot_tree_oid);
+		}
 	}
 
-	if (m_sb.apfs_er_state_oid) {
-		ReadBlocks(blk.data(), m_sb.apfs_er_state_oid, 1, 0);
-		bd.DumpNode(blk.data(), m_sb.apfs_er_state_oid);
+	if (m_sb->apfs_er_state_oid) {
+		ReadBlocks(blk.data(), m_sb->apfs_er_state_oid, 1, 0);
+		bd.DumpNode(blk.data(), m_sb->apfs_er_state_oid);
 	}
 
-	m_omap.dump(bd);
-	m_fs_tree.dump(bd);
+	// m_omap->tree().dump(bd);
+	// m_fs_tree.dump(bd);
 	// m_extentref_tree.dump(bd);
 	m_snap_meta_tree.dump(bd);
 
-	if (m_sb.apfs_integrity_meta_oid != 0) {
-		if (m_omap.Lookup(om, m_sb.apfs_integrity_meta_oid, m_sb.apfs_o.o_xid))
+	if (m_sb->apfs_integrity_meta_oid != 0) {
+		if (m_omap->lookup(m_sb->apfs_integrity_meta_oid, 0, &om_xid, &om_flags, &om_size, &om_paddr) == 0)
 		{
-			ReadBlocks(blk.data(), om.paddr, 1, 0);
-			bd.DumpNode(blk.data(), om.paddr);
+			ReadBlocks(blk.data(), om_paddr, 1, 0);
+			bd.DumpNode(blk.data(), om_paddr);
 		}
 	}
 
-	if (m_sb.apfs_snap_meta_ext_oid != 0) {
-		if (m_omap.Lookup(om, m_sb.apfs_snap_meta_ext_oid, m_sb.apfs_o.o_xid))
+	if (m_sb->apfs_snap_meta_ext_oid != 0) {
+		if (m_omap->lookup(m_sb->apfs_snap_meta_ext_oid, 0, &om_xid, &om_flags, &om_size, &om_paddr) == 0)
 		{
-			ReadBlocks(blk.data(), om.paddr, 1, 0);
-			bd.DumpNode(blk.data(), om.paddr);
+			ReadBlocks(blk.data(), om_paddr, 1, 0);
+			bd.DumpNode(blk.data(), om_paddr);
 		}
 	}
 
-#if 1
-	if (m_sb.apfs_fext_tree_oid != 0) {
-		BTree fxtree(m_container, this);
-		fxtree.Init(m_sb.apfs_fext_tree_oid, m_sb.apfs_o.o_xid, CompareFextKey, nullptr);
+#if 0
+	if (m_sb->apfs_fext_tree_oid != 0) {
+		BTree fxtree;
+
+		fxtree.Init(this, m_sb->apfs_fext_tree_oid, 0, m_sb->apfs_fext_tree_type, OBJECT_TYPE_FEXT_TREE, CompareFextKey, 0);
 		fxtree.dump(bd);
 	}
 #endif
