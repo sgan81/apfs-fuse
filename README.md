@@ -46,7 +46,7 @@ sudo apt-get install "c++"
 ```
 Of course these commands depend on the Linux distribution.
 
-Lastly, if running apfs-fuse directly in terminal returns command not recognized, do this inside the apfs-fuse/build folder:
+Lastly, if running apfs-fuse directly in terminal returns command not recognized then it has not been added to path correctly, do this inside the apfs-fuse/build folder:
 ```
 sudo cp -a . /usr/local/bin
 ```
