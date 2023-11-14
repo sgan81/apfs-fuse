@@ -40,7 +40,16 @@ Example for Linux:
 sudo apt update
 sudo apt install fuse libfuse3-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev zlib1g-dev
 ```
+If you get an error at the above step complaining about "c+" not found or similar, it seems your distro does not like installing c++ using regular apt, so we use apt-get with quotes:
+```
+sudo apt-get install "c++"
+```
 Of course these commands depend on the Linux distribution.
+
+Lastly, if running apfs-fuse directly in terminal returns command not recognized, do this inside the apfs-fuse/build folder:
+```
+sudo cp -a . /usr/local/bin
+```
 
 Clone the repository:
 ```
