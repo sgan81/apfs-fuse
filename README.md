@@ -46,11 +46,6 @@ sudo apt-get install "c++"
 ```
 Of course these commands depend on the Linux distribution.
 
-Lastly, if running apfs-fuse directly in terminal returns command not recognized then it has not been added to path correctly, do this inside the apfs-fuse/build folder:
-```
-sudo cp -a . /usr/local/bin
-```
-
 Clone the repository:
 ```
 git clone https://github.com/sgan81/apfs-fuse.git
@@ -72,6 +67,11 @@ make
 Note that the driver uses FUSE 3.0 by default (required on 32-bit systems). If
 you want do compile using FUSE 2.6, use `ccmake .` to change the option
 `USE_FUSE3` to `OFF`.
+
+Lastly, if running apfs-fuse directly in terminal returns command not recognized then it has not been added to path correctly, do this inside the apfs-fuse/build folder:
+```
+sudo cp -a . /usr/local/bin
+```
 
 ### Mount a drive
 ```
