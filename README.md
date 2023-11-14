@@ -40,6 +40,10 @@ Example for Linux:
 sudo apt update
 sudo apt install fuse libfuse3-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev zlib1g-dev
 ```
+If you get an error at the above step complaining about "c+" not found or similar, it seems your distro does not like installing c++ using regular apt, so we use apt-get with quotes:
+```
+sudo apt-get install "c++"
+```
 Of course these commands depend on the Linux distribution.
 
 Clone the repository:
@@ -63,6 +67,11 @@ make
 Note that the driver uses FUSE 3.0 by default (required on 32-bit systems). If
 you want do compile using FUSE 2.6, use `ccmake .` to change the option
 `USE_FUSE3` to `OFF`.
+
+Lastly, if running apfs-fuse directly in terminal returns command not recognized then it has not been added to path correctly, do this inside the apfs-fuse/build folder:
+```
+sudo cp -a . /usr/local/bin
+```
 
 ### Mount a drive
 ```
