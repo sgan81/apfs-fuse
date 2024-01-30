@@ -49,6 +49,7 @@ public:
 
 	int MountVolume(ObjPtr<Volume>& ptr, unsigned int fsid, const std::string &passphrase = std::string(), xid_t snap_xid = 0);
 	int GetVolumeInfo(unsigned int fsid, apfs_superblock_t &apsb);
+	oid_t GetFsOid(unsigned int fsid) const { return m_nxsb->nx_fs_oid[fsid]; }
 
 	int ReadBlocks(uint8_t *data, paddr_t paddr, uint64_t blkcnt = 1) const;
 	int ReadAndVerifyHeaderBlock(uint8_t *data, paddr_t paddr) const;

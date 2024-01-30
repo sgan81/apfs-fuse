@@ -497,7 +497,7 @@ void Container::dump(BlockDumper& bd)
 	}
 #endif
 
-#if 1
+#if 0
 	bd.st() << std::endl << "Dumping XP desc area (current SB):" << std::endl;
 	paddr = m_nxsb->nx_xp_desc_base;
 	last_index = m_nxsb->nx_xp_desc_index + m_nxsb->nx_xp_desc_len;
@@ -541,71 +541,12 @@ void Container::dump(BlockDumper& bd)
 
 	m_fq_tree_mgr.dump(bd);
 	m_fq_tree_vol.dump(bd);
-#if 0 // TODO move to spaceman
-	{
-		size_t bs = bd.GetBlockSize();
-		bd.SetBlockSize(m_sm_data.size());
-		bd.DumpNode(m_sm_data.data(), m_nxsb->nx_spaceman_oid);
-		bd.SetBlockSize(bs);
-	}
 
-	uint64_t oid;
-	size_t k;
+	ObjPtr<Spaceman> sm;
 
-	for (k = 0; k < m_sm->sm_ip_bm_block_count; k++)
-	{
-		oid = m_sm->sm_ip_bm_base + k;
-
-		bd.st() << "Dumping IP Bitmap block " << k << std::endl;
-
-		ReadBlocks(blk.data(), oid);
-		bd.DumpNode(blk.data(), oid);
-
-		bd.st() << std::endl;
-	}
-
-	// m_omap.dump(bd); // TODO
-	// m_omap_tree.dump(bd);
-	m_fq_tree_mgr.dump(bd);
-	m_fq_tree_vol.dump(bd);
-
-	const le_uint64_t *cxb_oid = reinterpret_cast<const le_uint64_t *>(m_sm_data.data() + m_sm->sm_dev[SD_MAIN].sm_addr_offset);
-	uint32_t cib_cnt = m_sm->sm_dev[SD_MAIN].sm_cib_count;
-	uint32_t cab_cnt = m_sm->sm_dev[SD_MAIN].sm_cab_count;
-
-	uint32_t cib_id;
-	uint32_t cab_id;
-
-	std::vector<uint64_t> cib_oid_list;
-	std::vector<uint8_t> cib_data(GetBlocksize());
-
-	cib_oid_list.reserve(cib_cnt);
-
-	if (cab_cnt != 0)
-	{
-		for (cab_id = 0; cab_id < cab_cnt; cab_id++)
-		{
-			ReadAndVerifyHeaderBlock(blk.data(), cxb_oid[cab_id]);
-			bd.DumpNode(blk.data(), cxb_oid[cab_id]);
-
-			const cib_addr_block_t *cab = reinterpret_cast<cib_addr_block_t *>(blk.data());
-
-			for (cib_id = 0; cib_id < cab->cab_cib_count; cib_id++)
-				cib_oid_list.push_back(cab->cab_cib_addr[cib_id]);
-		}
-	}
-	else
-	{
-		for (cib_id = 0; cib_id < cib_cnt; cib_id++)
-			cib_oid_list.push_back(cxb_oid[cib_id]);
-	}
-
-	for (cib_id = 0; cib_id < cib_cnt; cib_id++)
-	{
-		ReadAndVerifyHeaderBlock(blk.data(), cib_oid_list[cib_id]);
-		bd.DumpNode(blk.data(), cib_oid_list[cib_id]);
-	}
-#endif
+	getSpaceman(sm);
+	if (sm)
+		sm->dump(bd);
 }
 
 int Container::getSpaceman(ObjPtr<Spaceman>& sm)

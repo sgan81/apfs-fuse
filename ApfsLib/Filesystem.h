@@ -85,11 +85,6 @@ struct DirRec
 	bool has_sibling_id;
 };
 
-struct File
-{
-
-};
-
 struct XAttr
 {
 	XAttr();
@@ -100,15 +95,24 @@ struct XAttr
 	j_xattr_dstream_t xstrm;
 };
 
-class DStream
+class ApfsStreamBase
+{
+public:
+	virtual ~ApfsStreamBase();
+
+	virtual int pread(uint8_t* data, size_t size, uint64_t offset, size_t* nread) = 0;
+	virtual int close() = 0;
+};
+
+class DStream : public ApfsStreamBase
 {
 public:
 	DStream(Volume& v);
 	~DStream();
 
 	int open(uint64_t private_id, const j_dstream_t& dstm);
-	int pread(uint8_t* data, size_t size, uint64_t offset, size_t* nread_o);
-	int close();
+	int pread(uint8_t* data, size_t size, uint64_t offset, size_t* nread_o) override;
+	int close() override;
 
 	int preadAligned(uint8_t* data, size_t size, uint64_t offset);
 
@@ -130,10 +134,15 @@ private:
 	uint64_t m_buffer_offs;
 };
 
+struct File
+{
+
+};
+
 class Filesystem
 {
 public:
-	Filesystem();
+	Filesystem(Volume& vol);
 	~Filesystem();
 
 	int getInode(Inode& res, uint64_t id);
@@ -152,6 +161,5 @@ public:
 	int lookupName(uint64_t parent_id, const char* name, uint64_t& child_id, uint64_t& child_ts);
 
 private:
-
-
+	Volume& m_vol;
 };

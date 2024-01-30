@@ -1504,10 +1504,7 @@ struct fusion_mt_val_t {
 constexpr uint32_t FUSION_MT_DIRTY = 1 << 0;
 constexpr uint32_t FUSION_MT_TENANT = 1 << 1;
 
-
-
-#define APFS_TYPE_ID(t, o) ((static_cast<uint64_t>(t) << OBJ_TYPE_SHIFT) | (o & OBJ_ID_MASK))
-
+static inline uint64_t APFS_TYPE_ID(uint8_t t, uint64_t o) { return (static_cast<uint64_t>(t) << OBJ_TYPE_SHIFT) | (o & OBJ_ID_MASK); }
 
 #ifdef _MSC_VER
 #pragma warning(default: 4200)

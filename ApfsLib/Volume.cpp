@@ -472,9 +472,9 @@ void Volume::dump(BlockDumper& bd)
 		bd.DumpNode(blk.data(), m_sb->apfs_er_state_oid);
 	}
 
-	// m_omap->tree().dump(bd);
-	// m_fs_tree.dump(bd);
-	// m_extentref_tree.dump(bd);
+	m_omap->tree().dump(bd);
+	m_fs_tree.dump(bd);
+	m_extentref_tree.dump(bd);
 	m_snap_meta_tree.dump(bd);
 
 	if (m_sb->apfs_integrity_meta_oid != 0) {

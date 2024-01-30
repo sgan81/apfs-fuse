@@ -138,7 +138,13 @@ int main(int argc, char *argv[])
 	container->dump(bd);
 
 #if 1
+	oid_t fs_oid;
+
 	for (volume_id = 0; volume_id < NX_MAX_FILE_SYSTEMS; volume_id++) {
+		fs_oid = container->GetFsOid(volume_id);
+		if (fs_oid == 0)
+			continue;
+
 		ObjPtr<Volume> vol;
 		err = container->MountVolume(vol, volume_id);
 

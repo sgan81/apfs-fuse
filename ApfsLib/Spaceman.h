@@ -21,6 +21,8 @@
 
 #include "Object.h"
 
+class BlockDumper;
+
 class Spaceman : public Object
 {
 public:
@@ -30,6 +32,8 @@ public:
 	int init(const void * params) override;
 
 	uint64_t getFreeBlocks() const { return sm_phys->sm_dev[SD_MAIN].sm_free_count + sm_phys->sm_dev[SD_TIER2].sm_free_count; }
+
+	void dump(BlockDumper& d);
 
 private:
 	const spaceman_phys_t* sm_phys;
