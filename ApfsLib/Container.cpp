@@ -121,7 +121,7 @@ int Container::Mount(ObjPtr<Container>& ptr, Device *disk_main, uint64_t main_st
 		}
 
 		if (!VerifyBlock(tmp.data(), tmp.size())) {
-			log_warn("checksum error in xp desc area\n");
+			// log_warn("checksum error in xp desc area\n");
 			// DumpHex(std::cout, tmp.data(), tmp.size());
 			continue;
 		}

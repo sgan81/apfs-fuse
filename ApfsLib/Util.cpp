@@ -769,7 +769,7 @@ enum LogLevel {
 	LL_DEBUG
 };
 
-static int g_loglevel = LL_DEBUG;
+static int g_loglevel = LL_WARNING;
 
 void log_debug(const char *msg, ...)
 {

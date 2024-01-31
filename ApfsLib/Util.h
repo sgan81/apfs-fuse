@@ -57,6 +57,14 @@ bool GetPassword(std::string &pw);
 
 int log2(uint32_t val);
 
+#ifdef _MSC_VER
+#define __attribute__(x)
+#endif
+
 void log_debug(const char *msg, ...) __attribute__((format(printf, 1, 2)));
 void log_warn(const char *msg, ...) __attribute__((format(printf, 1, 2)));
 void log_error(const char *msg, ...) __attribute__((format(printf, 1, 2)));
+
+#ifdef _MSC_VER
+#undef __attribute__
+#endif

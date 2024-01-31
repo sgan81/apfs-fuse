@@ -273,3 +273,5 @@ doc/
 .DS_Store
 xcode/
 
+# Windows
+CMakeSettings.json

@@ -373,14 +373,18 @@ int Decmpfs::open(uint64_t ino)
 
 
 	// Etc PP ...
+
+	return ENOTSUP;
 }
 
 int Decmpfs::pread(void* data, size_t size, uint64_t offset, uint64_t& nread)
 {
+	return ENOTSUP;
 }
 
 int Decmpfs::close()
 {
+	return ENOTSUP;
 }
 
 size_t Decmpfs::decompress(uint8_t* dst, size_t dst_size, const uint8_t* src, size_t src_size, int algo)

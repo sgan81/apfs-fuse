@@ -12,8 +12,8 @@ set(CMAKE_CXX_STANDARD 11)
 
 # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -flto")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -flto")
-add_compile_options(-Wall -Wextra -flto)
-add_link_options(-flto)
+# add_compile_options(-Wall -Wextra -flto)
+# add_link_options(-flto)
 # add_link_options(-fsanitize=undefined)
 
 # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -march=native -fsanitize=undefined")
@@ -93,6 +93,8 @@ add_library(apfs
 	ApfsLib/DiskImageFile.h
 	ApfsLib/DiskStruct.h
 	ApfsLib/Endian.h
+	ApfsLib/Filesystem.cpp
+	ApfsLib/Filesystem.h
 	ApfsLib/Global.h
 	ApfsLib/GptPartitionMap.cpp
 	ApfsLib/GptPartitionMap.h
