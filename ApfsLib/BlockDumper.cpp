@@ -994,6 +994,16 @@ void BlockDumper::DumpBTEntry_APFS_Root(const void *key_ptr, size_t key_len, con
 		break;
 	}
 
+	case APFS_TYPE_DIR_STATS:
+		m_os << key << " => ";
+		if (index)
+			DumpBTIndex(val_ptr, val_len);
+		else {
+			const j_dir_stats_val_t *v = reinterpret_cast<const j_dir_stats_val_t*>(val_ptr);
+			m_os << "num_children=" << v->num_children << " total_size=" << v->total_size << " chained_key=" << v->chained_key << " gen_count=" << v->gen_count << endl;
+		}
+		break;
+
 	default:
 		m_os << "KEY TYPE UNKNOWN" << endl;
 
@@ -1367,6 +1377,10 @@ void BlockDumper::Dump_XF(const uint8_t * xf_data, size_t xf_size, bool drec)
 
 			case INO_EXT_TYPE_RDEV:
 				m_os << "[RDEV] " << *reinterpret_cast<const uint32_t *>(data);
+				break;
+
+			case INO_EXT_TYPE_PURGEABLE_FLAGS:
+				m_os << "[PURGEABLE_FLAGS] " << *reinterpret_cast<const uint64_t *>(data);
 				break;
 
 			default:
