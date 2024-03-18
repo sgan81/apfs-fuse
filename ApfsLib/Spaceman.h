@@ -23,6 +23,8 @@
 
 class BlockDumper;
 
+int CompareFreeQueueKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res);
+
 class Spaceman : public Object
 {
 public:

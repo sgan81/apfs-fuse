@@ -176,6 +176,17 @@ int Container::FinishMount()
 	uint32_t i;
 	uint32_t k;
 	int err;
+	Object* eph_obj;
+	BTreeParams fq_btn_params = {};
+	uint32_t type;
+	const void* params;
+
+	fq_btn_params.info.bt_flags = BTREE_SEQUENTIAL_INSERT | BTREE_ALLOW_GHOSTS | BTREE_EPHEMERAL;
+	fq_btn_params.info.bt_node_size = m_nxsb->nx_block_size;
+	fq_btn_params.info.bt_key_size = sizeof(spaceman_free_queue_key_t);
+	fq_btn_params.info.bt_val_size = sizeof(spaceman_free_queue_val_t);
+	fq_btn_params.cmp_func = CompareFreeQueueKey;
+	fq_btn_params.cmp_ctx = 0;
 
 	cpm_data.resize(m_nxsb->nx_block_size);
 	cpm = reinterpret_cast<const checkpoint_map_phys_t*>(cpm_data.data());
@@ -196,12 +207,20 @@ int Container::FinishMount()
 				log_debug("%x %x %x %x fs_oid=%" PRIx64 " oid=%" PRIx64 " paddr=%" PRIx64 "\n",
 					cm.cpm_type, cm.cpm_subtype, cm.cpm_size, cm.cpm_pad, cm.cpm_fs_oid, cm.cpm_oid, cm.cpm_paddr);
 				// For now, load only sm ...
-				if ((cm.cpm_type & OBJECT_TYPE_MASK) == OBJECT_TYPE_SPACEMAN) {
-					Object* dummy;
-					err = oc().getObj(dummy, nullptr, cm.cpm_oid, 0, cm.cpm_type, cm.cpm_subtype, cm.cpm_size, cm.cpm_paddr);
-					if (err)
-						log_debug("Failed to load ephemeral, oid %" PRIx64 ", err %d\n", cm.cpm_oid, err);
-				}
+				// if ((cm.cpm_type & OBJECT_TYPE_MASK) == OBJECT_TYPE_SPACEMAN) {
+				type = cm.cpm_type & OBJECT_TYPE_MASK;
+
+				if (type == OBJECT_TYPE_BTREE || type == OBJECT_TYPE_BTREE_NODE)
+					params = &fq_btn_params;
+				else
+					params = nullptr;
+
+				err = oc().getObj(eph_obj, params, cm.cpm_oid, 0, cm.cpm_type, cm.cpm_subtype, cm.cpm_size, cm.cpm_paddr);
+				if (err)
+					log_debug("Failed to load ephemeral, oid %" PRIx64 ", err %d\n", cm.cpm_oid, err);
+				else
+					eph_obj->release();
+				// }
 			}
 		}
 

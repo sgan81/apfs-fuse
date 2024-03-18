@@ -22,6 +22,20 @@
 #include "ObjCache.h"
 #include "Container.h"
 
+int CompareFreeQueueKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, uint64_t context, int& res)
+{
+	const spaceman_free_queue_key_t* s = reinterpret_cast<const spaceman_free_queue_key_t*>(skey);
+	const spaceman_free_queue_key_t* e = reinterpret_cast<const spaceman_free_queue_key_t*>(ekey);
+
+	if (s->sfqk_xid < e->sfqk_xid) res = -1;
+	else if (s->sfqk_xid > e->sfqk_xid) res = 1;
+	else if (s->sfqk_paddr < e->sfqk_paddr) res = -1;
+	else if (s->sfqk_paddr > e->sfqk_paddr) res = 1;
+	else res = 0;
+
+	return 0;
+}
+
 Spaceman::Spaceman()
 {
 	sm_phys = nullptr;
@@ -69,6 +83,12 @@ void Spaceman::dump(BlockDumper& d)
 	// TODO dump free queue trees
 
 	for (k = 0; k < SFQ_COUNT; k++) {
+		const spaceman_free_queue_t& sfq = sm_phys->sm_fq[k];
+		BTree sfq_tree;
+
+		sfq_tree.Init(&nx, sfq.sfq_tree_oid, 0, OBJ_EPHEMERAL | OBJECT_TYPE_BTREE, OBJECT_TYPE_SPACEMAN_FREE_QUEUE, CompareFreeQueueKey, 0);
+		sfq_tree.dump(d);
+
 		// sm_phys->sm_fq[k].sfq_tree_oid;
 		// ...
 	}
