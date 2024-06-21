@@ -534,7 +534,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	if (veke.hdr.info.flags & 2) {
 		// AES-128. This method is used for FileVault and CoreStorage encrypted
 		// volumes that have been converted to APFS.
-		rc = Rfc3394_KeyUnwrap(vek, veke.wrapped_vek, 0x10, kek, kek_mode, &iv);
+		rc = Rfc3394_KeyUnwrap(vek, veke.wrapped_vek, 0x10, kek, AES::AES_128, &iv);
 
 		if (rc)
 		{
@@ -551,7 +551,7 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	} else {
 		// AES-256. This method is used for wrapping the whole XTS-AES key,
 		// and applies to non-FileVault encrypted APFS volumes.
-		rc = Rfc3394_KeyUnwrap(vek, veke.wrapped_vek, 0x20, kek, kek_mode, &iv);
+		rc = Rfc3394_KeyUnwrap(vek, veke.wrapped_vek, 0x20, kek, AES::AES_256, &iv);
 	}
 
 	if (g_debug & Dbg_Crypto)
