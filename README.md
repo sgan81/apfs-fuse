@@ -35,10 +35,14 @@ Development tools:
 * gcc-c++ (or clang++)
 * git (for cloning)
 
-Example for Linux:
+Example for Debian-based Linux:
 ```
 sudo apt update
 sudo apt install fuse libfuse3-dev bzip2 libbz2-dev cmake gcc-c++ git libattr1-dev zlib1g-dev
+```
+Example for Fedora/Redhat Linux:
+```
+sudo yum install git cmake g++ zlib-devel bzlib-devel bzip2-devel fuse3-devel
 ```
 Of course these commands depend on the Linux distribution.
 
