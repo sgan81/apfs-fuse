@@ -68,6 +68,10 @@ you want do compile using FUSE 2.6, use `ccmake .` to change the option
 ```
 apfs-fuse <device> <mount-directory>
 ```
+### Example usage
+```
+apfs-fuse /dev/sda1 /mnt/sda1
+```
 #### Supported options:
 * `-d n`: If n > 0, enable debug output (see below for details).
 * `-f device`: Specify secondary device for Fusion drive.
