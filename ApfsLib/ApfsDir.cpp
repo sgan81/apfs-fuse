@@ -457,7 +457,20 @@ bool ApfsDir::LookupName(ApfsDir::DirRec& res, uint64_t parent_id, const char* n
 	if (!rc)
 	{
 		if (g_debug & Dbg_Dir)
-			std::cout << "Lookup failed!" << std::endl;
+			std::cout << "Lookup failed! Trying linear scan..." << std::endl;
+
+		std::vector<DirRec> entries;
+		if (ListDirectory(entries, parent_id))
+		{
+			for (const auto &de : entries)
+			{
+				if (de.name == name)
+				{
+					res = de;
+					return true;
+				}
+			}
+		}
 		return false;
 	}
 
