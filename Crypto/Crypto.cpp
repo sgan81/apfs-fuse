@@ -185,25 +185,19 @@ void HMAC_SHA256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t
 	memset(digest, 0, sizeof(digest));
 }
 
-void PBKDF2_HMAC_SHA1(const uint8_t* pw, size_t pw_len, const uint8_t* salt, size_t salt_len, int iterations, uint8_t* derived_key, size_t dk_len)
+void PBKDF2_HMAC_SHA1(const uint8_t* pw, size_t pw_len, const uint8_t* salt, size_t salt_len, uint32_t iterations, uint8_t* derived_key, size_t dk_len)
 {
 	assert(salt_len <= 0x20);
 	assert(dk_len <= 0x20);
 
 	constexpr size_t h_len = 0x14;
-	size_t r;
-	size_t l;
 	uint8_t t[h_len];
 	uint8_t u[h_len];
 	uint8_t s[0x24];
 	size_t k;
-	int j;
+	uint32_t j;
 	uint32_t i;
 	size_t n;
-
-	r = dk_len % h_len;
-	l = dk_len / h_len;
-	if (r > 0) l++;
 
 	for (i = 1, k = 0; k < dk_len; i++, k += h_len)
 	{
@@ -230,7 +224,7 @@ void PBKDF2_HMAC_SHA1(const uint8_t* pw, size_t pw_len, const uint8_t* salt, siz
 	}
 }
 
-void PBKDF2_HMAC_SHA256(const uint8_t* pw, size_t pw_len, const uint8_t* salt, size_t salt_len, int iterations, uint8_t* derived_key, size_t dk_len)
+void PBKDF2_HMAC_SHA256(const uint8_t* pw, size_t pw_len, const uint8_t* salt, size_t salt_len, uint32_t iterations, uint8_t* derived_key, size_t dk_len)
 {
 	// HMAC_SHA256(pw, key_len, salt, salt_len, mac)
 
@@ -247,19 +241,13 @@ void PBKDF2_HMAC_SHA256(const uint8_t* pw, size_t pw_len, const uint8_t* salt, s
 	assert(dk_len <= 0x20);
 
 	constexpr size_t h_len = 0x20;
-	size_t r;
-	size_t l;
 	uint8_t t[h_len];
 	uint8_t u[h_len];
 	uint8_t s[0x14];
 	size_t k;
-	int j;
+	uint32_t j;
 	uint32_t i;
 	size_t n;
-
-	r = dk_len % h_len;
-	l = dk_len / h_len;
-	if (r > 0) l++;
 
 	for (i = 1, k = 0; k < dk_len; i++, k += h_len)
 	{

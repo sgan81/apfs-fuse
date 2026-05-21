@@ -46,7 +46,9 @@ const uint8_t* der_decode_len(size_t& len, const uint8_t* der, const uint8_t* de
 	if (nb & 0x80) {
 		s = 0;
 		nb &= 0x7F;
-		if ((der + nb) >= der_end) return nullptr;
+		// Reject if the length octets don't fit, without forming an
+		// out-of-bounds pointer (der + nb may overflow past der_end).
+		if (nb > static_cast<size_t>(der_end - der)) return nullptr;
 		for (k = 0; k < nb; k++)
 			s = s << 8 | *der++;
 		len = s;
@@ -64,7 +66,11 @@ const uint8_t* der_decode_tl(der_tag_t expected_tag, size_t& len, const uint8_t*
 	if (tag != expected_tag)
 		return nullptr;
 	der = der_decode_len(len, der, der_end);
-	if (der + len > der_end)
+	if (der == nullptr)
+		return nullptr;
+	// Compare as sizes rather than pointers so an out-of-range len can't
+	// produce an out-of-bounds pointer (der + len) and undefined behaviour.
+	if (len > static_cast<size_t>(der_end - der))
 		return nullptr;
 	return der;
 }

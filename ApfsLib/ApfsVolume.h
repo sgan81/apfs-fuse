@@ -54,6 +54,11 @@ public:
 private:
 	static int CompareSnapMetaKey(const void *skey, size_t skey_len, const void *ekey, size_t ekey_len, void *context);
 
+	// Detects whether this volume is encrypted and, if so, obtains the
+	// volume encryption key (prompting for a password if needed) and
+	// initialises m_aes. Returns false only on a wrong password.
+	bool InitVolumeKey();
+
 	ApfsContainer &m_container;
 
 	apfs_superblock_t m_sb;

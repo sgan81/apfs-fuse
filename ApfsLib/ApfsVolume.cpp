@@ -68,31 +68,8 @@ bool ApfsVolume::Init(paddr_t apsb_paddr)
 		return false;
 	}
 
-	if ((m_sb.apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED && !m_container.IsUnencrypted())
-	{
-		uint8_t vek[0x20];
-		std::string str;
-
-		std::cout << "Volume " << m_sb.apfs_volname << " is encrypted." << std::endl;
-
-		if (!m_container.GetVolumeKey(vek, m_sb.apfs_vol_uuid))
-		{
-			if (m_container.GetPasswordHint(str, m_sb.apfs_vol_uuid))
-				std::cout << "Hint: " << str << std::endl;
-
-			std::cout << "Enter Password: ";
-			GetPassword(str);
-
-			if (!m_container.GetVolumeKey(vek, m_sb.apfs_vol_uuid, str.c_str()))
-			{
-				std::cout << "Wrong password!" << std::endl;
-				return false;
-			}
-		}
-
-		m_aes.SetKey(vek, vek + 0x10);
-		m_is_encrypted = true;
-	}
+	if (!InitVolumeKey())
+		return false;
 
 	if (!m_fs_tree.Init(m_sb.apfs_root_tree_oid, m_sb.apfs_o.o_xid, &m_omap))
 		std::cerr << "ERROR: root tree init failed" << std::endl;
@@ -170,31 +147,8 @@ bool ApfsVolume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 	if (m_sb.apfs_magic != APFS_MAGIC)
 		return false;
 
-	if ((m_sb.apfs_fs_flags & 3) != APFS_FS_UNENCRYPTED)
-	{
-		uint8_t vek[0x20];
-		std::string str;
-
-		std::cout << "Volume " << m_sb.apfs_volname << " is encrypted." << std::endl;
-
-		if (!m_container.GetVolumeKey(vek, m_sb.apfs_vol_uuid))
-		{
-			if (m_container.GetPasswordHint(str, m_sb.apfs_vol_uuid))
-				std::cout << "Hint: " << str << std::endl;
-
-			std::cout << "Enter Password: ";
-			GetPassword(str);
-
-			if (!m_container.GetVolumeKey(vek, m_sb.apfs_vol_uuid, str.c_str()))
-			{
-				std::cout << "Wrong password!" << std::endl;
-				return false;
-			}
-		}
-
-		m_aes.SetKey(vek, vek + 0x10);
-		m_is_encrypted = true;
-	}
+	if (!InitVolumeKey())
+		return false;
 
 	if (!m_fs_tree.Init(m_sb.apfs_root_tree_oid, m_sb.apfs_o.o_xid, &m_omap))
 		std::cerr << "WARNING: root tree init failed" << std::endl;
@@ -210,6 +164,44 @@ bool ApfsVolume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 		if (!m_fext_tree.Init(m_sb.apfs_fext_tree_oid, m_sb.apfs_o.o_xid))
 			std::cerr << "ERROR: fext tree init failed" << std::endl;
 	}
+
+	return true;
+}
+
+bool ApfsVolume::InitVolumeKey()
+{
+	// Software encryption in APFS is per-volume. There is nothing to do if
+	// this volume is not encrypted, or if the container keybag itself is
+	// stored unencrypted (in which case no volume key can be derived).
+	if ((m_sb.apfs_fs_flags & 3) == APFS_FS_UNENCRYPTED || m_container.IsUnencrypted())
+		return true;
+
+	uint8_t vek[0x20];
+	std::string str;
+
+	std::cout << "Volume " << m_sb.apfs_volname << " is encrypted." << std::endl;
+
+	if (!m_container.GetVolumeKey(vek, m_sb.apfs_vol_uuid))
+	{
+		if (m_container.GetPasswordHint(str, m_sb.apfs_vol_uuid))
+			std::cout << "Hint: " << str << std::endl;
+
+		std::cout << "Enter Password: ";
+		GetPassword(str);
+
+		if (!m_container.GetVolumeKey(vek, m_sb.apfs_vol_uuid, str.c_str()))
+		{
+			std::cout << "Wrong password!" << std::endl;
+			return false;
+		}
+	}
+
+	m_aes.SetKey(vek, vek + 0x10);
+	m_is_encrypted = true;
+
+	// The key has been copied into the AES round keys; don't keep a second
+	// plaintext copy on the stack.
+	memset(vek, 0, sizeof(vek));
 
 	return true;
 }

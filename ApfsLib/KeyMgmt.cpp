@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -59,14 +60,24 @@ Keybag::~Keybag()
 
 bool Keybag::Init(const media_keybag_t * mk, size_t size)
 {
-	(void)size;
+	if (size < sizeof(media_keybag_t))
+		return false;
 
 	if (mk->mk_locker.kl_version != 2)
 		return false;
 
+	// kl_nbytes is read from disk and cannot be trusted: it must fit inside
+	// the buffer that was actually read, and be large enough to contain the
+	// locker header itself. Otherwise the assign() below reads out of bounds.
+	const size_t avail = size - offsetof(media_keybag_t, mk_locker);
+	const uint32_t nbytes = mk->mk_locker.kl_nbytes;
+
+	if (nbytes < sizeof(kb_locker_t) || nbytes > avail)
+		return false;
+
 	const uint8_t *data = reinterpret_cast<const uint8_t *>(&mk->mk_locker);
 
-	m_data.assign(data, data + mk->mk_locker.kl_nbytes);
+	m_data.assign(data, data + nbytes);
 	m_kl = reinterpret_cast<kb_locker_t *>(m_data.data());
 
 	return true;
@@ -88,47 +99,49 @@ const keybag_entry_t * Keybag::GetKey(size_t nr)
 	if (nr >= m_kl->kl_nkeys)
 		return nullptr;
 
-	const uint8_t *ptr;
+	const uint8_t *ptr = m_kl->kl_entries;
+	const uint8_t *end = m_data.data() + m_data.size();
 	const keybag_entry_t *kb;
 	size_t len;
 	size_t k;
 
-	ptr = m_kl->kl_entries;
-
-	for (k = 0; k < nr; k++)
+	// Walk the variable-length entry list, checking at every step that both
+	// the fixed entry header and its key data stay inside the buffer. A
+	// corrupt keybag must not be able to make us read past m_data.
+	for (k = 0; k <= nr; k++)
 	{
+		if (static_cast<size_t>(end - ptr) < sizeof(keybag_entry_t))
+			return nullptr;
+
 		kb = reinterpret_cast<const keybag_entry_t *>(ptr);
 
-		len = (kb->ke_keylen + sizeof(keybag_entry_t) + 0x0F) & ~0xF;
+		len = (kb->ke_keylen + sizeof(keybag_entry_t) + 0x0F) & ~static_cast<size_t>(0xF);
+		if (len > static_cast<size_t>(end - ptr))
+			return nullptr;
+
+		if (k == nr)
+			return kb;
+
 		ptr += len;
 	}
 
-	kb = reinterpret_cast<const keybag_entry_t *>(ptr);
-
-	return kb;
+	return nullptr;
 }
 
 const keybag_entry_t * Keybag::FindKey(const apfs_uuid_t & uuid, uint16_t type)
 {
-	if (!m_kl)
-		return nullptr;
+	const size_t cnt = GetKeyCnt();
 
-	const uint8_t *ptr;
-	const keybag_entry_t *kb;
-	size_t len;
-	size_t k;
-
-	ptr = m_kl->kl_entries;
-
-	for (k = 0; k < m_kl->kl_nkeys; k++)
+	// GetKey() performs all bounds checking; reuse it so the lookup can't
+	// walk off the end of a malformed keybag.
+	for (size_t k = 0; k < cnt; k++)
 	{
-		kb = reinterpret_cast<const keybag_entry_t *>(ptr);
+		const keybag_entry_t *kb = GetKey(k);
+		if (!kb)
+			break;
 
 		if (memcmp(uuid, kb->ke_uuid, sizeof(apfs_uuid_t)) == 0 && kb->ke_tag == type)
 			return kb;
-
-		len = (kb->ke_keylen + sizeof(keybag_entry_t) + 0x0F) & ~0xF;
-		ptr += len;
 	}
 
 	return nullptr;
@@ -145,7 +158,6 @@ void Keybag::dump(std::ostream &st, Keybag *cbag, const apfs_uuid_t &vuuid)
 	size_t s;
 	size_t k;
 	const keybag_entry_t *ke;
-	bagdata_t bd;
 	const char *typestr;
 
 	st << "Dumping Keybag (" << (cbag ? "recs" : "keys") << ")" << endl;
@@ -395,7 +407,7 @@ bool KeyManager::Init(uint64_t block, uint64_t blockcnt, const apfs_uuid_t& cont
 {
 	bool rc;
 
-	rc = LoadKeybag(m_container_bag, 0x6B657973, block, blockcnt, container_uuid);
+	rc = LoadKeybag(m_container_bag, APFS_KEYBAG_OBJ, block, blockcnt, container_uuid);
 	if (rc)
 		memcpy(m_container_uuid, container_uuid, sizeof(apfs_uuid_t));
 	else
@@ -435,6 +447,11 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 {
 	const keybag_entry_t *ke_recs;
 
+	// The parameter defaults to nullptr; treat that as an empty passphrase
+	// so strlen() below can't be called on a null pointer.
+	if (password == nullptr)
+		password = "";
+
 	if (g_debug & Dbg_Crypto)
 	{
 		std::cout.setf(std::ios::hex | std::ios::uppercase);
@@ -466,7 +483,6 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	bool rc = false;
 	const keybag_entry_t *ke_kek;
 	const keybag_entry_t *ke_vek;
-	bagdata_t bd;
 	kek_entry_t keke;
 	vek_entry_t veke;
 	AES::Mode kek_mode = AES::AES_256;
@@ -518,48 +534,55 @@ bool KeyManager::GetVolumeKey(uint8_t* vek, const apfs_uuid_t& volume_uuid, cons
 	{
 		if (g_debug & Dbg_Crypto)
 			std::cout << "Password doesn't work for any key." << std::endl;
+		memset(dk, 0, sizeof(dk));
+		memset(kek, 0, sizeof(kek));
 		return false;
 	}
+
+	rc = false;
 
 	ke_vek = m_container_bag.FindKey(volume_uuid, KB_TAG_VOLUME_KEY);
-	if (!ke_vek)
-		return false;
 
-	if (!DecodeVEK(veke, ke_vek->ke_keydata, ke_vek->ke_keydata + ke_vek->ke_keylen))
-		return false;
-
-	memset(vek, 0, 0x20);
-
-	// TODO 1
-	if (veke.hdr.info.flags & 2) {
-		// AES-128. This method is used for FileVault and CoreStorage encrypted
-		// volumes that have been converted to APFS.
-		rc = Rfc3394_KeyUnwrap(vek, veke.wrapped_vek, 0x10, kek, kek_mode, &iv);
-
-		if (rc)
-		{
-			SHA256 sha;
-			uint8_t sha_result[0x20];
-			sha.Init();
-
-			// Use (VEK || vek_blob.uuid), then SHA256, then take the first 16 bytes
-			sha.Update(vek, 0x10);
-			sha.Update(veke.hdr.uuid, 0x10);
-			sha.Final(sha_result);
-			memcpy(vek + 0x10, sha_result, 0x10);
-		}
-	} else {
-		// AES-256. This method is used for wrapping the whole XTS-AES key,
-		// and applies to non-FileVault encrypted APFS volumes.
-		rc = Rfc3394_KeyUnwrap(vek, veke.wrapped_vek, 0x20, kek, kek_mode, &iv);
-	}
-
-	if (g_debug & Dbg_Crypto)
+	if (ke_vek && DecodeVEK(veke, ke_vek->ke_keydata, ke_vek->ke_keydata + ke_vek->ke_keylen))
 	{
-		std::cout << "VEK Wrpd: " << hexstr(veke.wrapped_vek, 0x28) << std::endl;
-		std::cout << "VEK     : " << hexstr(vek, 0x20) << std::endl;
-		std::cout << "VEK IV  : " << std::setw(16) << iv << std::endl;
+		memset(vek, 0, 0x20);
+
+		// TODO 1
+		if (veke.hdr.info.flags & 2) {
+			// AES-128. This method is used for FileVault and CoreStorage encrypted
+			// volumes that have been converted to APFS.
+			rc = Rfc3394_KeyUnwrap(vek, veke.wrapped_vek, 0x10, kek, kek_mode, &iv);
+
+			if (rc)
+			{
+				SHA256 sha;
+				uint8_t sha_result[0x20];
+				sha.Init();
+
+				// Use (VEK || vek_blob.uuid), then SHA256, then take the first 16 bytes
+				sha.Update(vek, 0x10);
+				sha.Update(veke.hdr.uuid, 0x10);
+				sha.Final(sha_result);
+				memcpy(vek + 0x10, sha_result, 0x10);
+			}
+		} else {
+			// AES-256. This method is used for wrapping the whole XTS-AES key,
+			// and applies to non-FileVault encrypted APFS volumes.
+			rc = Rfc3394_KeyUnwrap(vek, veke.wrapped_vek, 0x20, kek, kek_mode, &iv);
+		}
+
+		if (g_debug & Dbg_Crypto)
+		{
+			std::cout << "VEK Wrpd: " << hexstr(veke.wrapped_vek, 0x28) << std::endl;
+			std::cout << "VEK     : " << hexstr(vek, 0x20) << std::endl;
+			std::cout << "VEK IV  : " << std::setw(16) << iv << std::endl;
+		}
 	}
+
+	// dk (PBKDF2 output) and kek are key material derived from the user's
+	// password. Don't leave them lying around on the stack after use.
+	memset(dk, 0, sizeof(dk));
+	memset(kek, 0, sizeof(kek));
 
 	return rc;
 }
@@ -609,6 +632,10 @@ void KeyManager::dump(std::ostream &st)
 
 bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t blockcnt, const apfs_uuid_t& uuid)
 {
+	// A keybag only ever spans a handful of blocks. Reject an absurd block
+	// count from a corrupt prange before it becomes a huge allocation.
+	constexpr uint64_t max_keybag_blocks = 64;
+
 	std::vector<uint8_t> data;
 	size_t k;
 	const size_t blocksize = m_container.GetBlocksize();
@@ -616,18 +643,36 @@ bool KeyManager::LoadKeybag(Keybag& bag, uint32_t type, uint64_t block, uint64_t
 	if (g_debug & Dbg_Crypto)
 		std::cout << "starting LoadKeybag @ " << std::hex << block << std::endl;
 
+	if (blockcnt == 0 || blockcnt > max_keybag_blocks)
+	{
+		if (g_debug & Dbg_Errors)
+			std::cout << "Keybag: invalid block count " << blockcnt << std::endl;
+		return false;
+	}
+
 	data.resize(blockcnt * blocksize);
 	const media_keybag_t *mk = reinterpret_cast<const media_keybag_t *>(data.data());
 
-	m_container.ReadBlocks(data.data(), block, blockcnt);
+	if (!m_container.ReadBlocks(data.data(), block, blockcnt))
+	{
+		if (g_debug & Dbg_Errors)
+			std::cout << "Keybag: failed to read blocks at " << std::hex << block << std::endl;
+		return false;
+	}
+
 	if (mk->mk_obj.o_type == type)
-		m_is_unencrypted = true;
+	{
+		// Only the container keybag tells us whether the container is stored
+		// unencrypted; a per-volume ('recs') keybag must not set this flag.
+		if (type == APFS_KEYBAG_OBJ)
+			m_is_unencrypted = true;
+	}
 	else
 		DecryptBlocks(data.data(), block, blockcnt, uuid);
 
 	for (k = 0; k < blockcnt; k++)
 	{
-		if (!VerifyBlock(data.data(), blockcnt * blocksize))
+		if (!VerifyBlock(data.data() + k * blocksize, blocksize))
 			return false;
 	}
 
