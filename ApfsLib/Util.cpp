@@ -402,9 +402,13 @@ bool GetPassword(std::string &pw)
 	struct termios told, tnew;
 	FILE *stream = stdin;
 
-	/* Turn echoing off and fail if we can’t. */
+	/* A pipe has no terminal settings. This permits callers to supply a
+	 * passphrase over a private stdin pipe without exposing it in argv. */
 	if (tcgetattr (fileno (stream), &told) != 0)
-		return false;
+	{
+		std::getline(std::cin, pw);
+		return !std::cin.fail();
+	}
 	tnew = told;
 	tnew.c_lflag &= ~ECHO;
 	if (tcsetattr (fileno (stream), TCSAFLUSH, &tnew) != 0)
