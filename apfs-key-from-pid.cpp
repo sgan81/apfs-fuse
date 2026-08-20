@@ -164,8 +164,9 @@ static bool load_regions(pid_t pid, std::vector<Region> &regions)
 
 int main(int argc, char **argv)
 {
-    if (argc < 4 || argc > 5) {
-        std::cerr << "usage: apfs-key-from-pid PID DEVICE VOLUME_INDEX [MAX_CANDIDATES]\n";
+    if (argc < 4 || argc > 7) {
+        std::cerr << "usage: apfs-key-from-pid PID DEVICE VOLUME_INDEX "
+                     "[MAX_CANDIDATES [START_INDEX [COUNT]]]\n";
         return EINVAL;
     }
 
@@ -174,6 +175,13 @@ int main(int argc, char **argv)
     size_t max_candidates = (argc == 5)
                           ? static_cast<size_t>(std::strtoull(argv[4], nullptr, 10))
                           : 5000;
+    if (argc >= 6)
+        max_candidates = static_cast<size_t>(std::strtoull(argv[4], nullptr, 10));
+    size_t start_index = (argc >= 6)
+                       ? static_cast<size_t>(std::strtoull(argv[5], nullptr, 10)) : 0;
+    size_t requested_count = (argc >= 7)
+                           ? static_cast<size_t>(std::strtoull(argv[6], nullptr, 10))
+                           : max_candidates;
     if (pid <= 0 || volume_index >= NX_MAX_FILE_SYSTEMS || max_candidates == 0)
         return EINVAL;
 
@@ -218,8 +226,10 @@ int main(int argc, char **argv)
               });
     if (candidates.size() > max_candidates)
         candidates.resize(max_candidates);
-    std::cerr << "testing " << candidates.size()
-              << " in-memory passphrase candidates\n";
+    size_t end_index = std::min(candidates.size(), start_index + requested_count);
+    if (start_index > end_index) start_index = end_index;
+    std::cerr << "testing candidate range " << start_index << ".." << end_index
+              << " of " << candidates.size() << " ranked strings\n";
 
     Device *device = Device::OpenDevice(argv[2]);
     if (!device) return EIO;
@@ -233,7 +243,7 @@ int main(int argc, char **argv)
         std::cerr << "could not initialize the selected APFS volume\n";
         result = EIO;
     } else {
-        for (size_t i = 0; i < candidates.size(); i++) {
+        for (size_t i = start_index; i < end_index; i++) {
             if (container.GetVolumeKey(vek, volume_info.apfs_vol_uuid,
                                        candidates[i].text.c_str())) {
                 std::cerr << "matched an in-memory passphrase candidate\n";
@@ -242,8 +252,9 @@ int main(int argc, char **argv)
                 result = std::cout.good() ? 0 : EIO;
                 break;
             }
-            if ((i + 1) % 250 == 0)
-                std::cerr << "tested " << (i + 1) << " candidates\n";
+            if ((i - start_index + 1) % 250 == 0)
+                std::cerr << "range " << start_index << ": tested "
+                          << (i - start_index + 1) << " candidates\n";
         }
     }
 
