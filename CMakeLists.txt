@@ -137,6 +137,18 @@ endif()
 add_executable(apfsutil ApfsUtil/ApfsUtil.cpp)
 target_link_libraries(apfsutil apfs)
 
+add_executable(apfs-xid-list apfs-xid-list.cpp)
+target_link_libraries(apfs-xid-list apfs)
+
+add_executable(apfs-key-export apfs-key-export.cpp)
+target_link_libraries(apfs-key-export apfs)
+
+add_executable(apfs-key-from-pid apfs-key-from-pid.cpp)
+target_link_libraries(apfs-key-from-pid apfs)
+
+add_executable(apfs-vek-from-pid apfs-vek-from-pid.cpp)
+target_link_libraries(apfs-vek-from-pid apfs)
+
 include(GNUInstallDirs)
 install(TARGETS apfs-fuse RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(TARGETS apfsutil RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
