@@ -39,6 +39,7 @@
 #endif
 
 #include <getopt.h>
+#include <unistd.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -56,6 +57,7 @@
 #include <cstddef>
 
 #include <iostream>
+#include <fstream>
 
 static_assert(sizeof(fuse_ino_t) == 8, "Sorry, on 32-bit systems, you need to use FUSE-3.");
 
@@ -642,6 +644,9 @@ void usage(const char *name)
 	std::cout << "-v volume-id  : Specify number of volume to be mounted." << std::endl;
 	std::cout << "-r passphrase : Specify volume passphrase. The driver will ask for it if it is" << std::endl;
 	std::cout << "                needed and hasn't been specified here." << std::endl;
+	std::cout << "-R path       : Read volume passphrase from the first line of the given file" << std::endl;
+	std::cout << "                instead of the command line (avoids it showing up in ps/argv)." << std::endl;
+	std::cout << "                The file is deleted immediately after being read." << std::endl;
 	std::cout << "-s offset     : Specify offset to the beginning of the container." << std::endl;
 	std::cout << "-p partition  : Specify partition id containing the container." << std::endl;
 	std::cout << "-l            : Allow driver to return potentially corrupt data instead of" << std::endl;
@@ -757,7 +762,7 @@ int main(int argc, char *argv[])
 	g_set_uid = false;
 	g_set_gid = false;
 
-	while ((opt = getopt(argc, argv, "d:f:o:p:v:r:s:l")) != -1)
+	while ((opt = getopt(argc, argv, "d:f:o:p:v:r:R:s:l")) != -1)
 	{
 		switch (opt)
 		{
@@ -779,6 +784,16 @@ int main(int argc, char *argv[])
 			case 'r':
 				g_password = optarg;
 				break;
+			case 'R':
+			{
+				std::ifstream pwfile(optarg);
+				if (pwfile.is_open()) {
+					std::getline(pwfile, g_password);
+					pwfile.close();
+				}
+				::unlink(optarg);
+				break;
+			}
 			case 's':
 				main_offset = strtoul(optarg, nullptr, 10);
 				break;
