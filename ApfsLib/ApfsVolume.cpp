@@ -46,6 +46,8 @@ ApfsVolume::~ApfsVolume()
 
 bool ApfsVolume::Init(paddr_t apsb_paddr)
 {
+	if (!m_container.CanAccessVolumes())
+		return false;
 	std::vector<uint8_t> blk;
 
 	m_apsb_paddr = apsb_paddr;
@@ -114,6 +116,8 @@ bool ApfsVolume::Init(paddr_t apsb_paddr)
 
 bool ApfsVolume::MountSnapshot(paddr_t apsb_paddr, xid_t snap_xid)
 {
+	if (!m_container.CanAccessVolumes())
+		return false;
 	BTree snap_btree(m_container);
 	BTreeEntry snap_entry;
 	j_snap_metadata_key_t snap_key;
@@ -345,6 +349,8 @@ void ApfsVolume::dump(BlockDumper& bd)
 
 bool ApfsVolume::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt, uint64_t xts_tweak)
 {
+	if (!m_container.CanAccessVolumes())
+		return false;
 	constexpr int encryption_block_size = 0x200;
 
 	if (!m_container.ReadBlocks(data, paddr, blkcnt))

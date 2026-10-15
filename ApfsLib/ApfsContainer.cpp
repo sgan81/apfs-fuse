@@ -51,8 +51,10 @@ ApfsContainer::~ApfsContainer()
 {
 }
 
-bool ApfsContainer::Init(xid_t req_xid)
+bool ApfsContainer::Init(xid_t req_xid, VolumeAccessMode access_mode)
 {
+	m_initialized = false;
+	m_access_mode = access_mode;
 	std::vector<uint8_t> blk;
 
 	blk.resize(0x1000);
@@ -182,7 +184,7 @@ bool ApfsContainer::Init(xid_t req_xid)
 
 	// m_sb.nx_spaceman_oid
 
-	if ((m_nx.nx_keylocker.pr_start_addr != 0) && (m_nx.nx_keylocker.pr_block_count != 0))
+	if (access_mode == VolumeAccessMode::Full && (m_nx.nx_keylocker.pr_start_addr != 0) && (m_nx.nx_keylocker.pr_block_count != 0))
 	{
 		if (!m_keymgr.Init(m_nx.nx_keylocker.pr_start_addr, m_nx.nx_keylocker.pr_block_count, m_nx.nx_uuid))
 		{
@@ -191,25 +193,21 @@ bool ApfsContainer::Init(xid_t req_xid)
 		}
 	}
 
+	m_initialized = true;
 	return true;
 }
 
 ApfsVolume *ApfsContainer::GetVolume(unsigned int fsid, const std::string &passphrase, xid_t snap_xid)
 {
 	ApfsVolume *vol = nullptr;
-	oid_t oid;
+	oid_t oid = GetVolumeOid(fsid);
 	omap_res_t omr;
 	bool rc;
 
-	if (fsid >= 100)
+	if (oid == 0 || !CanAccessVolumes())
 		return nullptr;
 
 	m_passphrase = passphrase;
-
-	oid = m_nx.nx_fs_oid[fsid];
-
-	if (oid == 0)
-		return nullptr;
 
 	if (!m_omap.Lookup(omr, oid, m_nx.nx_o.o_xid))
 		return nullptr;
@@ -234,16 +232,23 @@ ApfsVolume *ApfsContainer::GetVolume(unsigned int fsid, const std::string &passp
 	return vol;
 }
 
+bool ApfsContainer::HasVolume(unsigned int fsid) const
+{
+	return GetVolumeOid(fsid) != 0;
+}
+
+oid_t ApfsContainer::GetVolumeOid(unsigned int fsid) const
+{
+	if (!m_initialized || fsid >= NX_MAX_FILE_SYSTEMS)
+		return 0;
+	return m_nx.nx_fs_oid[fsid];
+}
+
 bool ApfsContainer::GetVolumeInfo(unsigned int fsid, apfs_superblock_t& apsb)
 {
-	oid_t oid;
+	oid_t oid = GetVolumeOid(fsid);
 	omap_res_t omr;
 	std::vector<uint8_t> apsb_raw;
-
-	if (fsid >= NX_MAX_FILE_SYSTEMS)
-		return false;
-
-	oid = m_nx.nx_fs_oid[fsid];
 
 	if (oid == 0)
 		return false;
@@ -261,7 +266,8 @@ bool ApfsContainer::GetVolumeInfo(unsigned int fsid, apfs_superblock_t& apsb)
 
 	memcpy(&apsb, apsb_raw.data(), sizeof(apfs_superblock_t));
 
-	return true;
+	return apsb.apfs_magic == APFS_MAGIC &&
+		(apsb.apfs_o.o_type & OBJECT_TYPE_MASK) == OBJECT_TYPE_FS;
 }
 
 
@@ -312,7 +318,7 @@ bool ApfsContainer::ReadAndVerifyHeaderBlock(uint8_t * data, paddr_t paddr) cons
 
 bool ApfsContainer::GetVolumeKey(uint8_t *key, const apfs_uuid_t & vol_uuid, const char *password)
 {
-	if (!m_keymgr.IsValid())
+	if (!CanAccessVolumes() || !m_keymgr.IsValid())
 		return false;
 
 	if (password)
@@ -330,11 +336,15 @@ bool ApfsContainer::GetVolumeKey(uint8_t *key, const apfs_uuid_t & vol_uuid, con
 
 bool ApfsContainer::GetPasswordHint(std::string & hint, const apfs_uuid_t & vol_uuid)
 {
+	if (!CanAccessVolumes())
+		return false;
 	return m_keymgr.GetPasswordHint(hint, vol_uuid);
 }
 
 void ApfsContainer::dump(BlockDumper& bd)
 {
+	if (!CanAccessVolumes())
+		return;
 	std::vector<uint8_t> blk;
 	paddr_t paddr;
 	uint32_t index;

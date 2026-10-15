@@ -38,7 +38,7 @@ Device::~Device()
 {
 }
 
-Device * Device::OpenDevice(const char * name)
+Device * Device::OpenDevice(const char * name, ImageHandling image_handling)
 {
 	Device *dev = nullptr;
 	bool rc;
@@ -61,7 +61,7 @@ Device * Device::OpenDevice(const char * name)
 #endif
 
 	ext = strrchr(name, '.');
-	if (ext)
+	if (ext && image_handling == ImageHandling::ByExtension)
 	{
 		if (!strcmp(ext, ".dmg"))
 		{

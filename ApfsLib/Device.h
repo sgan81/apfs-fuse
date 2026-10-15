@@ -38,7 +38,8 @@ public:
 	unsigned int GetSectorSize() const { return m_sector_size; }
 	void SetSectorSize(unsigned int size) { m_sector_size = size; }
 
-	static Device *OpenDevice(const char *name);
+	enum class ImageHandling { ByExtension, Raw };
+	static Device *OpenDevice(const char *name, ImageHandling image_handling = ImageHandling::ByExtension);
 
 private:
 	unsigned int m_sector_size;

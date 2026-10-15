@@ -39,7 +39,10 @@ public:
 	ApfsContainer(Device *disk_main, uint64_t main_start, uint64_t main_len, Device *disk_tier2 = 0, uint64_t tier2_start = 0, uint64_t tier2_len = 0);
 	~ApfsContainer();
 
-	bool Init(xid_t req_xid = 0);
+	enum class VolumeAccessMode { Full, MetadataOnly };
+	bool Init(xid_t req_xid = 0, VolumeAccessMode access_mode = VolumeAccessMode::Full);
+	bool CanAccessVolumes() const { return m_initialized && m_access_mode == VolumeAccessMode::Full; }
+	bool HasVolume(unsigned int fsid) const;
 
 	ApfsVolume *GetVolume(unsigned int fsid, const std::string &passphrase = std::string(), xid_t snap_xid = 0);
 	bool GetVolumeInfo(unsigned int fsid, apfs_superblock_t &apsb);
@@ -53,11 +56,16 @@ public:
 
 	bool GetVolumeKey(uint8_t *key, const apfs_uuid_t &vol_uuid, const char *password = nullptr);
 	bool GetPasswordHint(std::string &hint, const apfs_uuid_t &vol_uuid);
-	bool IsUnencrypted() const { return m_keymgr.IsUnencrypted(); }
+	bool IsUnencrypted() const { return CanAccessVolumes() && m_keymgr.IsUnencrypted(); }
 
 	void dump(BlockDumper& bd);
 
 private:
+	oid_t GetVolumeOid(unsigned int fsid) const;
+
+	VolumeAccessMode m_access_mode = VolumeAccessMode::Full;
+	bool m_initialized = false;
+
 	Device *m_main_disk;
 	const uint64_t m_main_part_start;
 	const uint64_t m_main_part_len;
