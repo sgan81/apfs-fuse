@@ -137,6 +137,13 @@ endif()
 add_executable(apfsutil ApfsUtil/ApfsUtil.cpp)
 target_link_libraries(apfsutil apfs)
 
+include(CTest)
+if (BUILD_TESTING)
+	add_executable(apfs-btree-iterator-tests tests/BTreeIterator.cpp)
+	target_link_libraries(apfs-btree-iterator-tests apfs)
+	add_test(NAME btree-iterator COMMAND apfs-btree-iterator-tests)
+endif()
+
 include(GNUInstallDirs)
 install(TARGETS apfs-fuse RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(TARGETS apfsutil RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

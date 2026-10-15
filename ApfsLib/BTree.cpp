@@ -329,6 +329,9 @@ bool BTree::GetIterator(BTreeIterator& it, const void* key, size_t key_size, BTC
 
 bool BTree::GetIteratorBegin(BTreeIterator& it)
 {
+	it.reset();
+	if (!m_root_node)
+		return false;
 	oid_t oid;
 
 	std::shared_ptr<BTreeNode> node(m_root_node);
@@ -346,6 +349,8 @@ bool BTree::GetIteratorBegin(BTreeIterator& it)
 			oid = *reinterpret_cast<const oid_t *>(e.val);
 		}
 		node = GetNode(oid, node, 0);
+		if (!node)
+			return false;
 	}
 
 	it.Setup(this, node, 0);
@@ -665,6 +670,7 @@ BTreeIterator::~BTreeIterator()
 
 void BTreeIterator::Setup(BTree* tree, const std::shared_ptr<BTreeNode>& node, uint32_t index)
 {
+	m_error = false;
 	m_tree = tree;
 	m_node = node;
 	m_index = index;
@@ -693,6 +699,7 @@ bool BTreeIterator::next()
 
 void BTreeIterator::reset()
 {
+	m_error = false;
 	m_tree = nullptr;
 	m_node.reset();
 	m_index = 0;
@@ -735,7 +742,10 @@ std::shared_ptr<BTreeNode> BTreeIterator::next_node()
 		return std::shared_ptr<BTreeNode>();
 
 	while (node->level() > 0) {
-		node->GetEntry(e, pidx);
+		if (!node->GetEntry(e, pidx)) {
+			m_error = true;
+			return std::shared_ptr<BTreeNode>();
+		}
 
 		if (node->flags() & BTNODE_HASHED) {
 			const btn_index_node_val_t *binv = reinterpret_cast<const btn_index_node_val_t *>(e.val);
@@ -749,8 +759,11 @@ std::shared_ptr<BTreeNode> BTreeIterator::next_node()
 #endif
 		node = m_tree->GetNode(oid, node, pidx);
 
-		if (!node)
+		if (!node) {
 			std::cerr << "Failed to load btree node oid " << oid << std::endl;
+			m_error = true;
+			return node;
+		}
 
 		pidx = 0;
 	}
