@@ -195,6 +195,7 @@ public:
 
 	bool next();
 	void reset();
+	bool HasError() const { return m_error; }
 
 	bool GetEntry(BTreeEntry &res) const;
 
@@ -204,6 +205,7 @@ private:
 	BTree *m_tree;
 	std::shared_ptr<BTreeNode> m_node;
 	uint32_t m_index;
+	bool m_error = false;
 
 	std::shared_ptr<BTreeNode> next_node();
 };

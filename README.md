@@ -207,8 +207,18 @@ This tool was the one I originally used for reverse engineering. It will scan th
 correct checksums (and thus being part of some management structure), and then it will try to dump them. This will
 take a very long time to run on big volumes, and create huge log files. So using the quick version will be much faster.
 #### apfsutil
+
+`apfsutil` lists volumes and snapshots in an APFS container:
+
 ```
 apfsutil <device>
 ```
-This is a new tool that just displays some information from a container. For now, it lists the volumes a container
-contains, and snapshots if there are some. This tool might be extended in the future.
+
+Exit statuses:
+
+- `0`: Success.
+- `1`: Cannot open the device or initialize the container.
+- `2`: Missing device argument.
+- `3`: Incomplete results because volume or snapshot metadata is unreadable.
+
+For incomplete results, the tool reports errors and continues with the remaining volumes.

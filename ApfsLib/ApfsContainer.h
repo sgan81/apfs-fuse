@@ -40,6 +40,7 @@ public:
 	~ApfsContainer();
 
 	bool Init(xid_t req_xid = 0);
+	bool HasVolume(unsigned int fsid) const;
 
 	ApfsVolume *GetVolume(unsigned int fsid, const std::string &passphrase = std::string(), xid_t snap_xid = 0);
 	bool GetVolumeInfo(unsigned int fsid, apfs_superblock_t &apsb);
@@ -58,6 +59,10 @@ public:
 	void dump(BlockDumper& bd);
 
 private:
+	oid_t GetVolumeOid(unsigned int fsid) const;
+
+	bool m_initialized = false;
+
 	Device *m_main_disk;
 	const uint64_t m_main_part_start;
 	const uint64_t m_main_part_len;

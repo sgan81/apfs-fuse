@@ -2,8 +2,39 @@
 #include <ApfsLib/Device.h>
 #include <ApfsLib/GptPartitionMap.h>
 
-#include <cerrno>
 #include <cinttypes>
+#include <cstdio>
+
+enum ExitStatus { Success = 0, Failure = 1, ArgumentError = 2, PartialInventory = 3 };
+
+static bool print_snapshots(ApfsContainer &container, const apfs_superblock_t &apsb)
+{
+	BTree snap_tree(container);
+	BTreeIterator it;
+	BTreeEntry bte;
+	const j_snap_metadata_key_t *sme_k;
+	const j_snap_metadata_val_t *sme_v;
+
+	if (!snap_tree.Init(apsb.apfs_snap_meta_tree_oid, apsb.apfs_o.o_xid) || !snap_tree.GetIteratorBegin(it))
+		return false;
+
+	for (;;) {
+		if (!it.GetEntry(bte)) break;
+		if (bte.key_len < sizeof(j_snap_metadata_key_t))
+			return false;
+		sme_k = reinterpret_cast<const j_snap_metadata_key_t*>(bte.key);
+		if ((sme_k->hdr.obj_id_and_type >> OBJ_TYPE_SHIFT) != APFS_TYPE_SNAP_METADATA) break;
+		if (!bte.val || bte.val_len < sizeof(j_snap_metadata_val_t))
+			return false;
+		sme_v = reinterpret_cast<const j_snap_metadata_val_t*>(bte.val);
+		if (sme_v->name_len == 0 || sme_v->name_len > bte.val_len - sizeof(j_snap_metadata_val_t) ||
+			sme_v->name[sme_v->name_len - 1] != 0)
+			return false;
+		printf("    %" PRIu64 " : '%s'\n", sme_k->hdr.obj_id_and_type & OBJ_ID_MASK, sme_v->name);
+		if (!it.next()) break;
+	}
+	return !it.HasError();
+}
 
 static void print_apfs_uuid(const apfs_uuid_t &uuid)
 {
@@ -60,13 +91,14 @@ int main(int argc, char *argv[])
 	uint64_t offset;
 	uint64_t size;
 	apfs_superblock_t apsb;
+	int status = Success;
 
 	g_debug = 0;
 
 	if (argc < 2)
 	{
 		printf("Syntax: %s [device]\n", argv[0]);
-		return EINVAL;
+		return ArgumentError;
 	}
 
 	devname = argv[1];
@@ -95,8 +127,13 @@ int main(int argc, char *argv[])
 		if (container->Init()) {
 			// printf("Listing volumes:\n");
 			for (int k = 0; k < NX_MAX_FILE_SYSTEMS; k++) {
-				if (!container->GetVolumeInfo(k, apsb))
+				if (!container->HasVolume(k))
 					continue;
+				if (!container->GetVolumeInfo(k, apsb)) {
+					fprintf(stderr, "Volume %d: metadata unavailable or unreadable.\n", k);
+					status = PartialInventory;
+					continue;
+				}
 				printf("Volume %d ", k);
 				print_apfs_uuid(apsb.apfs_vol_uuid);
 				printf("\n");
@@ -105,7 +142,7 @@ int main(int argc, char *argv[])
 				printf("Role:               ");
 				print_role(apsb.apfs_role);
 				printf("\n");
-				printf("Name:               %s", apsb.apfs_volname);
+				printf("Name:               %.*s", static_cast<int>(sizeof(apsb.apfs_volname)), apsb.apfs_volname);
 				if (apsb.apfs_incompatible_features & APFS_INCOMPAT_CASE_INSENSITIVE)
 					printf(" (Case-insensitive)\n");
 				else if (apsb.apfs_incompatible_features & APFS_INCOMPAT_NORMALIZATION_INSENSITIVE)
@@ -116,30 +153,18 @@ int main(int argc, char *argv[])
 				printf("FileVault:          ");
 				print_filevault(apsb.apfs_fs_flags & APFS_FS_CRYPTOFLAGS);
 				printf("\n");
-				if (apsb.apfs_snap_meta_tree_oid) {
+				if (apsb.apfs_snap_meta_tree_oid || apsb.apfs_num_snapshots) {
 					printf("Snapshots:\n");
-					BTree snap_tree(*container);
-					BTreeIterator it;
-					BTreeEntry bte;
-					const j_snap_metadata_key_t *sme_k;
-					const j_snap_metadata_val_t *sme_v;
-
-					snap_tree.Init(apsb.apfs_snap_meta_tree_oid, apsb.apfs_o.o_xid);
-					if (snap_tree.GetIteratorBegin(it)) {
-						for (;;) {
-							if (!it.GetEntry(bte)) break;
-							sme_k = reinterpret_cast<const j_snap_metadata_key_t*>(bte.key);
-							sme_v = reinterpret_cast<const j_snap_metadata_val_t*>(bte.val);
-							if ((sme_k->hdr.obj_id_and_type >> OBJ_TYPE_SHIFT) != APFS_TYPE_SNAP_METADATA) break;
-							printf("    %" PRIu64 " : '%s'\n", sme_k->hdr.obj_id_and_type & OBJ_ID_MASK, sme_v->name);
-							if (!it.next()) break;
-						}
+					if (!print_snapshots(*container, apsb)) {
+						fprintf(stderr, "Volume %d: snapshot metadata unavailable or unreadable.\n", k);
+						status = PartialInventory;
 					}
 				}
 				printf("\n");
 			}
 		} else {
-			printf("Unable to open APFS container\n");
+			fprintf(stderr, "Unable to open APFS container\n");
+			status = Failure;
 		}
 
 		delete container;
@@ -147,10 +172,10 @@ int main(int argc, char *argv[])
 		device->Close();
 		delete device;
 	} else {
-		printf("Error opening device.\n");
-		return EIO;
+		fprintf(stderr, "Error opening device.\n");
+		return Failure;
 	}
 
 
-	return 0;
+	return status;
 }
