@@ -53,6 +53,8 @@ struct DmgCryptHeaderV1
 
 static_assert(sizeof(DmgCryptHeaderV1) == 0x4FC, "DmgCryptHeaderV1 invalid length.");
 
+static const uint32_t CSSM_ALGID_AES = 0x80000001;
+
 struct DmgCryptHeaderV2
 {
 	char signature[8];
@@ -466,15 +468,26 @@ bool DiskImageFile::SetupEncryptionV2()
 
 		PBKDF2_HMAC_SHA1(reinterpret_cast<const uint8_t *>(password.c_str()), password.size(), keydata->salt, keydata->salt_len, keydata->iteration_count, derived_key, sizeof(derived_key));
 
-		des.SetKey(derived_key);
-		des.SetIV(keydata->blob_enc_iv);
-
 		blob_len = keydata->encr_key_blob_size;
 
-		des.DecryptCBC(blob, keydata->encr_key_blob, blob_len);
-
-		if (blob[blob_len - 1] < 1 || blob[blob_len - 1] > 8)
-			continue;
+		// Newer images wrap the key blob with AES-192-CBC instead of 3DES.
+		if (keydata->blob_enc_algorithm.get() == CSSM_ALGID_AES && keydata->blob_enc_key_bits.get() == 192)
+		{
+			AES aes;
+			aes.SetKey(derived_key, AES::AES_192);
+			aes.SetIV(keydata->blob_enc_iv);
+			aes.DecryptCBC(keydata->encr_key_blob, blob, blob_len);
+			if (blob[blob_len - 1] < 1 || blob[blob_len - 1] > 16)
+				continue;
+		}
+		else
+		{
+			des.SetKey(derived_key);
+			des.SetIV(keydata->blob_enc_iv);
+			des.DecryptCBC(blob, keydata->encr_key_blob, blob_len);
+			if (blob[blob_len - 1] < 1 || blob[blob_len - 1] > 8)
+				continue;
+		}
 		blob_len -= blob[blob_len - 1];
 
 		if (g_debug & Dbg_Crypto)
