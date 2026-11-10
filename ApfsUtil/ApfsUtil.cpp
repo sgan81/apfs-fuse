@@ -4,6 +4,7 @@
 
 #include <cerrno>
 #include <cinttypes>
+#include <cstring>
 
 static void print_apfs_uuid(const apfs_uuid_t &uuid)
 {
@@ -55,27 +56,45 @@ static void print_filevault(uint64_t flags)
 int main(int argc, char *argv[])
 {
 	const char *devname = nullptr;
+	const char *tier2_name = nullptr;
 	Device *device = nullptr;
+	Device *tier2_device = nullptr;
 	ApfsContainer *container = nullptr;
 	uint64_t offset;
 	uint64_t size;
+	uint64_t tier2_offset;
+	uint64_t tier2_size;
 	apfs_superblock_t apsb;
 
 	g_debug = 0;
 
-	if (argc < 2)
+	if ((argc != 2) && ((argc != 4) || strcmp(argv[2], "-f")))
 	{
-		printf("Syntax: %s [device]\n", argv[0]);
+		printf("Syntax: %s <main-device> [-f <fusion-secondary-device>]\n", argv[0]);
 		return EINVAL;
 	}
 
 	devname = argv[1];
+	if (argc == 4)
+		tier2_name = argv[3];
 
 	device = Device::OpenDevice(devname);
 
 	if (device) {
+		if (tier2_name) {
+			tier2_device = Device::OpenDevice(tier2_name);
+			if (!tier2_device) {
+				printf("Error opening fusion secondary device.\n");
+				device->Close();
+				delete device;
+				return EIO;
+			}
+		}
+
 		offset = 0;
 		size = device->GetSize();
+		tier2_offset = 0;
+		tier2_size = tier2_device ? tier2_device->GetSize() : 0;
 
 		GptPartitionMap gpt;
 		if (gpt.LoadAndVerify(*device)) {
@@ -90,7 +109,22 @@ int main(int argc, char *argv[])
 			printf("\n");
 		}
 
-		container = new ApfsContainer(device, offset, size);
+		if (tier2_device) {
+			GptPartitionMap tier2_gpt;
+			if (tier2_gpt.LoadAndVerify(*tier2_device)) {
+				printf("Found partitions on fusion secondary device:\n");
+				tier2_gpt.ListEntries();
+
+				int partnum = tier2_gpt.FindFirstAPFSPartition();
+				if (partnum >= 0) {
+					printf("First APFS partition on fusion secondary device is %d\n", partnum);
+					tier2_gpt.GetPartitionOffsetAndSize(partnum, tier2_offset, tier2_size);
+				}
+				printf("\n");
+			}
+		}
+
+		container = new ApfsContainer(device, offset, size, tier2_device, tier2_offset, tier2_size);
 
 		if (container->Init()) {
 			// printf("Listing volumes:\n");
@@ -144,6 +178,10 @@ int main(int argc, char *argv[])
 
 		delete container;
 
+		if (tier2_device) {
+			tier2_device->Close();
+			delete tier2_device;
+		}
 		device->Close();
 		delete device;
 	} else {
