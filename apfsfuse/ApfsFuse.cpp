@@ -52,6 +52,7 @@
 #include <ApfsLib/GptPartitionMap.h>
 
 #include <cassert>
+#include <cerrno>
 #include <cstring>
 #include <cstddef>
 
@@ -261,12 +262,15 @@ static void apfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 	if (g_debug & Dbg_Info)
 		std::cout << "apfs_getattr: ino=" << ino << " => ";
 
+	ApfsContainer::ClearReadError();
 	rc = apfs_stat_internal(ino, st);
 
 	if (g_debug & Dbg_Info)
 		std::cout << (rc ? "OK" : "FAIL") << std::endl;
 
-	if (rc)
+	if (ApfsContainer::HasReadError())
+		fuse_reply_err(req, EIO);
+	else if (rc)
 		fuse_reply_attr(req, &st, FUSE_TIMEOUT);
 	else
 		fuse_reply_err(req, ENOENT);
@@ -282,12 +286,15 @@ static void apfs_getxattr_mac(fuse_req_t req, fuse_ino_t ino, const char *name, 
 	if (g_debug & Dbg_Info)
 		std::cout << "apfs_getxattr: " << std::hex << ino << " " << name << " => ";
 
+	ApfsContainer::ClearReadError();
 	rc = dir.GetAttribute(data, ino, name);
 
 	if (g_debug & Dbg_Info)
 		std::cout << (rc ? "OK" : "FAIL") << std::endl;
 
-	if (!rc)
+	if (ApfsContainer::HasReadError())
+		fuse_reply_err(req, EIO);
+	else if (!rc)
 		fuse_reply_err(req, ENODATA);
 	else
 	{
@@ -308,12 +315,15 @@ static void apfs_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 	if (g_debug & Dbg_Info)
 		std::cout << "apfs_getxattr: " << std::hex << ino << " " << name << " => ";
 
+	ApfsContainer::ClearReadError();
 	rc = dir.GetAttribute(data, ino, name);
 
 	if (g_debug & Dbg_Info)
 		std::cout << (rc ? "OK" : "FAIL") << std::endl;
 
-	if (!rc)
+	if (ApfsContainer::HasReadError())
+		fuse_reply_err(req, EIO);
+	else if (!rc)
 		fuse_reply_err(req, ENODATA);
 	else
 	{
@@ -332,7 +342,14 @@ static void apfs_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 	std::vector<std::string> names;
 	std::string reply;
 
+	ApfsContainer::ClearReadError();
 	rc = dir.ListAttributes(names, ino);
+
+	if (ApfsContainer::HasReadError())
+	{
+		fuse_reply_err(req, EIO);
+		return;
+	}
 
 	if (g_debug & Dbg_Info)
 		std::cout << "apfs_listxattr:" << std::endl;
@@ -365,19 +382,21 @@ static void apfs_lookup(fuse_req_t req, fuse_ino_t ino, const char *name)
 	ApfsDir::DirRec res;
 	bool rc;
 
+	ApfsContainer::ClearReadError();
 	rc = dir.LookupName(res, ino, name);
 
 	if (g_debug & Dbg_Info)
 		std::cout << (rc ? "OK" : "FAIL") << std::endl;
 
-	if (!rc)
-	{
+	if (ApfsContainer::HasReadError())
+		fuse_reply_err(req, EIO);
+	else if (!rc)
 		fuse_reply_err(req, ENOENT);
-	}
 	else
 	{
 		fuse_entry_param e;
 
+		memset(&e, 0, sizeof(e));
 		e.ino = res.file_id;
 		e.attr_timeout = FUSE_TIMEOUT;
 		e.entry_timeout = FUSE_TIMEOUT;
@@ -387,7 +406,12 @@ static void apfs_lookup(fuse_req_t req, fuse_ino_t ino, const char *name)
 		if (g_debug & Dbg_Info)
 			std::cout << "    apfs_stat_internal " << res.file_id << " => " << (rc ? "OK" : "FAIL") << std::endl;
 
-		fuse_reply_entry(req, &e);
+		if (ApfsContainer::HasReadError())
+			fuse_reply_err(req, EIO);
+		else if (!rc)
+			fuse_reply_err(req, ENOENT);
+		else
+			fuse_reply_entry(req, &e);
 	}
 }
 
@@ -405,7 +429,15 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 		File *f = new File();
 		ApfsDir dir(*g_volume);
 
+		ApfsContainer::ClearReadError();
 		rc = dir.GetInode(f->ino, ino);
+
+		if (ApfsContainer::HasReadError())
+		{
+			fuse_reply_err(req, EIO);
+			delete f;
+			return;
+		}
 
 		if (!rc)
 		{
@@ -421,6 +453,13 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 
 			rc = dir.GetAttribute(attr, ino, "com.apple.decmpfs");
 
+			if (ApfsContainer::HasReadError())
+			{
+				fuse_reply_err(req, EIO);
+				delete f;
+				return;
+			}
+
 			if (!rc)
 			{
 				std::cerr << "Couldn't get attribute com.apple.decmpfs for " << ino << std::endl;
@@ -434,8 +473,7 @@ static void apfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 				// std::cout << "Inode info: size=" << f->ino.sizes.size << ", alloced_size=" << f->ino.sizes.alloced_size << std::endl;
 			}
 			rc = DecompressFile(dir, ino, f->decomp_data, attr);
-			// In strict mode, do not return uncompressed data.
-			if (!rc && !g_lax)
+			if (ApfsContainer::HasReadError() || (!rc && !g_lax))
 			{
 				fuse_reply_err(req, EIO);
 				delete f;
@@ -471,11 +509,16 @@ static void apfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, st
 
 	if (!file->IsCompressed())
 	{
-		// bool rc;
 		std::vector<char> buf(size, 0);
 
-		// rc =
+		ApfsContainer::ClearReadError();
 		dir.ReadFile(buf.data(), file->ino.private_id, off, size);
+
+		if (ApfsContainer::HasReadError())
+		{
+			fuse_reply_err(req, EIO);
+			return;
+		}
 
 		// std::cerr << "apfs_read: fuse_reply_buf(req, " << reinterpret_cast<uint64_t>(buf.data()) << ", " << size << ")" << std::endl;
 
@@ -550,7 +593,13 @@ static void apfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 			dirbuf_add(req, dirbuf, "..", dirrec.ino.parent_id);
 		}
 #endif
+		ApfsContainer::ClearReadError();
 		rc = dir.ListDirectory(dir_list, ino);
+		if (ApfsContainer::HasReadError())
+		{
+			fuse_reply_err(req, EIO);
+			return;
+		}
 		if (!rc)
 		{
 			fuse_reply_err(req, ENOENT);
@@ -570,8 +619,11 @@ static void apfs_readlink(fuse_req_t req, fuse_ino_t ino)
 	bool rc = false;
 	std::vector<uint8_t> data;
 
+	ApfsContainer::ClearReadError();
 	rc = dir.GetAttribute(data, ino, "com.apple.fs.symlink");
-	if (!rc)
+	if (ApfsContainer::HasReadError())
+		fuse_reply_err(req, EIO);
+	else if (!rc)
 		fuse_reply_err(req, ENOENT);
 	else
 		fuse_reply_readlink(req, reinterpret_cast<const char *>(data.data()));

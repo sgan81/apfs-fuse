@@ -52,10 +52,29 @@ void DeviceWinFile::Close()
 
 bool DeviceWinFile::Read(void *data, uint64_t offs, uint64_t len)
 {
-	m_vol.seekg(offs);
-	m_vol.read(reinterpret_cast<char *>(data), len);
+	char *bdata = reinterpret_cast<char *>(data);
+	uint64_t remaining = len;
+	std::streamsize chunk;
 
-	// TODO: Fehlerbehandlung ...
+	if (!m_vol.is_open())
+		return false;
+
+	m_vol.clear();
+	m_vol.seekg(offs);
+	if (m_vol.fail())
+		return false;
+
+	while (remaining > 0)
+	{
+		chunk = remaining > 0x40000000ULL ? 0x40000000 : static_cast<std::streamsize>(remaining);
+		m_vol.read(bdata, chunk);
+		if (m_vol.fail() || m_vol.gcount() != chunk)
+			return false;
+
+		bdata += chunk;
+		remaining -= static_cast<uint64_t>(chunk);
+	}
+
 	return true;
 }
 

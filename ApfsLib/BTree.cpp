@@ -297,6 +297,9 @@ bool BTree::GetIterator(BTreeIterator& it, const void* key, size_t key_size, BTC
 		}
 
 		node = GetNode(oid, node, index);
+
+		if (!node)
+			return false;
 	}
 
 	index = FindBin(node, key, key_size, func, context, FindMode::GE);
@@ -346,6 +349,9 @@ bool BTree::GetIteratorBegin(BTreeIterator& it)
 			oid = *reinterpret_cast<const oid_t *>(e.val);
 		}
 		node = GetNode(oid, node, 0);
+
+		if (!node)
+			return false;
 	}
 
 	it.Setup(this, node, 0);
@@ -750,7 +756,10 @@ std::shared_ptr<BTreeNode> BTreeIterator::next_node()
 		node = m_tree->GetNode(oid, node, pidx);
 
 		if (!node)
+		{
 			std::cerr << "Failed to load btree node oid " << oid << std::endl;
+			return std::shared_ptr<BTreeNode>();
+		}
 
 		pidx = 0;
 	}

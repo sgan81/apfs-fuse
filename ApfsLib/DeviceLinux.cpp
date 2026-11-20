@@ -83,12 +83,38 @@ void DeviceLinux::Close()
 
 bool DeviceLinux::Read(void* data, uint64_t offs, uint64_t len)
 {
-	size_t nread;
+	uint8_t *bdata = reinterpret_cast<uint8_t *>(data);
+	uint64_t remaining = len;
+	uint64_t cur_offs = offs;
+	size_t chunk;
+	ssize_t nread;
 
-	nread = pread64(m_device, data, len, offs);
+	while (remaining > 0)
+	{
+		chunk = remaining > 0x40000000ULL ? 0x40000000U : static_cast<size_t>(remaining);
+		nread = pread64(m_device, bdata, chunk, cur_offs);
 
-	// TODO: Better error handling ...
-	return nread == len;
+		if (nread < 0)
+		{
+			if (errno == EINTR)
+				continue;
+			if (g_debug & Dbg_Errors)
+				std::cerr << "DeviceLinux::Read failed at offset " << cur_offs << " len " << chunk << ": " << strerror(errno) << std::endl;
+			return false;
+		}
+		if (nread == 0)
+		{
+			if (g_debug & Dbg_Errors)
+				std::cerr << "DeviceLinux::Read unexpected EOF at offset " << cur_offs << " remaining " << remaining << std::endl;
+			return false;
+		}
+
+		bdata += nread;
+		cur_offs += nread;
+		remaining -= nread;
+	}
+
+	return true;
 }
 
 #endif

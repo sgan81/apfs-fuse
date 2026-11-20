@@ -567,14 +567,16 @@ bool ApfsDir::ReadFile(void* data, uint64_t inode, uint64_t offs, size_t size)
 			{
 				if (g_debug & Dbg_Dir)
 					std::cout << "Full read blk " << extent_paddr + blk_idx << " cnt " << (cur_size >> m_blksize_sh) << std::endl;
-				m_vol.ReadBlocks(bdata, extent_paddr + blk_idx, cur_size >> m_blksize_sh, extent_crypto_id + blk_idx);
+				if (!m_vol.ReadBlocks(bdata, extent_paddr + blk_idx, cur_size >> m_blksize_sh, extent_crypto_id + blk_idx))
+					return false;
 			}
 			else
 			{
 				if (g_debug & Dbg_Dir)
 					std::cout << "Partial read blk " << extent_paddr + blk_idx << " cnt 1" << std::endl;
 
-				m_vol.ReadBlocks(m_tmp_blk.data(), extent_paddr + blk_idx, 1, extent_crypto_id + blk_idx);
+				if (!m_vol.ReadBlocks(m_tmp_blk.data(), extent_paddr + blk_idx, 1, extent_crypto_id + blk_idx))
+					return false;
 
 				if (blk_offs + cur_size > m_blksize)
 					cur_size = m_blksize - blk_offs;
