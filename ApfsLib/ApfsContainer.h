@@ -47,6 +47,9 @@ public:
 	bool ReadBlocks(uint8_t *data, paddr_t paddr, uint64_t blkcnt = 1) const;
 	bool ReadAndVerifyHeaderBlock(uint8_t *data, paddr_t paddr) const;
 
+	static void ClearReadError();
+	static bool HasReadError();
+
 	uint32_t GetBlocksize() const { return m_nx.nx_block_size; }
 	uint64_t GetBlockCount() const { return m_nx.nx_block_count; }
 	uint64_t GetFreeBlocks() const { return m_sm->sm_dev[SD_MAIN].sm_free_count + m_sm->sm_dev[SD_TIER2].sm_free_count; }

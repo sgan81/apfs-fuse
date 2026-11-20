@@ -265,6 +265,18 @@ bool ApfsContainer::GetVolumeInfo(unsigned int fsid, apfs_superblock_t& apsb)
 }
 
 
+static thread_local bool s_read_error = false;
+
+void ApfsContainer::ClearReadError()
+{
+	s_read_error = false;
+}
+
+bool ApfsContainer::HasReadError()
+{
+	return s_read_error;
+}
+
 bool ApfsContainer::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt) const
 {
 	uint64_t offs;
@@ -279,18 +291,34 @@ bool ApfsContainer::ReadBlocks(uint8_t * data, paddr_t paddr, uint64_t blkcnt) c
 	if (offs & FUSION_TIER2_DEVICE_BYTE_ADDR)
 	{
 		if (!m_tier2_disk)
+		{
+			s_read_error = true;
 			return false;
+		}
 
 		offs = offs - FUSION_TIER2_DEVICE_BYTE_ADDR + m_tier2_part_start;
-		return m_tier2_disk->Read(data, offs, size);
+		if (!m_tier2_disk->Read(data, offs, size))
+		{
+			s_read_error = true;
+			return false;
+		}
+		return true;
 	}
 	else
 	{
 		if (!m_main_disk)
+		{
+			s_read_error = true;
 			return false;
+		}
 
 		offs = offs + m_main_part_start;
-		return m_main_disk->Read(data, offs, size);
+		if (!m_main_disk->Read(data, offs, size))
+		{
+			s_read_error = true;
+			return false;
+		}
+		return true;
 	}
 }
 

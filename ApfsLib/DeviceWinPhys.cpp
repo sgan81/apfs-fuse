@@ -68,19 +68,32 @@ void DeviceWinPhys::Close()
 
 bool DeviceWinPhys::Read(void * data, uint64_t offs, uint64_t len)
 {
-	DWORD read_bytes = 0;
 	LARGE_INTEGER off;
-	BOOL rc;
+	uint8_t *bdata = reinterpret_cast<uint8_t *>(data);
+	uint64_t remaining = len;
+	DWORD chunk;
+	DWORD read_bytes;
 
 	if (m_drive == INVALID_HANDLE_VALUE)
 		return false;
 
 	off.QuadPart = offs;
+	if (!SetFilePointerEx(m_drive, off, nullptr, FILE_BEGIN))
+		return false;
 
-	SetFilePointerEx(m_drive, off, nullptr, FILE_BEGIN);
-	rc = ReadFile(m_drive, data, len, &read_bytes, nullptr);
+	while (remaining > 0)
+	{
+		chunk = remaining > 0x40000000ULL ? 0x40000000U : static_cast<DWORD>(remaining);
+		read_bytes = 0;
 
-	return rc == TRUE;
+		if (!ReadFile(m_drive, bdata, chunk, &read_bytes, nullptr) || read_bytes == 0)
+			return false;
+
+		bdata += read_bytes;
+		remaining -= read_bytes;
+	}
+
+	return true;
 }
 
 uint64_t DeviceWinPhys::GetSize() const
